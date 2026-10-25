@@ -16,27 +16,47 @@ export function pushState(): PushState {
   if (Notification.permission === "granted" && localStorage.getItem("sk.pushEndpoint")) return { state: "subscribed", msg: "On" };
   return { state: "off", msg: "Off" };
 }
-// ask=true must be called directly from a tap: requestPermission is the first await so iOS sees the user gesture.
+// Step log: every stage of turning alerts on is recorded so the Settings screen can show exactly where it failed.
+export type Step = { k: string; ok: boolean | null; v: string };
+let STEPS: Step[] = []; const stepL = new Set<() => void>(); export const onSteps = (f: () => void) => { stepL.add(f); return () => { stepL.delete(f); }; };
+export const getSteps = () => STEPS; const step = (k: string, ok: boolean | null, v: string) => { STEPS = [...STEPS.filter(s => s.k !== k), { k, ok, v }]; localStorage.setItem("sk.pushSteps", JSON.stringify({ at: Date.now(), steps: STEPS })); stepL.forEach(f => f()); };
+const withTimeout = <T,>(p: Promise<T>, ms: number, what: string) => Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error(what + " timed out after " + ms / 1000 + " s")), ms))]);
+async function swReg() { // never wait forever on serviceWorker.ready: register if missing, and accept an installing/waiting worker
+  let reg = await navigator.serviceWorker.getRegistration("/"); if (!reg) reg = await navigator.serviceWorker.register("/sw.js");
+  if (reg.active) return reg; return withTimeout(navigator.serviceWorker.ready, 10000, "Service worker activation"); }
+// ask=true must be called directly from a tap. iOS only shows the prompt if requestPermission() is the FIRST await after the tap,
+// so everything before it is synchronous.
 export async function syncPush(fl: Flight[], ask = false): Promise<string> {
-  const st = pushState(); if (st.state === "not-installed" || st.state === "unsupported" || st.state === "denied") { if (ask) throw new Error(st.msg); return st.state; }
-  if (Notification.permission !== "granted") { if (!ask) return "off"; const p = await Notification.requestPermission(); if (p !== "granted") throw new Error(p === "denied" ? pushState().msg : "Permission wasn't granted. Tap Turn on alerts and choose Allow."); }
-  const reg = await navigator.serviceWorker.ready; const { publicKey } = await api("/push/key");
+  if (ask) STEPS = [];
+  const ios = isIOS(), sa = isStandalone();
+  step("Installed to Home Screen", ios ? sa : true, ios ? (sa ? "Yes (navigator.standalone)" : "No: open Skyline from the Home Screen icon") : "Not needed on this device");
+  step("Push supported", pushSupported(), pushSupported() ? "PushManager available" : "No PushManager (iOS 16.4+ Home Screen app required)");
+  const st = pushState(); if (st.state === "not-installed" || st.state === "unsupported" || st.state === "denied") { step("Permission", st.state === "denied" ? false : null, typeof Notification !== "undefined" ? Notification.permission : "n/a"); if (ask) throw new Error(st.msg); return st.state; }
+  if (Notification.permission !== "granted") { if (!ask) { step("Permission", null, Notification.permission); return "off"; }
+    const p = await Notification.requestPermission(); step("Permission", p === "granted", p);
+    if (p !== "granted") throw new Error(p === "denied" ? pushState().msg : "Permission wasn't granted. Tap Turn on alerts and choose Allow."); }
+  else step("Permission", true, "granted");
+  let reg: ServiceWorkerRegistration; try { reg = await swReg(); step("Service worker", true, `active (${reg.active?.state || "ready"})`); } catch (e: any) { step("Service worker", false, e.message); throw new Error("Service worker problem: " + e.message); }
+  let publicKey: string; try { publicKey = (await withTimeout(api("/push/key"), 45000, "Server")).publicKey; step("Server key", true, publicKey.slice(0, 12) + "…"); } catch (e: any) { step("Server key", false, e.message); throw new Error("Couldn't reach the server: " + e.message); }
   let sub = await reg.pushManager.getSubscription();
   const curKey = sub?.options?.applicationServerKey ? btoa(String.fromCharCode(...new Uint8Array(sub.options.applicationServerKey as ArrayBuffer))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "") : localStorage.getItem("sk.vapid");
-  if (sub && curKey !== publicKey) { await sub.unsubscribe().catch(() => {}); sub = null; } // server key changed → resubscribe
-  try { if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(publicKey) }); }
-  catch (e: any) { throw new Error("Subscribing failed: " + (e?.name ? e.name + " – " : "") + (e?.message || e)); }
+  if (sub && curKey && curKey !== publicKey) { await sub.unsubscribe().catch(() => {}); sub = null; } // server key changed → resubscribe
+  try { if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(publicKey) }); step("Subscribed on device", true, new URL(sub.endpoint).host); }
+  catch (e: any) { const t = (e?.name ? e.name + ": " : "") + (e?.message || e); step("Subscribed on device", false, t); throw new Error("Subscribing failed: " + t); }
   localStorage.setItem("sk.vapid", publicKey); localStorage.setItem("sk.pushEndpoint", sub.endpoint);
-  const r = await api("/push/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), flights: watchList(fl), prefs: getPrefs() }) });
-  return `on · watching ${r.watching} flight${r.watching === 1 ? "" : "s"}`;
+  try { const r = await api("/push/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), flights: watchList(fl), prefs: getPrefs() }) });
+    step("Server has subscription", true, `yes, watching ${r.watching} flight${r.watching === 1 ? "" : "s"}`); localStorage.setItem("sk.pushSynced", String(Date.now()));
+    return `on, watching ${r.watching} flight${r.watching === 1 ? "" : "s"}`; }
+  catch (e: any) { step("Server has subscription", false, "POST failed: " + e.message); throw new Error("Server didn't save the subscription: " + e.message); }
 }
 const myFlights = () => { try { return JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend); } catch { return []; } };
 // Re-POST before testing so a server restart can't make the test fail with "not subscribed".
 export async function testPush(): Promise<string> {
   const st = pushState(); if (st.state !== "subscribed") throw new Error(st.state === "off" ? "Alerts are off — tap Turn on alerts first." : st.msg);
   await syncPush(myFlights());
-  const r = await api("/push/test", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: localStorage.getItem("sk.pushEndpoint") }) });
-  return `Test sent ✓ (accepted by ${r.host}, ${r.status}). It should arrive within a few seconds.`;
+  const r = await api("/push/test", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: localStorage.getItem("sk.pushEndpoint") }) }).catch((e: any) => { step("Test sent", false, e.message); throw e; });
+  step("Test sent", true, `accepted by ${r.host} (${r.status})`);
+  return `Test sent (accepted by ${r.host}, ${r.status}). It should arrive within a few seconds.`;
 }
 export const pushStatus = () => api("/push/status?endpoint=" + encodeURIComponent(localStorage.getItem("sk.pushEndpoint") || ""));
 
@@ -167,4 +187,73 @@ export function FactorViz({ x, color }: { x: any; color: string }) {
       <div className="fchips col"><span><small>Mean wind</small><b>{d.wind ?? "—"} km/h</b></span><span><small>Gusts</small><b style={{ color }}>{d.gust} km/h</b></span><span><small>Thresholds</small><b>45 gusty · 65 strong</b></span></div></div>; }
   if (x.kind === "inbound" && d.number) return <div className="fviz"><div className="chainv"><div><b>{d.number}</b><small>inbound · ETA {fmtT(d.eta)}</small></div><i style={{ background: color }} /><div><b>40m</b><small>min turnaround</small></div><i /><div><b>This flight</b><small>sched {fmtT(d.dep)}</small></div></div><div className="fvk mt6">Aircraft arrives {Math.abs(d.slack)} min too late for a normal turnaround</div></div>;
   return null;
+}
+
+// ---------- Build stamp + stale-app detection ----------
+declare const __BUILD__: string;
+export const BUILD = typeof __BUILD__ !== "undefined" ? __BUILD__ : "dev";
+export async function checkUpdate(): Promise<string | null> { try { const r = await fetch("/version.json", { cache: "no-store" }); const j = await r.json(); return j.build && j.build !== BUILD ? j.build : null; } catch { return null; } }
+export async function applyUpdate() { const reg = await navigator.serviceWorker?.getRegistration("/"); await reg?.update().catch(() => {}); const ks = await caches?.keys?.().catch(() => []) || []; await Promise.all(ks.map(k => caches.delete(k))); location.reload(); }
+export function UpdateBanner() { const [nb, setNb] = useState<string | null>(null);
+  useEffect(() => { const go = () => checkUpdate().then(setNb); go(); const f = () => document.visibilityState === "visible" && go(); document.addEventListener("visibilitychange", f); return () => document.removeEventListener("visibilitychange", f); }, []);
+  if (!nb) return null; return <div className="warm press" onClick={applyUpdate}><div><b>New version of Skyline available</b><small>Tap to update (you have {BUILD}, latest is {nb})</small></div></div>; }
+// ---------- Notification checklist ----------
+export function PushChecklist({ refresh }: { refresh?: number }) {
+  const [, re] = useState(0); const [srv, setSrv] = useState<any>(null); useEffect(() => onSteps(() => re(n => n + 1)), []);
+  useEffect(() => { const ep = localStorage.getItem("sk.pushEndpoint"); if (ep) pushStatus().then(setSrv).catch(e => setSrv({ error: e.message })); }, [refresh, getSteps().length]);
+  const iosV = (navigator.userAgent.match(/OS (\d+)_(\d+)/) || []).slice(1).map(Number); const ios = isIOS();
+  const saved = (() => { try { return JSON.parse(localStorage.getItem("sk.pushSteps") || "null"); } catch { return null; } })();
+  const S = getSteps().length ? getSteps() : saved?.steps || []; const g = (k: string) => S.find((x: Step) => x.k === k);
+  const perm = typeof Notification !== "undefined" ? Notification.permission : "unavailable";
+  const rows: [string, boolean | null, string][] = [
+    ["iOS 16.4 or later", ios ? (iosV.length ? iosV[0] > 16 || (iosV[0] === 16 && iosV[1] >= 4) : null) : true, ios ? (iosV.length ? `iOS ${iosV.join(".")}` : "unknown") : "Not an iPhone"],
+    ["Installed to Home Screen", ios ? isStandalone() : true, ios ? (isStandalone() ? "Opened from Home Screen icon" : "Opened in Safari: alerts can't work here") : "Not needed"],
+    ["Permission granted", perm === "granted" ? true : perm === "denied" ? false : null, perm],
+    ["Service worker", g("Service worker")?.ok ?? null, g("Service worker")?.v || "not checked yet"],
+    ["Subscribed on this device", g("Subscribed on device")?.ok ?? (localStorage.getItem("sk.pushEndpoint") ? true : null), g("Subscribed on device")?.v || (localStorage.getItem("sk.pushEndpoint") ? "endpoint saved" : "no")],
+    ["Server has subscription", srv?.you ? srv.you.subscribed : g("Server has subscription")?.ok ?? null, srv?.you ? (srv.you.subscribed ? `yes, watching ${srv.you.watching}` : "No: server lost it (restart). Tap Re-register.") : g("Server has subscription")?.v || "unknown"],
+    ["Test sent", g("Test sent")?.ok ?? null, g("Test sent")?.v || "not yet"]];
+  const ic = (o: boolean | null) => o === true ? <span className="ck ok">✓</span> : o === false ? <span className="ck bad">✕</span> : <span className="ck na">–</span>;
+  return <div className="card m0"><h3>Notification checklist</h3>
+    {rows.map(([k, o, v]) => <div key={k} className="row between sm ckrow"><span className="row g8">{ic(o)}{k}</span><span className="faint">{v}</span></div>)}
+    {S.filter((x: Step) => x.ok === false).map((x: Step) => <div key={x.k} className="ckerr">{x.k} failed: {x.v}</div>)}
+    <div className="faint sm mt8">App build {BUILD}{saved?.at ? ` · last attempt ${new Date(saved.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}</div></div>;
+}
+
+// Local notification that works on iPhone too (pages there can't construct Notification; the service worker can).
+export function localNotify(title: string, body: string, tag?: string) { try { if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  navigator.serviceWorker?.getRegistration("/").then(r => r ? r.showNotification(title, { body, tag, icon: "/icon-192.png" }) : void new Notification(title, { body })).catch(() => {}); } catch {} }
+
+// ---------- Security queues (real feed only) ----------
+export function SecurityCard({ iata }: { iata: string }) {
+  const [s, setS] = useState<any>(null); useEffect(() => { const go = () => api(`/security/${iata}`).then(setS).catch(e => setS({ available: false, note: e.message })); go(); const t = setInterval(go, 120e3); return () => clearInterval(t); }, [iata]);
+  if (!s) return null;
+  return <div className="card"><div className="row between"><h3>Security wait</h3>{s.available && <span className="srcb live">LIVE</span>}</div>
+    {s.available ? <>{s.queues.map((q: any) => <div key={q.terminal + q.kind} className="row between ckrow"><span>{q.terminal} <span className="faint sm">{q.kind === "Connections" ? "flight connections" : "departures"}</span></span><b className={q.max >= 20 ? "orange" : ""}>{q.text}{q.stale ? " (stale)" : ""}</b></div>)}
+      <div className="faint sm mt8">{s.source}{s.updated ? " · updated " + new Date(s.updated).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }) + " UK time" : ""}</div></>
+      : <div className="muted sm">No live queue data. {s.note || `${iata} doesn't publish security wait times in a feed we can read.`}</div>}</div>;
+}
+// ---------- Official airport links (all checked returning 200 on 25 Oct 2026) ----------
+const MAGL = (d: string, lounge: string) => ({ Parking: `https://${d}/parking/`, "Drop-off & pick-up": `https://${d}/getting-to-and-from/pick-up-and-drop-off/`, Lounges: `https://${d}${lounge}`, "Getting here": `https://${d}/getting-to-and-from/`, "Fast Track security": `https://${d}/at-the-airport/security-fasttrack/` });
+const LINKS: Record<string, Record<string, string>> = {
+  MAN: MAGL("www.manchesterairport.co.uk", "/at-the-airport/airport-lounges/"), STN: MAGL("www.stanstedairport.com", "/at-the-airport/escape-lounge/"), EMA: MAGL("www.eastmidlandsairport.com", "/at-the-airport/escape-lounge/"),
+  LHR: { Parking: "https://www.heathrow.com/transport-and-directions/heathrow-parking", "Drop-off & by car": "https://www.heathrow.com/transport-and-directions/by-car", Lounges: "https://www.heathrow.com/at-the-airport/lounges-hotels-spas", "Getting here": "https://www.heathrow.com/transport-and-directions", "Security & baggage": "https://www.heathrow.com/at-the-airport/security-and-baggage" } };
+export function AirportLinks({ iata }: { iata: string }) { const L = LINKS[iata]; if (!L) return null;
+  return <div className="card"><h3>Plan your trip</h3><div className="muted sm">Official {iata} airport pages</div>{Object.entries(L).map(([k, u]) => <a key={k} className="row between ckrow" href={u} target="_blank" rel="noreferrer"><span>{k}</span><span className="faint sm">{new URL(u).hostname.replace("www.", "")} ›</span></a>)}</div>; }
+// ---------- Departure day checklist ----------
+export function DepartureDay({ f }: { f: Flight }) {
+  const [sec, setSec] = useState<any>(null); const iata = f.origin?.iata || "";
+  useEffect(() => { if (iata) api(`/security/${iata}`).then(setSec).catch(() => {}); }, [iata]);
+  if (!f.dep.scheduled || ["departed", "enroute", "landed", "cancelled"].includes(f.status || "") || Math.abs(+new Date(f.dep.scheduled) - Date.now()) > 36 * 3600e3) return null;
+  const tz = f.origin?.tz; const q = sec?.available ? sec.queues.filter((x: any) => x.kind === "Departures" && (!f.dep.terminal || x.terminal.replace(/\D/g, "") === String(f.dep.terminal).replace(/\D/g, ""))) : [];
+  const qMax = q.length ? Math.max(...q.map((x: any) => x.max || 0)) : null; const d = Math.max(0, delay(f.dep) ?? 0);
+  const items: [string, string, boolean | null][] = [
+    ["Check-in", (f as any).checkIn ? `Zone ${(f as any).checkIn}` : "See airline", null],
+    ["Terminal", f.dep.terminal ? `Terminal ${f.dep.terminal}` : "Not published yet", f.dep.terminal ? true : null],
+    ["Security queue", qMax != null ? `${q.map((x: any) => x.text).join(", ")} now` : "No live queue data", qMax != null ? qMax < 20 : null],
+    ["Delay", d ? `+${d} min (airport)` : "None published", d ? false : true],
+    ["Gate", f.dep.gate ? `Gate ${f.dep.gate}` : (f as any).gateShownFrom ? `Shown from ${fmtT((f as any).gateShownFrom, tz)}` : "Not shown yet", f.dep.gate ? true : null],
+    ["Arrival belt", f.arr.baggage ? `Belt ${f.arr.baggage}` : "Shown after landing", f.arr.baggage ? true : null]];
+  return <div className="card"><h3>Departure day</h3>{items.map(([k, v, o]) => <div key={k} className="row between ckrow"><span className="row g8"><span className={"ck " + (o === true ? "ok" : o === false ? "bad" : "na")}>{o === true ? "✓" : o === false ? "!" : "–"}</span>{k}</span><span className="sm">{v}</span></div>)}
+    <div className="faint sm mt8">Leave time above uses the delay; security time {qMax != null ? "is live from the airport" : "isn't published by this airport, so allow your usual buffer"}.</div></div>;
 }

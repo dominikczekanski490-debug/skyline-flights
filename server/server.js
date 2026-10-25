@@ -67,7 +67,7 @@ async function getJSON(url, opt = {}) {
 const MAG = "https://d3ebfrkw2baepa.cloudfront.net/";
 const MAG_SITES = { MAN: "https://www.manchesterairport.co.uk", STN: "https://www.stanstedairport.com", EMA: "https://www.eastmidlandsairport.com" };
 const magQ = dir => { const f = dir === "dep" ? "allDeparturesWithinMonth" : "allArrivalsWithinMonth";
-  const x = dir === "dep" ? "estimatedDepartureDateTime actualDepartureDateTime departureGate { number }" : "estimatedArrivalDateTime actualArrivalDateTime arrivalGate { number } arrivalBaggageClaim { number }";
+  const x = dir === "dep" ? "estimatedDepartureDateTime actualDepartureDateTime departureGate { number action }" : "estimatedArrivalDateTime actualArrivalDateTime arrivalGate { number } arrivalBaggageClaim { number }";
   return `query($airportCode: String!, $startDate: AWSDateTime, $endDate: AWSDateTime, $size: Int){ ${f}(tenant: $airportCode, startDate: $startDate, endDate: $endDate, size: $size){ id scheduledDepartureDateTime scheduledArrivalDateTime ${x} arrivalAirport { name cityName code } departureAirport { name cityName code } flightNumber airline { name code } arrivalTerminal departureTerminal status } }`; };
 function londonDay(ymd) {
   const off = d => new Date(d.toLocaleString("en-US", { timeZone: "Europe/London" })) - new Date(d.toLocaleString("en-US", { timeZone: "UTC" }));
@@ -86,7 +86,7 @@ function normMag(f, apt, dir) {
   const _id = `${num}-${(f.scheduledDepartureDateTime || f.scheduledArrivalDateTime || "").slice(0, 10)}`; return { id: _id, date: _id.slice(-10),
     number: num, airline: { ...airlineOut(al), name: airlineOut(al).name || f.airline?.name },
     origin: airportOut(dir === "dep" ? here : there) || there, destination: airportOut(dir === "dep" ? there : here) || there,
-    dep: dir === "dep" ? { scheduled: f.scheduledDepartureDateTime, estimated: f.estimatedDepartureDateTime, actual: f.actualDepartureDateTime, gate: f.departureGate?.number, terminal: f.departureTerminal }
+    dep: dir === "dep" ? { scheduled: f.scheduledDepartureDateTime, estimated: f.estimatedDepartureDateTime, actual: f.actualDepartureDateTime, gate: f.departureGate?.number, terminal: f.departureTerminal, gateAction: f.departureGate?.action || undefined }
                        : { scheduled: f.scheduledDepartureDateTime },
     arr: dir === "arr" ? { scheduled: f.scheduledArrivalDateTime, estimated: f.estimatedArrivalDateTime, actual: f.actualArrivalDateTime, gate: f.arrivalGate?.number, terminal: f.arrivalTerminal, baggage: f.arrivalBaggageClaim?.number }
                        : { scheduled: f.scheduledArrivalDateTime },
@@ -170,10 +170,41 @@ async function sydBoard(apt, dir, ymd) {
     return out.filter(f => inDay(f.dep.scheduled || f.arr.scheduled, ymd));
   });
 }
+
+// Heathrow (LHR): JSON endpoints used by heathrow.com's own public departures/arrivals board + security wait times
+const LHR_API = "https://api-dp-prod.dp.heathrow.com/pihub/";
+const lhrH = { headers: { origin: "https://www.heathrow.com", referer: "https://www.heathrow.com/", "accept-encoding": "gzip" } };
+const zIso = u => u ? new Date(u.replace(/Z?$/, "Z")).toISOString() : undefined;
+const lhrStatus = (k, m) => { m = (m || "").toLowerCase(); if (k.Cancelled || m.includes("cancel")) return "cancelled"; if (m.includes("divert")) return "diverted"; if (k.Landed) return "landed";
+  if (k.Departed || k.Taxied) return "departed"; if (k.Boarding || k.FlightClosing) return "boarding"; if (k.GateOpen || k.GateClosed || k.AtGate) return "gate"; if (k.Delayed) return "delayed"; return "scheduled"; };
+async function lhrBoard(apt, dir, ymd) {
+  return cached(`lhr:${dir}:${ymd}`, ymd < todayLondon() ? 6 * 3600 : 120, async () => {
+    const r = await getJSON(`${LHR_API}flights/${dir === "dep" ? "departures" : "arrivals"}?date=${ymd}`, lhrH); if (!Array.isArray(r)) throw new Error("LHR feed returned no data");
+    return r.filter(x => x.flightService?.codeShareStatus !== "CODESHARE_MARKETING_FLIGHT").map(x => { const s = x.flightService, m = s.aircraftMovement, pc = m.route.portsOfCall;
+      const here = pc.find(p => p.airportFacility?.iataIdentifier === "LHR") || pc[0], there = pc.find(p => p !== here && p.portOfCallType === (dir === "dep" ? "DESTINATION" : "ORIGIN")) || pc.find(p => p !== here) || {};
+      const st = (m.aircraftMovementStatus || [])[0] || {}, k = Object.fromEntries((st.statusData || []).map(d => [d.localisationKey, d.data ?? true]));
+      const sched = zIso(here.operatingTimes?.scheduled?.utc), day = (here.operatingTimes?.scheduled?.local || "").slice(0, 10);
+      const hm = k.Departed || k.Landed || k.Taxied, et = k.OnTime || k.Delayed || k.Expected || k.Estimated;
+      const fix = t => { if (!t || typeof t !== "string" || !/^\d\d:\d\d$/.test(t)) return undefined; let u = localToUtc("Europe/London", day, t); if (sched && u && Math.abs(new Date(u) - new Date(sched)) > 12 * 3600e3) u = new Date(+new Date(u) + (new Date(u) < new Date(sched) ? 86400e3 : -86400e3)).toISOString(); return u; };
+      const tf = here.airportFacility?.terminalFacility || {}, belt = (st.message || "").match(/belt (\d+)/i)?.[1];
+      const num = s.iataFlightIdentifier || ((x.flightService.airlineParty?.iataIdentifier || "") + s.flightNumber);
+      return mkFlight(apt, dir, there.airportFacility?.iataIdentifier, there.airportFacility?.airportCityLocation?.name || there.airportFacility?.name, num, s.airlineParty?.iataIdentifier, s.airlineParty?.name,
+        { sched, est: fix(et), act: fix(hm), gate: tf.gateFacility?.gateNumber, term: tf.code, belt: belt ? String(+belt) : undefined }, st.message || "Scheduled", lhrStatus(k, st.message), "Heathrow official flight info (heathrow.com)",
+        { checkIn: tf.checkInZoneFacility?.identifier, gateShownFrom: zIso(tf.gateFacility?.gateShownFrom?.utc), codeshares: (s.codeShareSummary || "").split(/[ ,]+/).filter(Boolean), aircraft: { type: s.aircraftTransport?.icaoTypeCode } }); })
+      .filter(f => inDay(f.dep.scheduled || f.arr.scheduled, ymd));
+  });
+}
+// Security queue times: only airports that publish live numbers. Never estimated here.
+const SECURITY = {
+  LHR: async () => { const r = await getJSON(LHR_API + "securitywaittime", lhrH); const at = r.map(x => x.lastUpdated).sort().at(-1);
+    return { source: "Heathrow official security wait times (heathrow.com)", updated: at ? localToUtc("Europe/London", at.slice(0, 10), at.slice(11, 16)) : null,
+      queues: r.map(x => ({ terminal: x.checkpointFacility?.terminalFacility?.code, kind: x.checkpointFacility?.checkpointFacilityType?.code === "securityConnections" ? "Connections" : "Departures", text: x.waitTimeMessage, range: x.waitTimeRangeMinutes,
+        max: x.queueMeasurements?.find(q => q.name === "maximumWaitTime")?.value ?? null, stale: !!x.isDataStale })) }; } };
 const OFFICIAL = {};
 for (const c of Object.keys(MAG_SITES)) OFFICIAL[c] = { fn: magBoard, label: `${c} Airport official flight info`, provider: "Official airport feed", site: MAG_SITES[c].replace("https://www.", "") };
 for (const c of AVINOR) OFFICIAL[c] = { fn: avinorBoard, label: "Avinor official flight data", provider: "Official airport feed (Avinor)", site: "avinor.no" };
 OFFICIAL.FRA = { fn: fraBoard, label: "Frankfurt Airport official flight info", provider: "Official airport feed", site: "frankfurt-airport.com" };
+OFFICIAL.LHR = { fn: lhrBoard, label: "Heathrow official flight info", provider: "Official airport feed", site: "heathrow.com" };
 OFFICIAL.SYD = { fn: sydBoard, label: "Sydney Airport official flight info", provider: "Official airport feed", site: "sydneyairport.com.au" };
 const officialBoard = (apt, dir, ymd) => OFFICIAL[apt].fn(apt, dir, ymd);
 
@@ -284,6 +315,28 @@ api.get("/board/:iata", wrap(async (req, res) => { const iata = req.params.iata.
     const p = predictCore(f, dir === "dep" ? { wxDep: wxAt(wx, t), aptStats: st } : { wxArr: wxAt(wx, t) }); f.pred = { d: p.predictedDelay, on: p.probs.onTime, c: p.confidence, top: p.top, summary: p.summary, factors: p.factors.slice(0, 4) }; }
   res.json({ airport: airportOut(a), dir, ...b }); }));
 
+
+// ---- Route-based ADS-B match: many airlines (Jet2 EXS, easyJet EZY...) fly alphanumeric callsigns (EXS8KD), so EXS1747 isn't on ADS-B.
+// Find an aircraft of the same operator, airborne, on the great circle between origin and destination, heading to the destination,
+// near where the flight should be given its real departure time. Once matched, follow that airframe by hex.
+const R_NM = 3440.065, rad = x => x * Math.PI / 180;
+const nm = (a, b) => { const dl = rad(b.lat - a.lat), dn = rad(b.lon - a.lon); const h = Math.sin(dl / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dn / 2) ** 2; return 2 * R_NM * Math.asin(Math.sqrt(h)); };
+const brg = (a, b) => { const y = Math.sin(rad(b.lon - a.lon)) * Math.cos(rad(b.lat)), x = Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) - Math.sin(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.cos(rad(b.lon - a.lon)); return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360; };
+const lerp = (a, b, t) => ({ lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t });
+const MATCH = {};
+const liveOut = (a, src, extra = {}) => ({ hex: a.hex, callsign: (a.flight || "").trim(), reg: a.r, type: a.t, lat: a.lat, lon: a.lon, alt: a.alt_baro, gs: a.gs, track: a.track, vs: a.baro_rate, squawk: a.squawk, seen: a.seen, source: src, ...extra });
+async function routeMatch(f) { const o = f.origin, d = f.destination, icao = f.airline?.icao; const t0 = f.dep?.actual; if (!o?.lat || !d?.lat || !icao || !t0) return null;
+  const el = (Date.now() - new Date(t0)) / 3600e3; if (el < 0.05 || el > 18) return null; const key = f.number + f.date;
+  const m = MATCH[key]; if (m) { const r = await cached("hex:" + m.hex, 15, () => getJSON(`https://api.adsb.lol/v2/hex/${m.hex}`)).catch(() => null); const a = r?.ac?.[0];
+    if (a?.lat != null) return liveOut(a, "adsb.lol", { matched: "route", matchNote: m.note }); return null; }
+  const tot = nm(o, d), exp = Math.min(tot, Math.max(0, (el - 0.2) * 420)); const p = lerp(o, d, tot ? exp / tot : 0);
+  const r = await cached(`pt:${p.lat.toFixed(1)}:${p.lon.toFixed(1)}`, 30, () => getJSON(`https://api.adsb.lol/v2/point/${p.lat.toFixed(3)}/${p.lon.toFixed(3)}/250`)).catch(() => null);
+  let best = null; for (const a of r?.ac || []) { const cs = (a.flight || "").trim(); if (!cs.startsWith(icao) || a.lat == null) continue;
+    const air = typeof a.alt_baro === "number"; const fo = nm(o, a), td = nm(a, d), x = fo + td - tot; if (x > 40) continue;
+    if (air && a.track != null) { const dd = Math.abs(((a.track - brg(a, d)) + 540) % 360 - 180); if (dd > 35) continue; }
+    if (!air && td > 8) continue; const sc = Math.abs(fo - exp) + x * 2; if (sc > 160) continue; if (!best || sc < best.sc) best = { a, sc, cs }; }
+  if (!best) return null; const note = `Matched by route: ${best.cs}${best.a.r ? " (" + best.a.r + ")" : ""} is the ${f.airline?.name || icao} aircraft on the ${o.iata}→${d.iata} track`;
+  MATCH[key] = { hex: best.a.hex, note }; return liveOut(best.a, "adsb.lol", { matched: "route", matchNote: note }); }
 async function findFlight(number, ymd) {
   number = number.toUpperCase().replace(/\s+/g, "");
   const result = { number, date: ymd, sources: [] };
@@ -291,7 +344,7 @@ async function findFlight(number, ymd) {
   const cs = toCallsign(number);
   let route = null; if (cs) { try { route = await cached("adsbdb:" + cs, 86400, async () => (await getJSON(`https://api.adsbdb.com/v0/callsign/${cs}`)).response?.flightroute); } catch {} }
   if (!result.flight) {
-    const cands = new Set(route ? [route.origin?.iata_code, route.destination?.iata_code].filter(a => OFFICIAL[a]) : Object.keys(MAG_SITES));
+    const cands = new Set(route ? [route.origin?.iata_code, route.destination?.iata_code].filter(a => OFFICIAL[a]) : [...Object.keys(MAG_SITES), "LHR"]);
     let dep, arr;
     for (const apt of cands) for (const dir of ["dep", "arr"]) { try { const f = (await officialBoard(apt, dir, ymd)).find(x => x.number === number); if (f) dir === "dep" ? (dep = f) : (arr = f); } catch {} }
     const f = dep || arr;
@@ -303,6 +356,12 @@ async function findFlight(number, ymd) {
   }
   if (result.flight) result.flight.callsign = cs;
   if (cs) { const live = await liveByCallsign(cs).catch(() => null); if (live) { result.live = live; result.sources.push(live.source); } }
+  if (!result.live && result.flight && result.flight.status === "departed" && !result.flight.arr?.actual) { const lv = await routeMatch({ ...result.flight, date: ymd }).catch(() => null); if (lv) { result.live = lv; result.sources.push("adsb.lol (route match)"); } }
+  const F = result.flight, L = result.live;
+  if (F && L?.lat != null && F.destination?.lat) { const rem = nm(L, F.destination), tot = nm(F.origin || L, F.destination);
+    L.remainingNm = Math.round(rem); L.progress = tot ? Math.max(0, Math.min(100, Math.round((1 - rem / tot) * 100))) : null;
+    if (typeof L.alt === "number" && L.gs > 80) { L.eta = new Date(Date.now() + (rem / L.gs + 8 / 60) * 3600e3).toISOString(); if (!F.arr?.actual) { F.arr = { ...F.arr, estimated: F.arr?.estimated || L.eta, etaSource: "ADS-B (distance ÷ ground speed + 8 min approach)" }; } if (["departed", "scheduled", "delayed", "boarding", "gate"].includes(F.status)) { F.status = "enroute"; F.statusText = "En route"; } }
+    else if (L.alt === "ground" && rem < 8 && F.status !== "landed") { F.status = "landed"; F.statusText = "Landed (ADS-B: on the ground at " + F.destination.iata + ")"; } }
   if (result.flight && !result.flight.date) result.flight.date = ymd;
   return result;
 }
@@ -535,7 +594,7 @@ function diff(a, b, f) { const m = []; if (!a) return m;
   if (b.dly != null && (a.dly ?? 0) + 10 <= b.dly && b.dly >= 15) m.push(`⏱ Now ${b.dly} min late`);
   if (b.dly != null && a.dly != null && a.dly >= 15 && b.dly <= a.dly - 15) m.push(`✅ Delay reduced to ${Math.max(0, b.dly)} min`);
   if (b.belt && b.belt !== a.belt) m.push(`🧳 Baggage belt ${b.belt}`);
-  if (b.status !== a.status && ["departed", "landed", "diverted", "boarding"].includes(b.status)) m.push(b.statusText || b.status);
+  if (b.status !== a.status && ["departed", "enroute", "landed", "diverted", "boarding"].includes(b.status) && !(a.status === "enroute" && b.status === "departed") && !(a.status === "departed" && b.status === "enroute")) m.push(b.status === "enroute" ? "Departed, now en route" : b.statusText || b.status);
   return m; }
 // prefs: { events: { cancel, gate, delay, belt, status }: bool, quiet: { on, from: "22:00", to: "07:00", tz } } — cancellations always break quiet hours
 function filterPrefs(m, p) { if (!p || !m.length) return m; const ev = p.events || {}; const kind = x => x.startsWith("❌") ? "cancel" : x.startsWith("🚪") || x.startsWith("Terminal") ? "gate" : x.startsWith("⏱") || x.startsWith("✅") ? "delay" : x.startsWith("🧳") ? "belt" : "status";
@@ -562,8 +621,11 @@ function learned(o, t) { const route = [], apt = [];
   return { route: sum(route), airport: sum(apt) }; }
 api.get("/learned", (req, res) => res.json(learned(String(req.query.o || "").toUpperCase(), String(req.query.t || "").toUpperCase())));
 
+api.get("/security/:iata", wrap(async (req, res) => { const c = req.params.iata.toUpperCase(); const f = SECURITY[c];
+  if (!f) return res.json({ iata: c, available: false, note: "This airport doesn't publish live security queue times that Skyline can read." });
+  try { res.json({ iata: c, available: true, ...(await cached("sec:" + c, 120, f)) }); } catch (e) { res.json({ iata: c, available: false, note: "Live queue feed unavailable right now (" + e.message + ")" }); } }));
 app.use("/api", api);
 const dist = path.join(__dir, "../web/dist");
-app.use(express.static(dist, { setHeaders: (r, p) => { if (p.endsWith("sw.js") || p.endsWith(".html")) r.setHeader("cache-control", "no-cache"); } }));
+app.use(express.static(dist, { setHeaders: (r, p) => { if (p.endsWith("sw.js") || p.endsWith(".html") || p.endsWith("version.json")) r.setHeader("cache-control", "no-cache"); } }));
 app.get(/^\/(?!api).*/, (q, r) => r.sendFile(path.join(dist, "index.html")));
 app.listen(PORT, "0.0.0.0", () => console.log("Skyline on :" + PORT));

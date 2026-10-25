@@ -1,12 +1,13 @@
 import { TerminalBoard } from "./terminal";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRef, useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import MapView, { MAP_STYLES } from "./MapView";
 import { Sheet, RoundBtn, I, Badge } from "./ui";
 import { api, today, dist, fmtT, fmtD, best, delay, dur, lateLabel, lateColor, withEstArr, load, save, logo, ics, download, wxIcon, tzOffset, estDurMin, type Flight, type Ap } from "./lib";
+import { liveOf, statusOf } from "./lib";
 import { EXAMPLE } from "./example";
 import { Timeline, Progress, WeatherCard, AirportInfo, PassportMore, PasteImport, exportIcs, UnitsCard, AlertPrefsCard } from "./more";
-import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras } from "./extras";
+import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras, DepartureDay, UpdateBanner, PushChecklist, BUILD, localNotify } from "./extras";
 
 type Ov = { t: "flight"; f: Flight } | { t: "board"; iata: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" };
 const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <img className="alogo" style={{ width: s, height: s }} src={logo(a?.iata)} onError={e => (e.currentTarget.style.visibility = "hidden")} alt="" />;
@@ -23,7 +24,7 @@ export default function App() {
   const [theme, setTheme] = useState(localStorage.getItem("sk.theme") || "dark");
   useEffect(() => save(flights), [flights]);
   useEffect(() => { navigator.storage?.persist?.(); if (new URLSearchParams(location.search).get("tab") === "friends") { setTab("friends"); history.replaceState(null, "", "/"); } }, []);
-  useEffect(() => { const f = () => document.visibilityState === "visible" && syncPush(flights.filter(x => !x.friend)).catch(e => console.warn("push resync", e)); const t = setTimeout(f, 1500); document.addEventListener("visibilitychange", f); return () => { clearTimeout(t); document.removeEventListener("visibilitychange", f); }; }, [flights.filter(f => !f.friend).map(f => f.id).join()]);
+  useEffect(() => { const f = () => document.visibilityState === "visible" && syncPush(flights.filter(x => !x.friend)).catch(e => console.warn("push resync", e)); const t = setTimeout(f, 1500); const iv = setInterval(f, 10 * 60e3); document.addEventListener("visibilitychange", f); return () => { clearTimeout(t); clearInterval(iv); document.removeEventListener("visibilitychange", f); }; }, [flights.filter(f => !f.friend).map(f => f.id).join()]);
   useEffect(() => { localStorage.setItem("sk.theme", theme); document.documentElement.dataset.theme = theme; }, [theme]);
   useEffect(() => { localStorage.setItem("sk.map2", mapStyle); }, [mapStyle]);
   // import a friend's shared flight from URL
@@ -32,14 +33,22 @@ export default function App() {
   const upd = (f: Flight) => setFlights(l => l.map(x => x.id === f.id && !!x.friend === !!f.friend ? f : x));
   const active = flights.filter(f => !f.example && f.date >= new Date(Date.now() - 86400e3).toISOString().slice(0, 10));
   // refresh active flights + live positions, notify on change
-  useEffect(() => { const tick = async () => { for (const f of active) { try { const r = await api(`/flight/${f.number}?date=${f.date}`); if (r.live) setLive(l => ({ ...l, [f.id]: r.live }));
-    if (r.flight && !f.manual) { const n = { ...f, ...r.flight, id: f.id, date: f.date, notes: f.notes, friend: f.friend, aircraft: { ...f.aircraft, ...r.flight.aircraft, ...(r.live ? { reg: r.live.reg, hex: r.live.hex, model: r.live.type } : {}) } };
-      const msg: string[] = []; if (n.statusText !== f.statusText && n.statusText) msg.push(n.statusText!); if (n.dep.gate !== f.dep.gate && n.dep.gate) msg.push(`Gate ${n.dep.gate}`);
-      if (msg.length) { n.updates = [...(f.updates || []), { at: Date.now(), text: msg.join(" • ") }]; if (Notification?.permission === "granted") new Notification(`${n.number} ${n.origin?.iata}→${n.destination?.iata}`, { body: msg.join(" • "), icon: "/icon-192.png" }); }
-      upd(n); } } catch {} } }; tick(); const t = setInterval(tick, 90e3); return () => clearInterval(t); }, [active.map(f => f.id).join()]);
+  // Refresh every tracked flight from the server on open, whenever the app comes back to the foreground, and every 60 s.
+  // (Before: a status change fired `new Notification()`, which throws on iPhone, so the update was never saved and the card stayed stale.)
+  const flRef = useRef(flights); flRef.current = flights;
+  useEffect(() => { let busy = false; const tick = async () => { if (busy || document.visibilityState !== "visible") return; busy = true;
+    const now = flRef.current.filter(f => !f.example && f.date >= new Date(Date.now() - 86400e3).toISOString().slice(0, 10));
+    for (const f of now) { try { const r = await api(`/flight/${f.number}?date=${f.date}`); setLive(l => ({ ...l, [f.id]: r.live || null }));
+      if (r.flight && !f.manual) { const n: Flight = { ...f, ...r.flight, id: f.id, date: f.date, notes: f.notes, friend: f.friend, checkedAt: Date.now(), live: r.live ? { ...r.live, at: Date.now() } : null, aircraft: { ...f.aircraft, ...r.flight.aircraft, ...(r.live ? { reg: r.live.reg, hex: r.live.hex, model: r.live.type } : {}) } } as any;
+        const msg: string[] = []; if (n.statusText !== f.statusText && n.statusText) msg.push(n.statusText!); if (n.dep.gate !== f.dep.gate && n.dep.gate) msg.push(`Gate ${n.dep.gate}`);
+        if (msg.length) { n.updates = [...(f.updates || []), { at: Date.now(), text: msg.join(" · ") }]; localNotify(`${n.number} ${n.origin?.iata}→${n.destination?.iata}`, msg.join(" · "), n.id); }
+        upd(n); } } catch (e) { console.warn("refresh", f.number, e); } }
+    busy = false; };
+    tick(); const t = setInterval(tick, 60e3); const v = () => document.visibilityState === "visible" && tick(); document.addEventListener("visibilitychange", v); window.addEventListener("focus", v);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", v); window.removeEventListener("focus", v); }; }, [active.map(f => f.id).join()]);
   const top = ov.at(-1); const focus = top?.t === "flight" ? top.f : null;
   const mapFlights = focus ? [focus] : tab === "passport" ? flights.filter(f => !f.friend) : tab === "friends" ? flights.filter(f => f.friend) : active.filter(f => !f.friend);
-  return <div className="app"><WarmBanner />{why && <WhySheet f={why} close={() => setWhy(null)} />}
+  return <div className="app"><WarmBanner /><UpdateBanner />{why && <WhySheet f={why} close={() => setWhy(null)} />}
     <MapView flights={mapFlights} live={live} style={mapStyle} radar={radar} focus={focus} locate={locate} onPlane={id => { const f = flights.find(x => x.id === id); f && push({ t: "flight", f }); }} />
     <div className="maptint" /><div className="aurora" />
     <div className="mapbtns"><button onClick={() => setMapStyle(MAP_STYLES[(MAP_STYLES.indexOf(mapStyle) + 1) % MAP_STYLES.length])}>{I.layers}</button><button className={radar ? "on" : ""} onClick={() => setRadar(!radar)}>{I.cloud}</button><button onClick={() => setLocate(Date.now())}>{I.locate}</button></div>
@@ -64,14 +73,14 @@ function FlightCard({ f, onClick, pred }: { f: Flight; onClick: () => void; pred
   useEffect(() => { if (pred && !f.example) api(`/predict/${f.number}?date=${f.date}`).then(setP).catch(() => {}); }, [f.id]);
   const until = best(f.dep) ? (+new Date(best(f.dep)!) - Date.now()) / 60000 : null;
   const dm = estDurMin(f.origin, f.destination) || 0; const st = best(f.dep) ? (Date.now() - +new Date(best(f.dep)!)) / 60000 : -1;
-  const prog = f.status === "landed" ? 100 : st <= 0 ? 0 : Math.min(100, (st / Math.max(dm, 1)) * 100);
-  const sTxt = f.status === "landed" ? "Landed" : f.status === "cancelled" ? "Cancelled" : st > 0 ? "En route" : dd != null && dd >= 15 ? `Delayed +${dd}m` : "Scheduled";
-  const sCls = f.status === "cancelled" || (dd != null && dd >= 15) ? "bad" : st > 0 ? "air" : "ok";
+  const lv = liveOf(f); const S = statusOf(f, lv);
+  const prog = f.status === "landed" ? 100 : lv?.progress != null ? lv.progress : ["departed", "enroute"].includes(f.status || "") && st > 0 ? Math.min(95, (st / Math.max(dm, 1)) * 100) : 0;
+  const sTxt = S.label, sCls = S.cls;
   return <div className="card fcard rise press" onClick={onClick}>
     <div className="row between"><div className="row g12"><div className="logowrap"><Logo a={f.airline} s={40} /></div><div><div className="fnum">{f.number}<span> • {fmtD(f.date, { weekday: "short", day: "numeric", month: "short" })}{f.friend && ` • ${f.friend}`}</span></div><div className="froute">{f.origin?.city || f.origin?.iata} → {f.destination?.city || f.destination?.iata}</div></div></div>
       <span className={"spill " + sCls}><i />{sTxt}</span></div>
     <div className="fbig"><div><div className="iata">{f.origin?.iata}</div><div className="ftime" style={{ color: lateColor(dd) }}>{fmtT(best(f.dep), f.origin?.tz)}</div></div>
-      <div className="ftrack"><div className="fdur">{dm ? dur(dm) : ""}</div><div className="fline"><span style={{ width: `${prog}%` }} /><i style={{ left: `${prog}%` }}>{I.glyph}</i></div><div className="fdur">{until != null && until > 0 ? `departs in ${dur(until)}` : f.statusText || ""}</div></div>
+      <div className="ftrack"><div className="fdur">{dm ? dur(dm) : ""}</div><div className="fline"><span style={{ width: `${prog}%` }} /><i style={{ left: `${prog}%` }}>{I.glyph}</i></div><div className="fdur">{lv && typeof lv.alt === "number" ? `${Math.round(lv.alt / 100) * 100} ft · ${Math.round(lv.gs || 0)} kt` : until != null && until > 0 && !["departed", "enroute", "landed", "cancelled"].includes(f.status || "") ? `departs in ${dur(until)}` : f.statusText || ""}</div></div>
       <div className="right"><div className="iata">{f.destination?.iata}</div><div className="ftime">{fmtT(best(g.arr), f.destination?.tz)}{(g.arr as any).estimatedOnly && <sup>est</sup>}</div></div></div>
     {p && !p.cancelled && <div className="aiwrap"><span className="aichip press" onClick={e => { e.stopPropagation(); (window as any).__why?.(f); }}><b style={{ color: lateColor(p.predictedDelay) }}>AI {p.predictedDelay >= 5 ? `+${p.predictedDelay}m` : "on time"}</b></span>{p?.top && <span className="toprsn">{p.summary}</span>}</div>}
   </div>;
@@ -222,7 +231,7 @@ function Prediction({ f }: { f: Flight }) {
 }
 
 function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
-  const g = withEstArr(f); const dd = delay(f.dep), da = delay(g.arr); const lv = live[f.id];
+  const g = withEstArr(f); const dd = delay(f.dep), da = delay(g.arr); const lv = live[f.id] || liveOf(f);
   const [wx, setWx] = useState<any[]>([]); const [ac, setAc] = useState<any>(null); const [fc, setFc] = useState<any>(null); const [inb, setInb] = useState<any>(null); const [al, setAl] = useState<any>(f.airline);
   useEffect(() => { Promise.all([f.origin, f.destination].map((a: Ap) => a?.lat ? api(`/weather?lat=${a.lat}&lon=${a.lon}`).catch(() => null) : null)).then(setWx);
     if (!f.example) api(`/forecast/${f.number}`).then(setFc).catch(() => {}); if (f.airline?.iata && !f.airline.links) api("/airline/" + f.airline.iata).then(setAl).catch(() => {}); }, [f.id]);
@@ -230,13 +239,13 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   useEffect(() => { if (hex || reg) api(`/aircraft?hex=${hex || ""}&reg=${reg || ""}`).then(setAc).catch(() => {}); if (reg) api(`/inbound?reg=${reg}&date=${f.date}`).then(setInb).catch(e => setInb({ err: e.message, needsKey: e.needsKey })); }, [hex, reg]);
   const tracked = flights.some((x: Flight) => x.id === f.id);
   const until = best(f.dep) ? (+new Date(best(f.dep)!) - Date.now()) / 60000 : 0;
-  const banner = f.status === "cancelled" ? ["Cancelled", "red"] : f.status === "landed" ? [`Arrived ${da != null ? lateLabel(da) : ""}`, da && da > 14 ? "red" : "green"] : f.status === "departed" ? ["In the air", "blue"] : until > 0 ? [`Gate Departure in ${dur(until)}`, dd && dd > 14 ? "red" : "green"] : [f.statusText || "Scheduled", "green"];
+  const banner = f.status === "cancelled" ? ["Cancelled", "red"] : f.status === "landed" ? [`Arrived ${da != null ? lateLabel(da) : ""}`, da && da > 14 ? "red" : "green"] : f.status === "enroute" ? [`En route${lv?.eta ? ", ETA " + fmtT(lv.eta, f.destination?.tz) : ""}`, "blue"] : f.status === "departed" ? ["Departed " + (f.dep.actual ? fmtT(f.dep.actual, f.origin?.tz) : ""), "blue"] : until > 0 ? [`Gate Departure in ${dur(until)}`, dd && dd > 14 ? "red" : "green"] : [f.statusText || "Scheduled", "green"];
   const tz = tzOffset(f.destination?.tz) - tzOffset(f.origin?.tz);
   const shareUrl = () => shareLink(f);
   const h = (f.history = flights.filter((x: Flight) => x.origin?.iata === f.origin?.iata && x.destination?.iata === f.destination?.iata && !x.friend));
   return <div className="fd">
     {f.example && <div className="exlabel">Example data — not a real flight record</div>}
-    <div className={"banner " + banner[1]}><b>{banner[0]}</b><div className="sm">Total {dur(estDurMin(f.origin, f.destination))} est. • {dist(f.origin, f.destination).toLocaleString()} mi{lv ? ` • live ${Math.round(lv.alt || 0).toLocaleString()} ft, ${Math.round(lv.gs || 0)} kt` : ""}</div></div>
+    <div className={"banner " + banner[1]}><b>{banner[0]}</b><div className="sm">Total {dur(estDurMin(f.origin, f.destination))} est. • {dist(f.origin, f.destination).toLocaleString()} mi{lv ? ` • live ${Math.round(lv.alt || 0).toLocaleString()} ft, ${Math.round(lv.gs || 0)} kt` : ""}</div>{lv?.matched === "route" && <div className="sm">{lv.matchNote}. Probable match: the airline flies a different radio callsign from the flight number.</div>}</div>
     <TimeBlock dir="dep" a={f.origin} t={f.dep} d={dd} badge={<Badge icon={<span>↗</span>} v={f.dep.gate} k={f.dep.terminal && `Terminal ${f.dep.terminal}`} />} />
     {f.diverted && <div className="divert">⑂ DIVERTED TO {f.diverted.iata}<span>Search for Recovery Flight ›</span></div>}
     <div className="sep"><span>◷ {dur(estDurMin(f.origin, f.destination))} • {dist(f.origin, f.destination).toLocaleString()} mi</span></div>
@@ -245,7 +254,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <Progress f={f} lv={lv} />
     <Timeline f={f} />
     <Prediction f={f} />
-    <LeaveCard f={f} />
+    <LeaveCard f={f} /><DepartureDay f={f} />
     <WeatherCard w={wx[0]} a={f.origin} label="Departure" />
     <WeatherCard w={wx[1]} a={f.destination} label="Arrival" />
     <h3 className="px">Good to Know</h3>
@@ -383,7 +392,8 @@ function PushControls() {
     <div className="row g8 mt8 wrap"><button className="primary" disabled={busy} onClick={() => run(syncPush(flights(), true).then(m => "Notifications " + m))}>{st.state === "subscribed" ? "Re-register alerts" : "Turn on alerts"}</button>
       <button className="secondary" disabled={busy || st.state !== "subscribed"} onClick={() => run(testPush())}>Send test</button>
       <button className="chip" onClick={() => pushStatus().then(setDbg).catch(e => setDbg({ error: e.message }))}>Diagnostics</button></div>
-    {msg && <div className="sm mt8" style={{ color: msg.err ? "var(--red, #ff5a5f)" : undefined }}>{msg.t}</div>}
+    <div className="mt8"><PushChecklist refresh={msg ? msg.t.length : 0} /></div>
+    {msg && <div className={"pushmsg mt8 " + (msg.err ? "err" : "ok")}>{msg.err ? "Failed: " : ""}{msg.t}</div>}
     {dbg && <pre className="sm muted mt8" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 200, overflow: "auto" }}>{JSON.stringify(dbg.you ? { you: dbg.you, vapid: dbg.vapidSource, subs: dbg.subscriptions, log: dbg.log?.slice(0, 5) } : dbg, null, 1)}</pre>}</>;
 }
 
@@ -392,7 +402,7 @@ function Settings({ x, theme, setTheme }: any) {
   const load = () => api("/settings").then(r => { setS(r); setLb(r.llmBase); setLm(r.llmModel); }); useEffect(() => { load(); }, []);
   const saveK = (body: any) => api("/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, adminToken: tok, newAdminToken: tok }) }).then(() => { setMsg("Saved ✓"); load(); }).catch(e => setMsg(e.message));
   return <><Head title="Settings" right={x} /><div className="px col g8">
-    <UnitsCard /><AlertPrefsCard onChange={() => syncPush(JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend)).catch(() => {})} />
+    <div className="card m0 row between"><span className="sm">App version</span><b className="sm">{BUILD}</b></div><UnitsCard /><AlertPrefsCard onChange={() => syncPush(JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend)).catch(() => {})} />
     <div className="card m0"><h3>Appearance</h3><div className="segs m0">{["auto", "light", "dark"].map(t => <button key={t} className={theme === t ? "on" : ""} onClick={() => setTheme(t)}>{t}</button>)}</div></div>
     <div className="card m0"><h3>Push notifications</h3><div className="muted sm">Gate & terminal changes, delays, cancellations, belt numbers — even when Skyline is closed. The server checks your tracked flights every 4 minutes. iPhone: open Skyline from its Home Screen icon (iOS 16.4+).</div>
       <PushControls /></div>

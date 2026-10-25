@@ -35,3 +35,18 @@ export const download = (name: string, text: string, type = "text/calendar") => 
 export const wxText = (c: number) => c === 0 ? "clear" : c <= 2 ? "few clouds" : c === 3 ? "overcast" : c <= 48 ? "fog" : c <= 57 ? "drizzle" : c <= 67 ? "rain" : c <= 77 ? "snow" : c <= 82 ? "showers" : c <= 86 ? "snow showers" : "thunderstorms";
 export const wxIcon = (c: number) => c === 0 ? "☀️" : c <= 2 ? "🌤️" : c === 3 ? "☁️" : c <= 48 ? "🌫️" : c <= 67 ? "🌧️" : c <= 77 ? "❄️" : c <= 82 ? "🌦️" : c <= 86 ? "🌨️" : "⛈️";
 export const tzOffset = (tz?: string, at = new Date()) => { if (!tz) return 0; const p = new Date(at.toLocaleString("en-US", { timeZone: tz })); const u = new Date(at.toLocaleString("en-US", { timeZone: "UTC" })); return Math.round((+p - +u) / 60000); };
+// Live ADS-B snapshot saved on the flight by the refresh loop; ignored once older than 5 minutes.
+export const liveOf = (f: any) => f?.live && Date.now() - (f.live.at || 0) < 5 * 60e3 ? f.live : null;
+// One status vocabulary for every card, from the airport feed + ADS-B. Never guessed from the clock alone.
+export function statusOf(f: Flight, lv?: any): { label: string; cls: "ok" | "bad" | "air" | "warn" } {
+  const d = delay(f.dep); const s = f.status || "";
+  if (s === "cancelled") return { label: "Cancelled", cls: "bad" };
+  if (s === "diverted") return { label: "Diverted", cls: "bad" };
+  if (s === "landed") return { label: "Landed", cls: "ok" };
+  if (s === "enroute" || (lv && typeof lv.alt === "number" && s !== "landed")) return { label: "En route", cls: "air" };
+  if (s === "departed") return { label: "Departed", cls: "air" };
+  if (s === "boarding") return { label: /final/i.test(f.statusText || "") ? "Final call" : /closing/i.test(f.statusText || "") ? "Gate closing" : "Boarding", cls: "warn" };
+  if (s === "gate") return { label: /closed/i.test(f.statusText || "") ? "Gate closed" : "Go to gate", cls: "warn" };
+  if (s === "delayed" || (d != null && d >= 15)) return { label: d != null && d > 0 ? `Delayed +${d}m` : "Delayed", cls: "bad" };
+  return { label: "Scheduled", cls: "ok" };
+}

@@ -282,12 +282,6 @@ h1,h2,h3,.froute,.big,.iata{letter-spacing:-.025em}.ftime,.big,.iata,.brow,.boar
 .tb-bclock{align-self:flex-end;margin:4px 12px;font-weight:700;font-variant-numeric:tabular-nums;font-size:22px}
 .tb-tag{color:#fff;font-weight:700;padding:1px 6px;border-radius:2px;font-size:.85em;text-align:center}
 /* MAG: charcoal screen, white Frutiger-like text, thin rules, filled status pills, clock bottom right */
-.tb-mag{--bg:#2b2b2d;--hd:#2b2b2d;--fg:#fff;--ok:#39b54a;--bad:#ff5a5a;--warn:#ffcc00;font-family:"Segoe UI","Frutiger","Helvetica Neue",Arial,sans-serif}
-.tb-mag .tb-title b{font-weight:600;font-size:26px}.tb-mag .tb-ap{display:none}
-.tb-mag .tb-head{background:#ffcc00;color:#111;opacity:1;font-size:11px;font-weight:700;margin:0 10px;padding:5px 8px}
-.tb-mag .tb-row{border-bottom:1px solid rgba(255,255,255,.18);margin:0 10px;padding:0 8px}
-.tb-mag .tb-st.blink.ok,.tb-mag .tb-st.ok{background:#39b54a;color:#0a2a10;padding:0 6px;animation:none}
-.tb-mag .tb-st.blink.bad{background:none;color:#ff5a5a}.tb-mag .tb-bclock{font-size:20px}
 /* Heathrow: yellow header band with black title, black screens, yellow text, white remarks, amber 7-seg clock box */
 .tb-lhr{--bg:#121212;--fg:#ffd200;--ok:#4be36b;--bad:#ff3b30;--warn:#ffffff}
 .tb-lhr .tb-top{background:#ffd200;color:#111}.tb-lhr .tb-top .tb-ap{color:#111}
@@ -330,3 +324,27 @@ h1,h2,h3,.froute,.big,.iata{letter-spacing:-.025em}.ftime,.big,.iata,.brow,.boar
 .tb-led .tb-panel{background:#000;border:6px solid #3a1d10;background-image:radial-gradient(rgba(255,163,26,.07) 30%,transparent 31%);background-size:3px 3px}
 .tb-led .tb-row{text-transform:uppercase}.tb-led .tb-ptitle{color:#9bff5a;font-size:12px}
 @media (orientation:portrait){.tb-row{font-size:11px}.tb-head{font-size:9px}.tb-head,.tb-row{gap:4px;padding:0 6px}}
+.ck{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;font-size:12px;font-weight:800}
+.ck.ok{background:#1f8f4e;color:#fff}.ck.bad{background:#d23b3b;color:#fff}.ck.na{background:#333a48;color:#9aa3b5}
+.ckrow{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}.ckrow .faint{max-width:55%;text-align:right;overflow:hidden;text-overflow:ellipsis}
+.ckerr{margin-top:8px;padding:10px 12px;border-radius:10px;background:rgba(210,59,59,.15);border:1px solid #d23b3b;color:#ffb3b3;font-size:13px;font-weight:600}
+.pushmsg{padding:10px 12px;border-radius:10px;font-size:13px;font-weight:600}.pushmsg.err{background:rgba(210,59,59,.18);border:1px solid #d23b3b;color:#ffc1c1}.pushmsg.ok{background:rgba(31,143,78,.15);border:1px solid #1f8f4e;color:#b9f0cf}
+/* MAG airside screen (per user photo): yellow title band, navy / near-black alternating rows, coloured airline tiles */
+.tb-mag{--bg:#0d0f14;--fg:#fff;--ok:#fff;--bad:#ff6b5e;--warn:#ffd23f;background:#0d0f14;font-family:"Segoe UI","Frutiger","Helvetica Neue",Arial,sans-serif}
+.tb-mag .tb-top{background:linear-gradient(#f2e01a,#e6cf00);color:#111;padding:8px 16px;margin:0}
+.tb-mag .tb-title b{font-weight:700;font-size:30px;color:#111;letter-spacing:-.3px}.tb-mag .tb-ap{display:block;color:#3a3200;font-size:12px;font-weight:600;text-align:right}
+.tb-mag .tb-sec{display:block;font-size:12px;color:#111}
+.tb-mag .tb-head{background:#0d0f14;color:#fff;opacity:1;font-size:15px;font-weight:600;padding:8px 0 6px;margin:0}
+.tb-mag .tb-row{margin:0;padding:0;border:0;background:#45507a;min-height:calc((100vh - 150px)/var(--per))}
+.tb-mag .tb-row.alt{background:#1a1414}
+.tb-mag .tb-row>span{display:flex;align-items:center;padding:0 8px;overflow:hidden;white-space:nowrap}
+.tb-mag .c-time{font-size:26px;font-weight:700;color:#fff}.tb-mag .c-dest{font-size:22px;font-weight:600;color:#f6c443}
+.tb-mag .c-fl{font-size:16px;color:#fff}.tb-mag .c-gate{font-size:20px;font-weight:700;color:#fff;justify-content:center}
+.tb-mag .tb-st{color:#fff;font-size:15px;background:none!important;padding:0!important}.tb-mag .tb-st.bad{color:#fff;font-weight:700}.tb-mag .tb-st.dim{color:#cfd3dc}.tb-mag .tb-st.warn{color:#ffd23f}
+.tb-mag .tb-st.blink{animation:tbblink 1.4s steps(2) infinite}
+.tb-mag .c-tile{padding:0!important;align-self:stretch}
+.tb-tile{display:flex;align-items:center;gap:6px;width:100%;height:100%;padding:0 8px;font-size:15px;font-weight:800;letter-spacing:-.2px}
+.tb-tile img{width:24px;height:24px;border-radius:4px;background:#fff;object-fit:contain}.tb-tile b{overflow:hidden;text-overflow:ellipsis}
+.tb-mag .tb-bclock{font-size:20px;color:#fff}
+@keyframes tbblink{50%{opacity:.35}}
+.tb-sec{margin-left:10px}

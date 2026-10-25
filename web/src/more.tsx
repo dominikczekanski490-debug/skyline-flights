@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { SecurityCard, AirportLinks } from "./extras";
 import { api, dist, estDurMin, dur, fmtD, best, tzOffset, wxText, ics, download, today, type Flight, type Ap, type Times } from "./lib";
 import { I } from "./ui";
 
@@ -96,6 +97,7 @@ export function AirportInfo({ iata }: { iata: string }) {
       {w && <><Cell icon={wxSvg(w.weather_code)} k="Weather now" v={`${fTemp(w.temperature_2m)} · ${wxText(w.weather_code)}`} /><Cell icon={X.wind} k="Wind" v={`${compass(w.wind_direction_10m)} ${Math.round(w.wind_speed_10m)} kt`} /></>}
       {d.live && <><Cell icon={X.radar} k="Aircraft within 25 nm" v={d.live.total} /><Cell icon={I.plane} k="On the ground · below 10k ft" v={`${d.live.ground} · ${d.live.low}`} /></>}</div>
     <div className="faint sm mt8">Live traffic: {d.live?.source || "unavailable"} ADS-B, refreshed every minute · weather Open-Meteo</div></div>
+    <SecurityCard iata={iata} /><AirportLinks iata={iata} />
     {d.runways?.length ? <div className="card"><h3>Runways</h3><div className="muted sm">{d.runways.length} active · OurAirports</div>
       {d.runways.map((r: any) => <div key={r.le + r.he} className="rwy"><span className="mic">{X.runway}</span><div className="grow"><b>{r.le}{r.he ? " / " + r.he : ""}</b><div className="faint sm">{surf(r.surface)}{r.lighted ? " · lit" : ""}{r.heading ? ` · ${Math.round(r.heading)}°` : ""}</div></div>
         <div className="right"><b>{r.lengthFt ? (getUnits().dist === "km" ? `${Math.round(r.lengthFt * .3048).toLocaleString()} m` : `${r.lengthFt.toLocaleString()} ft`) : "—"}</b><div className="faint sm">{r.widthFt ? (getUnits().dist === "km" ? `${Math.round(r.widthFt * .3048)} m wide` : `${r.widthFt} ft wide`) : ""}</div></div></div>)}</div> : null}</>;

@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, fmtT, delay, logo } from "./lib";
 
 // Original CSS recreations inspired by reference photos of each airport's screens (see refs/). Not official designs.
-type Col = "time" | "dest" | "fl" | "logo" | "tag" | "gate" | "term" | "st" | "icon" | "est";
+type Col = "time" | "dest" | "fl" | "logo" | "tag" | "gate" | "term" | "st" | "icon" | "est" | "tile";
 type Th = { name: string; cls: string; cols: Col[]; title: (dir: string) => [string, string]; panels?: number; clock: "top" | "bottom" | "box"; heads?: Partial<Record<Col, string>> };
 export const THEMES: Record<string, Th> = {
-  mag: { name: "MAG (MAN/STN/EMA)", cls: "tb-mag", cols: ["time", "dest", "fl", "st"], clock: "bottom", title: d => [d === "dep" ? "All Departures" : "All Arrivals", ""] },
+  mag: { name: "MAG (MAN/STN/EMA)", cls: "tb-mag", cols: ["tile", "time", "dest", "fl", "st", "gate"], clock: "bottom", title: d => [d === "dep" ? "Airside Departures" : "Arrivals", ""], heads: { tile: "", time: "Time", dest: "Destination", fl: "Flight", st: "Remark", gate: "Gate" } },
   lhr: { name: "Heathrow", cls: "tb-lhr", cols: ["time", "dest", "fl", "st"], panels: 2, clock: "box", title: d => [d === "dep" ? "Departures" : "Arrivals", ""] },
   fra: { name: "Frankfurt", cls: "tb-fra", cols: ["fl", "dest", "time", "icon", "term", "gate"], clock: "top", title: d => d === "dep" ? ["Abflug", "Departures"] : ["Ankunft", "Arrivals"], heads: { fl: "Flug Flight", dest: "Ziel Destination", time: "Zeit Time", icon: "", term: "Terminal", gate: "Gate" } },
   avinor: { name: "Avinor (OSL)", cls: "tb-avinor", cols: ["time", "tag", "dest", "gate", "st"], panels: 2, clock: "top", title: d => d === "dep" ? ["Avgang", "Departure"] : ["Ankomst", "Arrival"], heads: { time: "Tid", tag: "Fly", dest: "Til / To", gate: "Gate", st: "Merknad" } },
@@ -17,7 +17,12 @@ export const THEMES: Record<string, Th> = {
 };
 const NORDIC = /^(OSL|BGO|TRD|SVG|TOS|BOO|AES|KRS|HAU|EVE|ALF|BDU|MOL|KSU|LKL|HFT|VDS|KKN|ANX|SSJ|MQN|FRO|SOG|HOV|ORW|SDN|FDE|RRS|BNN|MJF|RVK|VAW|BVG|SKN|SVJ|LKN|VRY|RET|NVK|HAA|BJF|MEH|OSY|NTB|SOJ)$/;
 export const autoTheme = (iata: string) => /^(MAN|STN|EMA)$/.test(iata) ? "mag" : /^(LHR|LGW)$/.test(iata) ? "lhr" : iata === "FRA" ? "fra" : NORDIC.test(iata) ? "avinor" : /^(SYD|MEL|BNE)$/.test(iata) ? "syd" : iata === "AMS" ? "ams" : /^(CDG|ORY)$/.test(iata) ? "cdg" : "led";
-const HEAD: Record<Col, string> = { time: "Time", dest: "Destination", fl: "Flight", logo: "", tag: "Flight", gate: "Gate", term: "Term", st: "Remarks", icon: "", est: "Est" };
+// Airline brand tile colours (as painted on the MAN screens: easyJet orange, Lufthansa navy, Jet2 red...). Unknown airlines get a neutral tile.
+const BRAND: Record<string, [string, string]> = { U2: ["#ff6600", "#fff"], EC: ["#ff6600", "#fff"], DS: ["#ff6600", "#fff"], LH: ["#05164d", "#fff"], LS: ["#e2001a", "#fff"], FR: ["#073590", "#f1c933"], RK: ["#073590", "#f1c933"], BA: ["#075aaa", "#fff"], TOM: ["#1b1464", "#fff"], BY: ["#1b1464", "#fff"], EK: ["#d71921", "#fff"], QR: ["#5c0632", "#fff"], EY: ["#bd8b13", "#fff"], KL: ["#00a1de", "#fff"], AF: ["#002157", "#fff"], AA: ["#36495a", "#fff"], UA: ["#005daa", "#fff"], VS: ["#e10a0a", "#fff"], EI: ["#006a4e", "#fff"], LX: ["#e2001a", "#fff"], SK: ["#000f3c", "#fff"], TK: ["#c70a0c", "#fff"], W6: ["#c6007e", "#fff"], W9: ["#c6007e", "#fff"], VY: ["#ffcc00", "#333"], PC: ["#fdb913", "#2d2d2d"], SN: ["#002157", "#fff"], AY: ["#0b1560", "#fff"], LO: ["#11397e", "#fff"], TP: ["#e00000", "#fff"], IB: ["#d7192d", "#fff"], SQ: ["#0f2a5d", "#fcb130"], CX: ["#006564", "#fff"], EW: ["#a5027d", "#fff"], LM: ["#e2007a", "#fff"], BE: ["#e2007a", "#fff"], MT: ["#003c71", "#fff"], AT: ["#c4122f", "#fff"], SV: ["#00694d", "#fff"], PK: ["#00573f", "#fff"], ET: ["#078930", "#fcdd09"], A3: ["#003a70", "#fff"], AI: ["#d22630", "#fff"], WY: ["#9b1b30", "#fff"], VL: ["#05164d", "#fff"] };
+const NAMEFIX: Record<string, string> = { RK: "Ryanair", DS: "easyJet", EC: "easyJet", U2: "easyJet", W9: "Wizz Air", LS: "Jet2.com", BY: "TUI", TOM: "TUI", SK: "SAS", EW: "Eurowings", LM: "Loganair", VL: "Lufthansa City" }; // registry names lag rebrands (RK resolves to the defunct Air Afrique)
+const Tile = ({ a }: { a: any }) => { const [bad, setBad] = useState(false); const [bg, fg] = BRAND[a?.iata] || ["#2a3142", "#fff"]; a = a && NAMEFIX[a.iata] ? { ...a, name: NAMEFIX[a.iata] } : a;
+  return <span className="tb-tile" style={{ background: bg, color: fg }}>{a?.iata && !bad ? <img src={logo(a.iata)} alt="" onError={() => setBad(true)} /> : null}<b>{(a?.name || a?.iata || "").replace(/ (Airlines?|Airways|Air Lines|International)$/i, "")}</b></span>; };
+const HEAD: Record<Col, string> = { tile: "", time: "Time", dest: "Destination", fl: "Flight", logo: "", tag: "Flight", gate: "Gate", term: "Term", st: "Remarks", icon: "", est: "Est" };
 const tagColor = (c = "") => { let h = 0; for (const x of c) h = (h * 31 + x.charCodeAt(0)) % 360; return `hsl(${h} 70% 42%)`; };
 
 // Board remark from the feed's own status text only. Supported vocabularies (checked live):
@@ -30,18 +35,24 @@ function status(f: any, dir: string) {
   if (f.status === "cancelled" || /cancel/.test(s)) return { txt: "Cancelled", k: "bad" };
   if (f.status === "diverted" || /divert/.test(s)) return { txt: "Diverted", k: "bad" };
   if (dir === "dep") {
-    if (/final call/.test(s)) return { txt: "Final call" + gs, k: "blink bad" };
+    if (/deallocat/i.test(t.gateAction || f.gateAction || "")) return (d ?? 0) >= 30 ? { txt: "Delayed" + at(t.estimated), k: "warn" } : { txt: "Gate closed", k: "bad" };
+    if (/final call/.test(s) || /final call/i.test(t.gateAction || f.gateAction || "")) return { txt: "Final call" + gs, k: "blink bad" };
+    if (/flight closing/.test(s)) return { txt: "Flight closing" + gs, k: "blink bad" };
+    if (/taxied/.test(s)) return { txt: "Taxied", k: "dim" };
+    if (/check-in zone/.test(s) && !/delay/.test(s)) return { txt: "On time · Zone " + (s.match(/zone\s+([a-z0-9]+)/)?.[1] || "").toUpperCase(), k: "" };
     if (/boarding/.test(s)) return { txt: "Boarding" + gs, k: "blink ok" };
     if (/go to gate|gate open/.test(s)) return { txt: (/gate open/.test(s) ? "Gate open" : "Go to gate") + gs, k: "blink ok" };
     if (/closed/.test(s)) return { txt: "Gate closed", k: "bad" };
     if (/off block/.test(s)) return { txt: "Off blocks" + at(t.actual), k: "dim" };
     if (f.status === "departed") return { txt: "Departed" + at(t.actual), k: "dim" };
-    if (/lounge/.test(s)) return { txt: d != null && d >= 5 ? "Delayed" + at(t.estimated) : "Wait in lounge", k: d != null && d >= 5 ? "warn" : "" };
+    if (/lounge/.test(s)) return { txt: (d ?? 0) >= 5 ? "Delayed" + at(t.estimated) : "Wait in lounge", k: (d ?? 0) >= 5 ? "warn" : "" };
   } else {
     if (/baggage delivery finish/.test(s)) return { txt: "Bags delivered", k: "dim" };
     if (/baggage/.test(s)) return { txt: "Baggage" + (f.arr?.baggage ? " belt " + f.arr.baggage : " in hall"), k: "blink ok" };
     if (/on position/.test(s)) return { txt: "At stand" + at(t.actual), k: "ok" };
-    if (f.status === "landed") return { txt: (/landed/.test(s) ? "Landed" : "Arrived") + at(t.actual), k: "ok" };
+    if (/bags delivered/.test(s)) return { txt: "Landed" + at(t.actual) + " · bags delivered", k: "dim" };
+    if (/on belt|arriving on belt/.test(s)) return { txt: "Landed" + at(t.actual) + " · belt " + (s.match(/belt\s+(\w+)/)?.[1] || ""), k: "ok" };
+    if (f.status === "landed") return { txt: "Landed" + at(t.actual), k: "ok" };
     if (/approach/.test(s)) return { txt: "On approach" + at(t.estimated), k: "blink ok" };
     if (/delayed departure/.test(s)) return { txt: "Delayed departure", k: "warn" };
   }
@@ -65,7 +76,8 @@ function Flap({ text, w }: { text: string; w: number }) {
 
 export function TerminalBoard({ iata, dir: dir0, date, onClose }: { iata: string; dir: string; date: string; onClose: () => void }) {
   const [dir, setDir] = useState(dir0); const [d, setD] = useState<any>(null); const [theme, setTheme] = useState(() => localStorage.getItem("sk.tb." + iata) || "auto");
-  const [page, setPage] = useState(0); const [paused, setPaused] = useState(false); const [now, setNow] = useState(Date.now()); const [upd, setUpd] = useState<number>(0);
+  const [page, setPage] = useState(0); const [paused, setPaused] = useState(false); const [now, setNow] = useState(Date.now()); const [upd, setUpd] = useState<number>(0); const [side, setSide] = useState(() => localStorage.getItem("sk.tb.side") || "Airside"); const [sec, setSec] = useState<any>(null);
+  useEffect(() => { api(`/security/${iata}`).then(setSec).catch(() => setSec(null)); }, [iata]);
   const ref = useRef<HTMLDivElement>(null); const th = theme === "auto" || !THEMES[theme] ? autoTheme(iata) : theme;
   useEffect(() => { let on = true; const go = () => api(`/board/${iata}?dir=${dir}&date=${date}`).then(r => { if (on) { setD(r); setUpd(Date.now()); } }).catch(e => on && setD((p: any) => p || { error: e.message })); go(); const t = setInterval(go, 60e3); return () => { on = false; clearInterval(t); }; }, [iata, dir, date]);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
@@ -78,7 +90,7 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose }: { iata: string
   useEffect(() => { if (paused) return; const t = setInterval(() => setPage(p => (p + 1) % pages), 9000); return () => clearInterval(t); }, [paused, pages]);
   const pg = Math.min(page, pages - 1); void 0; const vis = rows.slice(pg * per, pg * per + per); const solari = th === "solari";
   const clock = new Date(now).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: th === "led" ? "2-digit" : undefined, timeZone: tz });
-  const tt = THEMES[th];
+  const tt0 = THEMES[th]; const tt: Th = th === "mag" ? { ...tt0, title: d => [d === "dep" ? `${side} Departures` : "Arrivals", ""], heads: { ...tt0.heads, gate: dir === "arr" ? "Belt" : "Gate", dest: dir === "arr" ? "From" : "Destination" } } : tt0;
   const show = vis.length ? rows.slice(pg * per * panels, pg * per * panels + per * panels) : [];
   const cellOf = (f: any, c: Col, st: any) => { const t = dir === "dep" ? f.dep : f.arr; const ap = dir === "dep" ? f.destination : f.origin; const ltz = (dir === "dep" ? f.origin?.tz : f.destination?.tz) || tz;
     const txt = (v: string, w: number) => solari ? <Flap text={v} w={w} /> : v;
@@ -86,7 +98,8 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose }: { iata: string
       case "time": return txt(fmtT(t.scheduled, ltz), 5);
       case "est": { const e = t.actual || t.estimated; return e && e !== t.scheduled ? fmtT(e, ltz) : ""; }
       case "dest": return txt(ap?.city || ap?.name || ap?.iata || "", 15);
-      case "fl": return <span className="tb-fl">{!solari && th !== "fra" && th !== "syd" && <Logo a={f.airline} />}{txt(th === "fra" ? f.number.replace(/^([A-Z0-9]{2})/, "$1 ") : f.number, 7)}</span>;
+      case "fl": return <span className="tb-fl">{!solari && th !== "fra" && th !== "syd" && th !== "mag" && <Logo a={f.airline} />}{txt(th === "fra" ? f.number.replace(/^([A-Z0-9]{2})/, "$1 ") : f.number, 7)}</span>;
+      case "tile": return <Tile a={f.airline} />;
       case "logo": return <span className="tb-fl"><Logo a={f.airline} /></span>;
       case "tag": return <span className="tb-tag" style={{ background: tagColor(f.airline?.iata) }}>{f.number}</span>;
       case "gate": return txt((dir === "dep" ? t.gate : f.arr?.baggage) || "", 4);
@@ -100,18 +113,19 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose }: { iata: string
     <div className="tb-head" style={{ gridTemplateColumns: grid }}>{tt.cols.map(c => <span key={c}>{(tt.heads || {})[c] ?? (c === "gate" && dir === "arr" ? "Belt" : c === "dest" && dir === "arr" ? "From" : HEAD[c])}</span>)}</div>
     <div className="tb-rows">{list.map((f: any, i: number) => { const st = status(f, dir);
       return <div key={f.id + pg + i + (solari ? st.txt : "")} className={"tb-row " + (i % 2 ? "alt" : "")} style={{ gridTemplateColumns: grid }}>{tt.cols.map(c => <span key={c} className={"c-" + c}>{cellOf(f, c, st)}</span>)}{fraSt(st)}</div>; })}</div></div>;
-  const W: Record<Col, string> = { time: "58px", est: "52px", dest: "minmax(0,1.5fr)", fl: "minmax(0,.9fr)", logo: "34px", tag: "84px", gate: "52px", term: "54px", st: "minmax(0,1.3fr)", icon: "26px" };
+  const W: Record<Col, string> = { tile: "minmax(110px,.9fr)", time: th === "mag" ? "92px" : "58px", est: "52px", dest: "minmax(0,1.5fr)", fl: "minmax(0,.9fr)", logo: "34px", tag: "84px", gate: "52px", term: "54px", st: "minmax(0,1.3fr)", icon: "26px" };
   const grid = tt.cols.map(c => W[c]).join(" ") + (th === "fra" ? " minmax(0,1fr)" : "");
   const msg = !d ? "Loading live board…" : d.error ? d.error : live ? `No official schedule feed for ${iata}. The terminal view needs scheduled times, so use the list view for live ADS-B traffic.` : rows.length === 0 ? `No more ${dir === "dep" ? "departures" : "arrivals"} listed for this date.` : "";
   return <div ref={ref} style={{ ["--per" as any]: per }} className={"tboard " + tt.cls + (paused ? " paused" : "")} onClick={() => setPaused(p => !p)}>
     {(panels === 1 || !["avinor", "ams", "led"].includes(th)) && <div className="tb-top"><div className="tb-title"><b>{tt.title(dir)[0]}</b>{tt.title(dir)[1] && <span>{tt.title(dir)[1]}</span>}</div>
-      <div className="tb-ap">{d?.airport?.name || iata}</div>{tt.clock === "top" && <div className="tb-clock">{clock}</div>}</div>}
+      <div className="tb-ap">{d?.airport?.name || iata}{sec && <span className="tb-sec">{sec.available ? "Security " + sec.queues.filter((q: any) => q.kind === "Departures").map((q: any) => `${q.terminal} ${q.text}`).join(" · ") : "Security: no live queue data"}</span>}</div>{tt.clock === "top" && <div className="tb-clock">{clock}</div>}</div>}
     {msg ? <div className="tb-msg">{msg}</div> : <div className="tb-panels">{Array.from({ length: panels }, (_, k) => panel(show.slice(k * per, k * per + per), k))}</div>}
     {tt.clock !== "top" && <div className={"tb-bclock " + tt.clock}>{clock}</div>}
     <div className="tb-foot"><span>{paused ? "Paused - tap to resume" : `Page ${pg + 1} of ${Math.max(1, Math.ceil(rows.length / (per * panels)))}`}</span>
       <span>{upd ? "Updated " + new Date(upd).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz }) : ""}{d?.source ? " · " + d.source : ""}</span>
       <span className="tb-ctl" onClick={e => e.stopPropagation()}>
         <select value={dir} onChange={e => { setDir(e.target.value); setPage(0); }}><option value="dep">Departures</option><option value="arr">Arrivals</option></select>
+        {th === "mag" && dir === "dep" && <select value={side} onChange={e => { setSide(e.target.value); localStorage.setItem("sk.tb.side", e.target.value); }}><option>Airside</option><option>Landside</option></select>}
         <select value={theme} onChange={e => setTheme(e.target.value)}><option value="auto">Auto ({THEMES[autoTheme(iata)].name})</option>{Object.entries(THEMES).map(([k, v]) => <option key={k} value={k}>{v.name}</option>)}</select>
         <button onClick={onClose}>Close</button></span></div>
   </div>;
