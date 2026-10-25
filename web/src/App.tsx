@@ -299,7 +299,7 @@ function Board({ iata, x, push }: any) {
       <select className="chip" value={dir} onChange={e => setDir(e.target.value)}><option value="dep">✈ To (Departures)</option><option value="arr">✈ From (Arrivals)</option></select>
       <select className="chip" value={airline} onChange={e => setAirline(e.target.value)}><option value="">Airline: All</option>{airlines.sort().map(a => <option key={a}>{a}</option>)}</select></div>
     <div className="px"><input className="field" placeholder="Filter city or flight" value={q} onChange={e => setQ(e.target.value)} /></div>
-    {!d && <div className="note">Loading live board…</div>}
+    {!d && <div>{[0,1,2,3,4,5,6].map(i => <div key={i} className="sk-row"><div className="skel" style={{ width: 52 }} /><div className="grow"><div className="skel" style={{ width: (60 + (i * 37) % 30) + "%" }} /><div className="skel" style={{ width: "35%", height: 10, marginTop: 8 }} /></div><div className="skel" style={{ width: 54 }} /></div>)}</div>}
     {d && !d.error && d.sourceKind && d.sourceKind !== "live" && <div className="px"><span className={"srcb " + (d.sourceKind === "official" ? "off" : "")}>{d.sourceKind === "official" ? "OFFICIAL AIRPORT FEED" : "AERODATABOX"}</span> <span className="faint sm">{d.source}{d.site ? ` · ${d.site}` : ""} · real scheduled, estimated & actual times</span></div>}
     {d?.error && <div className="note warn">{d.needsKey ? `Free real-time boards are available for MAN, STN, EMA, FRA, SYD and 45 Norwegian (Avinor) airports. For ${iata}, add a free AeroDataBox key in Settings.` : d.error}</div>}
     {d?.liveOnly && <div className="note live-note"><b>Live traffic only</b> — derived from real ADS-B positions near {iata} (adsb.lol / adsb.fi) with adsbdb routes. No free official schedule feed exists for this airport, so no times or delays are shown (nothing is guessed). Optional: an AeroDataBox key in Settings adds schedules here.{date !== today() && " Live traffic is only available for today."}</div>}
@@ -323,7 +323,7 @@ function Disruptions({ x, push, seg }: any) {
   return <><Head title="Airports" right={<>{x}</>} />{seg}
     <div className="px row g8"><h3 className="m0">Airport disruptions</h3><span className="live">LIVE</span></div>
     <div className="px muted sm mt8">See the top 10 airports with the most cancellations and longest delays.</div>
-    {!d && <div className="note">Loading…</div>}
+    {!d && <div>{[0,1,2,3,4,5,6].map(i => <div key={i} className="sk-row"><div className="skel" style={{ width: 52 }} /><div className="grow"><div className="skel" style={{ width: (60 + (i * 37) % 30) + "%" }} /><div className="skel" style={{ width: "35%", height: 10, marginTop: 8 }} /></div><div className="skel" style={{ width: 54 }} /></div>)}</div>}
     <div className="card dcard">{A.map((a: any) => <div key={a.airport.iata} className="drow" onClick={() => push({ t: "board", iata: a.airport.iata })}>
       <div className="grow"><div className="row g8"><b>{a.airport.city || a.airport.name}</b><span className="tag">{a.airport.iata}</span></div>
         {a.wx && <div className="row g10 sm muted mt8"><span>{wxIcon(a.wx.code)} {Math.round(a.wx.temp)}°C</span><span>{a.wx.windKts <= 3 ? "Variable " : <span className="warr" style={{ transform: `rotate(${(a.wx.windDir + 180) % 360}deg)` }}>↑</span>} {a.wx.windKts} kts</span></div>}</div>
@@ -350,7 +350,7 @@ function AirportStatus({ x, push, flights, seg }: any) {
   return <><Head title="Airports" right={<><RoundBtn onClick={() => navigator.share?.({ title: "Airport delays", url: location.href })}>{I.share}</RoundBtn>{x}</>} />{seg}
     <div className="chips"><span className="chip plain">Now ⌄</span>{["All", "Europe", "North America", "Asia", "Oceania", "Africa", "South America"].map(r => <button key={r} className={"chip" + (region === r ? " on" : " plain")} onClick={() => setRegion(r)}>{r}</button>)}</div>
     <div className="px"><b>For You</b><div className="muted sm">Favorites and airports from your active flights</div>{!favs.length && <div className="faint">No Favorites – Tap ★ in an airport to favorite</div>}</div>{favs.map(row)}
-    {!d && <div className="note">Loading…</div>}
+    {!d && <div>{[0,1,2,3,4,5,6].map(i => <div key={i} className="sk-row"><div className="skel" style={{ width: 52 }} /><div className="grow"><div className="skel" style={{ width: (60 + (i * 37) % 30) + "%" }} /><div className="skel" style={{ width: "35%", height: 10, marginTop: 8 }} /></div><div className="skel" style={{ width: 54 }} /></div>)}</div>}
     {[[2, "Major Issues"], [1, "Minor Issues"], [0, "Normal Operations"], [-1, "No free live data"]].map(([s, l]) => { const L = A.filter((a: any) => sev(a) === s); return L.length ? <div key={l}><h4 className="px">{l}</h4>{L.map(row)}</div> : null; })}
     <div className="note">Stats cover the last 4 hours. MAN, STN, EMA, FRA, SYD and 45 Norwegian (Avinor) airports are computed live from official airport feeds. {d && !d.keys?.aerodatabox && "Add a free AeroDataBox key in Settings for worldwide airports."}</div></>;
 }
