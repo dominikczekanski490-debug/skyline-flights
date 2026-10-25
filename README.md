@@ -14,3 +14,11 @@ Boards for non-MAG airports are labelled "Live traffic only — add AeroDataBox 
 AI predictions now return ranked `factors` (icon, title, explanation, impact in minutes, severity), a `summary` and a `confidenceNote`. Every factor comes from a real input; it is still an estimate.
 
 Deep links: `/#board=AMS`, `/#airports=disruptions`.
+
+## v3: push, persistence, sharing, keep-warm
+- **Push notifications** (Web Push/VAPID). Settings → Turn on alerts. The server checks tracked flights every 4 min and pushes gate/terminal/belt changes, delays (+10 min steps), cancellations, departed/landed. iPhone: iOS 16.4+, opened from the Home Screen icon.
+- **Persistence**: your flights/friends/settings live on the phone (localStorage + `navigator.storage.persist()`), so they survive any server restart; Settings → Back up/Restore moves them between devices. The client re-sends its push subscription and watch-list on every open and re-subscribes automatically if the server's VAPID key changed.
+- **Best durable server store (free)**: create a free Upstash Redis DB and set `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` on Render. Then VAPID keys, subscriptions and the 60-day delay history survive restarts. Alternatively set fixed `VAPID_PUBLIC`/`VAPID_PRIVATE`. Without either, the server uses `/tmp` (lost on restart/redeploy; the app recovers on next open).
+- **Keep-warm**: server self-pings `RENDER_EXTERNAL_URL` every 9 min, optional GitHub Actions ping in `docs/keep-warm.yml` (copy to `.github/workflows/` via the GitHub web UI; the bot token lacks workflow scope). The PWA shell is served from the service-worker cache instantly with a "Waking up Skyline…" pill if the server is cold.
+- **Share links**: `/s/<id>`. The id encodes flight+date (stateless, survives restarts); the page shows live status read-only, and "Follow in my Friends feed" adds it.
+- **Smarter AI**: learns per-route and per-airport averages from recorded history; "Leave for the airport" card (estimate).

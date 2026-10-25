@@ -1,0 +1,9 @@
+name: keep-warm
+on:
+  schedule: [{ cron: "*/10 * * * *" }]
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -m 90 https://skyline-flights.onrender.com/api/health || true

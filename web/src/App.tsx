@@ -4,6 +4,7 @@ import MapView, { MAP_STYLES } from "./MapView";
 import { Sheet, RoundBtn, I, Badge } from "./ui";
 import { api, today, dist, fmtT, fmtD, best, delay, dur, lateLabel, lateColor, withEstArr, load, save, logo, ics, download, wxText, wxIcon, tzOffset, estDurMin, type Flight, type Ap } from "./lib";
 import { EXAMPLE } from "./example";
+import { WarmBanner, syncPush, testPush, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras } from "./extras";
 
 type Ov = { t: "flight"; f: Flight } | { t: "board"; iata: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" };
 const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <img className="alogo" style={{ width: s, height: s }} src={logo(a?.iata)} onError={e => (e.currentTarget.style.visibility = "hidden")} alt="" />;
@@ -19,6 +20,8 @@ export default function App() {
   const [why, setWhy] = useState<any>(null); (window as any).__why = (f: any) => { navigator.vibrate?.(8); setWhy(f); };
   const [theme, setTheme] = useState(localStorage.getItem("sk.theme") || "auto");
   useEffect(() => save(flights), [flights]);
+  useEffect(() => { navigator.storage?.persist?.(); if (new URLSearchParams(location.search).get("tab") === "friends") { setTab("friends"); history.replaceState(null, "", "/"); } }, []);
+  useEffect(() => { const t = setTimeout(() => syncPush(flights).catch(() => {}), 1500); return () => clearTimeout(t); }, [flights.filter(f => !f.friend).map(f => f.id).join()]);
   useEffect(() => { localStorage.setItem("sk.theme", theme); document.documentElement.dataset.theme = theme; }, [theme]);
   useEffect(() => { localStorage.setItem("sk.map", mapStyle); }, [mapStyle]);
   // import a friend's shared flight from URL
@@ -34,7 +37,7 @@ export default function App() {
       upd(n); } } catch {} } }; tick(); const t = setInterval(tick, 90e3); return () => clearInterval(t); }, [active.map(f => f.id).join()]);
   const top = ov.at(-1); const focus = top?.t === "flight" ? top.f : null;
   const mapFlights = focus ? [focus] : tab === "passport" ? flights.filter(f => !f.friend) : tab === "friends" ? flights.filter(f => f.friend) : active.filter(f => !f.friend);
-  return <div className="app">{why && <WhySheet f={why} close={() => setWhy(null)} />}
+  return <div className="app"><WarmBanner />{why && <WhySheet f={why} close={() => setWhy(null)} />}
     <MapView flights={mapFlights} live={live} style={mapStyle} radar={radar} focus={focus} locate={locate} onPlane={id => { const f = flights.find(x => x.id === id); f && push({ t: "flight", f }); }} />
     <div className="mapbtns"><button onClick={() => setMapStyle(MAP_STYLES[(MAP_STYLES.indexOf(mapStyle) + 1) % MAP_STYLES.length])}>{I.layers}</button><button className={radar ? "on" : ""} onClick={() => setRadar(!radar)}>{I.cloud}</button><button onClick={() => setLocate(Date.now())}>{I.locate}</button></div>
     <Sheet snaps={[0.3, 0.55, 0.94]} initial={1} z={5}>
@@ -80,7 +83,8 @@ function Friends({ list, open, push }: { list: Flight[]; open: (f: Flight) => vo
   return <><Head title="Friends" right={<Avatar onClick={() => push({ t: "settings" })} />} />
     {!list.length && <div className="empty"><b>Follow friends' flights</b><span>Open any flight → Share to send a link. When a friend opens your link (or you open theirs) the flight appears here and updates live.</span></div>}
     {list.map(f => <FlightCard key={f.id} f={f} onClick={() => open(f)} pred />)}
-    <div className="px mt16"><button className="primary wide" onClick={() => push({ t: "search" })}>＋ Add Friend's Flight</button></div></>;
+    <div className="px mt16"><button className="primary wide" onClick={() => push({ t: "search" })}>＋ Add Friend's Flight</button>
+      <button className="secondary wide mt8" style={{ width: "100%" }} onClick={() => { const u = prompt("Paste a Skyline share link"); const s = u && parseShare(u); if (s) location.href = u!.slice(u!.indexOf("/s/")); else if (u) alert("That isn't a Skyline share link"); }}>🔗 Follow from a share link</button></div></>;
 }
 
 // ---------------- Passport ----------------
@@ -108,6 +112,7 @@ function Passport({ flights, setFlights, open, push }: { flights: Flight[]; setF
     </div>
     <div className="pcard delays"><div className="row between"><b className="huge">{Math.round(s.lost / 60)}</b>{I.share}</div><div className="h3">hours lost from delays</div><small>Delayed flights averaged {s.nl ? dur(s.lost / s.nl) : "0m"} late</small></div>
     <div className="pcard aircraft"><div className="h3">Most flown aircraft</div><b className="h1 thin">{s.top?.[0] || "—"}</b><small>{s.top?.[1] || 0} flights</small><div className="acimg">{I.plane}</div></div>
+    <PassportExtras L={L} yr={yr} />
     <div className="row g8 px wrap mt8"><button className="chip" onClick={() => push({ t: "addpast" })}>＋ Add past flight</button><label className="chip">⇪ Import CSV / .ics<input hidden type="file" accept=".csv,.ics" onChange={imp} /></label>
       <button className="chip" onClick={() => download("skyline.ics", ics(L))}>📅 Export .ics</button>{!flights.length && <button className="chip" onClick={() => setFlights(EXAMPLE)}>Load example data</button>}</div>
     <div className="sorts">{["Date", "From", "To", "Airline", "Aircraft"].map(k => <button key={k} className={sort === k ? "on" : ""} onClick={() => setSort(k)}>{k}{sort === k && " ↓"}</button>)}</div>
@@ -217,7 +222,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   const until = best(f.dep) ? (+new Date(best(f.dep)!) - Date.now()) / 60000 : 0;
   const banner = f.status === "cancelled" ? ["Cancelled", "red"] : f.status === "landed" ? [`Arrived ${da != null ? lateLabel(da) : ""}`, da && da > 14 ? "red" : "green"] : f.status === "departed" ? ["In the air", "blue"] : until > 0 ? [`Gate Departure in ${dur(until)}`, dd && dd > 14 ? "red" : "green"] : [f.statusText || "Scheduled", "green"];
   const tz = tzOffset(f.destination?.tz) - tzOffset(f.origin?.tz);
-  const shareUrl = () => location.origin + "/?share=" + btoa(unescape(encodeURIComponent(JSON.stringify({ ...f, notes: undefined, updates: undefined }))));
+  const shareUrl = () => shareLink(f);
   const h = (f.history = flights.filter((x: Flight) => x.origin?.iata === f.origin?.iata && x.destination?.iata === f.destination?.iata && !x.friend));
   const wxRow = (w: any, l: string) => w?.current && <div className="gtk"><span className="ico">{wxIcon(w.current.weather_code)}</span><div><b>{l} Weather</b><div className="muted sm">{Math.round(w.current.temperature_2m)}°C and {wxText(w.current.weather_code)} • wind {Math.round(w.current.wind_speed_10m)} km/h</div></div></div>;
   return <div className="fd">
@@ -229,6 +234,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <TimeBlock dir="arr" a={f.diverted || f.destination} t={g.arr} d={da} est={(g.arr as any).estimatedOnly} badge={<Badge icon={<span>🧳</span>} v={f.arr.baggage || f.arr.gate} k={f.arr.terminal && `Terminal ${f.arr.terminal}`} />} />
     <div className="muted sm px">Source: {f.source || (f.manual ? "entered manually" : "—")}</div>
     <Prediction f={f} />
+    <LeaveCard f={f} />
     <h3 className="px">Good to Know</h3>
     {wxRow(wx[0], "Departure")}{wxRow(wx[1], "Arrival")}
     <div className="gtk"><span className="ico">🕘</span><div><b>{tz ? `${tz > 0 ? "+" : ""}${tz / 60}h Timezone Change` : "No Timezone Change"}</b><div className="muted sm">{tz ? `${f.destination?.city} is ${Math.abs(tz / 60)}h ${tz > 0 ? "ahead of" : "behind"} ${f.origin?.city}` : "Both airports are in the same timezone"}</div></div></div>
@@ -258,7 +264,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <div className="fbar"><div className="pill small"><button onClick={() => navigator.share ? navigator.share({ title: `${f.number} ${f.origin?.iata}→${f.destination?.iata}`, url: shareUrl() }) : (navigator.clipboard.writeText(shareUrl()), alert("Share link copied"))}>{I.share}</button>
       <button onClick={() => { const n = prompt("Diverted to (IATA), or leave blank"); if (n !== null) api("/airport/" + n).then(a => upd({ ...f, diverted: a })).catch(() => upd({ ...f, diverted: undefined })); }}>{I.edit}</button>
       <button onClick={() => { if (confirm("Remove this flight?")) { setFlights((l: Flight[]) => l.filter(x => x.id !== f.id)); close(); } }}>{I.more}</button></div>
-      {!tracked ? <button className="primary" onClick={() => { setFlights((l: Flight[]) => [...l, f]); Notification?.requestPermission?.(); }}>＋ Track Flight</button> : <button className="primary" onClick={() => push({ t: "board", iata: f.origin?.iata })}>{f.origin?.iata} Board</button>}</div>
+      {!tracked ? <button className="primary" onClick={() => { setFlights((l: Flight[]) => [...l, f]); syncPush([...flights, f], true).catch(() => {}); }}>＋ Track Flight</button> : <button className="primary" onClick={() => push({ t: "board", iata: f.origin?.iata })}>{f.origin?.iata} Board</button>}</div>
   </div>;
 }
 function TimeBlock({ dir, a, t, d, badge, est }: any) {
@@ -361,8 +367,11 @@ function Settings({ x, theme, setTheme }: any) {
   const saveK = (body: any) => api("/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, adminToken: tok, newAdminToken: tok }) }).then(() => { setMsg("Saved ✓"); load(); }).catch(e => setMsg(e.message));
   return <><Head title="Settings" right={x} /><div className="px col g8">
     <div className="card m0"><h3>Appearance</h3><div className="segs m0">{["auto", "light", "dark"].map(t => <button key={t} className={theme === t ? "on" : ""} onClick={() => setTheme(t)}>{t}</button>)}</div></div>
-    <div className="card m0"><h3>Notifications</h3><div className="muted sm">Alerts for gate/status changes of tracked flights while Skyline is open (iOS: add to Home Screen first).</div><button className="secondary mt8" onClick={() => Notification?.requestPermission?.().then(p => setMsg("Notifications: " + p))}>Enable notifications</button></div>
-    <div className="card m0"><h3>All features unlocked</h3><div className="muted sm">Skyline has no paywall. Everything is free.</div></div>
+    <div className="card m0"><h3>Push notifications</h3><div className="muted sm">Gate & terminal changes, delays, cancellations, belt numbers — even when Skyline is closed. The server checks your tracked flights every 4 minutes. iPhone: open Skyline from its Home Screen icon (iOS 16.4+).</div>
+      <div className="row g8 mt8 wrap"><button className="primary" onClick={() => syncPush(x.props?.flights || JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]"), true).then(m => setMsg("Notifications: " + m)).catch(e => setMsg(e.message))}>Turn on alerts</button><button className="secondary" onClick={() => testPush().then(() => setMsg("Test notification sent ✓")).catch(e => setMsg(e.message))}>Send test</button></div></div>
+    <div className="card m0"><h3>Your data</h3><div className="muted sm">Your flights, friends and settings are saved on this iPhone and survive server restarts. Make a backup file to move them to another device.</div>
+      <div className="row g8 mt8 wrap"><button className="secondary" onClick={() => exportBackup()}>⇩ Back up</button><label className="secondary">⇪ Restore<input hidden type="file" accept=".json,application/json" onChange={e => e.target.files?.[0] && importBackup(e.target.files[0]).catch(er => setMsg(er.message))} /></label></div>
+      <input className="field mt8" placeholder="Your name (shown on flights you share)" defaultValue={localStorage.getItem("sk.name") || ""} onBlur={e => localStorage.setItem("sk.name", e.target.value.trim())} /></div>
     <div className="card m0"><h3>AeroDataBox key (worldwide schedules)</h3><div className="muted sm">Free “Basic” plan at rapidapi.com/aedbx-aedbx/api/aerodatabox → Subscribe → copy X-RapidAPI-Key. Enables boards & flight search at any airport, aircraft registration, inbound-plane chain and global airport delay stats. Status: <b>{s.aerodatabox || "not set"}</b></div>
       <input className="field mt8" placeholder="Paste RapidAPI key" value={k} onChange={e => setK(e.target.value)} /><button className="primary mt8" onClick={() => saveK({ aerodataboxKey: k })}>Save key</button></div>
     <div className="card m0"><h3>LLM explanations (optional)</h3><div className="muted sm">Any OpenAI-compatible API (default xAI: console.x.ai). Used only to word the AI-prediction explanation. Status: <b>{s.llm || "not set"}</b></div>

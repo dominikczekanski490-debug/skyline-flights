@@ -281,6 +281,9 @@ function predictCore(f, ctx) {
   const hist = Object.values(HIST[f.number] || {}).filter(x => x.d != null);
   if (hist.length >= 3) { const m = hist.reduce((a, x) => a + Math.max(-10, Math.min(180, x.d)), 0) / hist.length; const w = Math.min(hist.length, 20) / 6; signals.push("history");
     step(() => { mu = (mu * w0 + m * w) / (w0 + w); w0 += w; }, "📊", `Route history: ${m >= 0 ? "+" : ""}${Math.round(m)}m average`, `${f.number} averaged ${Math.round(m)} min vs schedule across ${hist.length} flights Skyline has recorded (up to 60 days).`, "history"); }
+  if (hist.length < 3 && f.origin?.iata) { const L = learned(f.origin.iata, f.destination?.iata); const src = L.route?.n >= 5 ? ["route", L.route] : L.airport?.n >= 15 ? ["airport", L.airport] : null;
+    if (src) { const [kind, v] = src, w = Math.min(v.n, 40) / 15; signals.push("learned");
+      step(() => { mu = (mu * w0 + v.avg * w) / (w0 + w); w0 += w; }, "🧠", kind === "route" ? `Learned: ${f.origin.iata}→${f.destination?.iata} ${v.avg >= 0 ? "+" : ""}${v.avg}m typical` : `Learned: ${f.origin.iata} departures ${v.avg >= 0 ? "+" : ""}${v.avg}m typical`, `From ${v.n} real ${kind === "route" ? "flights on this route" : "departures from " + f.origin.iata} Skyline recorded (last 60 days): average ${v.avg} min vs schedule, ${v.late15}% were 15+ min late.`, "learned"); } }
   const st = ctx.aptStats; if (st?.avgDelay != null && st.n >= 5) { const w = 1.2; signals.push("airport");
     step(() => { mu = (mu * w0 + st.avgDelay * w) / (w0 + w); w0 += w; }, st.avgDelay >= 20 ? "🚦" : "🛫", st.avgDelay >= 20 ? `${f.origin?.iata} congested right now` : `${f.origin?.iata} running normally`, `Departures over the last 4 h: average ${st.avgDelay} min late, ${st.onTime}% on time, ${st.cancelled || 0}% cancelled (${st.n} flights, live board).`, "airport"); }
   const sd = f.dep?.scheduled; const loc = sd ? new Date(new Date(sd).toLocaleString("en-US", { timeZone: f.origin?.tz || "Europe/London" })) : null;
@@ -383,6 +386,62 @@ api.get("/disruptions", wrap(async (req, res) => {
     return { updated: new Date().toISOString(), airports: R.filter(r => worst(r) >= 0).sort((a, b) => worst(b) - worst(a)), noData: R.filter(r => worst(r) < 0).map(r => r.airport.iata), liveOnly: R.filter(r => worst(r) < 0 && r.live),
       formula: "Skyline Disruption Index (not Flightradar24): 5 × (0.45·min(cancelled/20%,1) + 0.35·min(avg delay/60m,1) + 0.20·min(share >30m late/50%,1)), last 4h, min 5 flights" }; });
   res.json({ ...out, keys: { aerodatabox: !!cfg.aerodataboxKey } }); }));
+
+
+// ================= Durable state, Web Push, share links, keep-warm =================
+// Store: Upstash Redis REST if UPSTASH_REDIS_REST_URL/TOKEN set (free, survives restarts), else a JSON file in DATA_DIR.
+const KV_URL = process.env.UPSTASH_REDIS_REST_URL, KV_TOK = process.env.UPSTASH_REDIS_REST_TOKEN;
+const STATE_FILE = path.join(DATA_DIR, "state.json");
+let STATE = { subs: {}, vapid: null };
+async function loadState() {
+  try { if (KV_URL) { const r = await getJSON(KV_URL.replace(/\/$/, "") + "/get/skyline_state", { headers: { authorization: "Bearer " + KV_TOK } }); if (r.result) Object.assign(STATE, JSON.parse(r.result)); }
+    else Object.assign(STATE, JSON.parse(fs.readFileSync(STATE_FILE, "utf8"))); } catch {}
+  if (STATE.hist && typeof STATE.hist === "object") for (const k in STATE.hist) HIST[k] = { ...(HIST[k] || {}), ...STATE.hist[k] };
+}
+let saveT = null; function saveState() { clearTimeout(saveT); saveT = setTimeout(async () => { const body = JSON.stringify({ ...STATE, hist: KV_URL ? HIST : undefined });
+  try { if (KV_URL) await fetch(KV_URL.replace(/\/$/, "") + "/set/skyline_state", { method: "POST", headers: { authorization: "Bearer " + KV_TOK }, body }); else fs.writeFileSync(STATE_FILE, body); } catch (e) { console.warn("state save failed", e.message); } }, 1500); }
+setInterval(() => { if (KV_URL) saveState(); }, 30 * 60e3); // keep delay history durable too
+import webpush from "web-push";
+const ready = loadState().then(() => {
+  if (process.env.VAPID_PUBLIC && process.env.VAPID_PRIVATE) STATE.vapid = { publicKey: process.env.VAPID_PUBLIC, privateKey: process.env.VAPID_PRIVATE };
+  if (!STATE.vapid) { STATE.vapid = webpush.generateVAPIDKeys(); saveState(); }
+  webpush.setVapidDetails("mailto:skyline-dev@example.com", STATE.vapid.publicKey, STATE.vapid.privateKey);
+});
+api.get("/push/key", wrap(async (q, r) => { await ready; r.json({ publicKey: STATE.vapid.publicKey, durable: !!KV_URL }); }));
+api.post("/push/subscribe", wrap(async (req, res) => { await ready; const { sub, flights = [] } = req.body || {}; if (!sub?.endpoint) return res.status(400).json({ error: "no subscription" });
+  const id = Buffer.from(sub.endpoint).toString("base64url").slice(-40); const prev = STATE.subs[id]?.flights || [];
+  STATE.subs[id] = { sub, at: Date.now(), flights: flights.slice(0, 30).map(f => { const o = prev.find(p => p.number === f.number && p.date === f.date); return { number: String(f.number).toUpperCase(), date: f.date, snap: o?.snap || f.snap || null }; }) };
+  saveState(); res.json({ ok: true, watching: STATE.subs[id].flights.length }); }));
+api.post("/push/test", wrap(async (req, res) => { await ready; const id = Buffer.from(req.body?.endpoint || "").toString("base64url").slice(-40); const s = STATE.subs[id]; if (!s) return res.status(404).json({ error: "not subscribed" });
+  await webpush.sendNotification(s.sub, JSON.stringify({ title: "Skyline notifications are on ✓", body: `Watching ${s.flights.length} flight${s.flights.length === 1 ? "" : "s"} for gate, delay and cancellation changes.` })); res.json({ ok: true }); }));
+const snapOf = f => ({ status: f.status, statusText: f.statusText, gate: f.dep?.gate || null, term: f.dep?.terminal || null, belt: f.arr?.baggage || null, dly: delayMin(f) });
+function diff(a, b, f) { const m = []; if (!a) return m;
+  if (b.status === "cancelled" && a.status !== "cancelled") m.push("❌ Cancelled");
+  if (b.gate && b.gate !== a.gate) m.push(`🚪 Gate ${a.gate ? a.gate + " → " : ""}${b.gate}`);
+  if (b.term && a.term && b.term !== a.term) m.push(`Terminal ${a.term} → ${b.term}`);
+  if (b.dly != null && (a.dly ?? 0) + 10 <= b.dly && b.dly >= 15) m.push(`⏱ Now ${b.dly} min late`);
+  if (b.dly != null && a.dly != null && a.dly >= 15 && b.dly <= a.dly - 15) m.push(`✅ Delay reduced to ${Math.max(0, b.dly)} min`);
+  if (b.belt && b.belt !== a.belt) m.push(`🧳 Baggage belt ${b.belt}`);
+  if (b.status !== a.status && ["departed", "landed", "diverted", "boarding"].includes(b.status)) m.push(b.statusText || b.status);
+  return m; }
+async function watch() { await ready; const cache = {};
+  for (const [id, s] of Object.entries(STATE.subs)) { const keep = [];
+    for (const w of s.flights) { if (w.date < new Date(Date.now() - 36 * 3600e3).toISOString().slice(0, 10)) continue; keep.push(w);
+      try { const k = w.number + w.date; const r = cache[k] ||= await findFlight(w.number, w.date); if (!r.flight) continue; const n = snapOf(r.flight); const msg = diff(w.snap, n, r.flight); w.snap = n;
+        if (msg.length) await webpush.sendNotification(s.sub, JSON.stringify({ title: `${r.flight.number} ${r.flight.origin?.iata || ""}→${r.flight.destination?.iata || ""}`, body: msg.join(" • "), tag: k, url: "/" })).catch(e => { if (e.statusCode === 404 || e.statusCode === 410) delete STATE.subs[id]; });
+      } catch {} }
+    if (STATE.subs[id]) STATE.subs[id].flights = keep; }
+  saveState(); }
+setInterval(watch, 4 * 60e3); setTimeout(watch, 20e3);
+// keep-warm self ping (Render free sleeps after ~15 min without inbound traffic)
+if (process.env.RENDER_EXTERNAL_URL) setInterval(() => fetch(process.env.RENDER_EXTERNAL_URL + "/api/health").catch(() => {}), 9 * 60e3);
+
+// Learned stats from stored history: per route and per origin airport
+function learned(o, t) { const route = [], apt = [];
+  for (const k in HIST) for (const x of Object.values(HIST[k])) { if (x.d == null) continue; if (x.o === o && x.t === t) route.push(x.d); if (x.o === o) apt.push(x.d); }
+  const sum = a => a.length ? { n: a.length, avg: Math.round(a.reduce((s, d) => s + Math.max(-10, Math.min(180, d)), 0) / a.length), late15: Math.round(a.filter(d => d >= 15).length / a.length * 100) } : null;
+  return { route: sum(route), airport: sum(apt) }; }
+api.get("/learned", (req, res) => res.json(learned(String(req.query.o || "").toUpperCase(), String(req.query.t || "").toUpperCase())));
 
 app.use("/api", api);
 const dist = path.join(__dir, "../web/dist");
