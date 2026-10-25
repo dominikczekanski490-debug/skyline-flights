@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { getPrefs } from "./more";
 import { api, best, delay, dist, dur, estDurMin, fmtT, fmtD, lateLabel, lateColor, logo, today, type Flight } from "./lib";
 
 // ---------- Web Push ----------
@@ -26,7 +27,7 @@ export async function syncPush(fl: Flight[], ask = false): Promise<string> {
   try { if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(publicKey) }); }
   catch (e: any) { throw new Error("Subscribing failed: " + (e?.name ? e.name + " – " : "") + (e?.message || e)); }
   localStorage.setItem("sk.vapid", publicKey); localStorage.setItem("sk.pushEndpoint", sub.endpoint);
-  const r = await api("/push/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), flights: watchList(fl) }) });
+  const r = await api("/push/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), flights: watchList(fl), prefs: getPrefs() }) });
   return `on · watching ${r.watching} flight${r.watching === 1 ? "" : "s"}`;
 }
 const myFlights = () => { try { return JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend); } catch { return []; } };

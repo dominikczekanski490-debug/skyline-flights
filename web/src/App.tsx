@@ -1,12 +1,14 @@
+import { TerminalBoard } from "./terminal";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import MapView, { MAP_STYLES } from "./MapView";
 import { Sheet, RoundBtn, I, Badge } from "./ui";
-import { api, today, dist, fmtT, fmtD, best, delay, dur, lateLabel, lateColor, withEstArr, load, save, logo, ics, download, wxText, wxIcon, tzOffset, estDurMin, type Flight, type Ap } from "./lib";
+import { api, today, dist, fmtT, fmtD, best, delay, dur, lateLabel, lateColor, withEstArr, load, save, logo, ics, download, wxIcon, tzOffset, estDurMin, type Flight, type Ap } from "./lib";
 import { EXAMPLE } from "./example";
+import { Timeline, Progress, WeatherCard, AirportInfo, PassportMore, PasteImport, exportIcs, UnitsCard, AlertPrefsCard } from "./more";
 import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras } from "./extras";
 
-type Ov = { t: "flight"; f: Flight } | { t: "board"; iata: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" };
+type Ov = { t: "flight"; f: Flight } | { t: "board"; iata: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" };
 const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <img className="alogo" style={{ width: s, height: s }} src={logo(a?.iata)} onError={e => (e.currentTarget.style.visibility = "hidden")} alt="" />;
 
 export default function App() {
@@ -119,7 +121,8 @@ function Passport({ flights, setFlights, open, push }: { flights: Flight[]; setF
     <div className="pcard delays"><div className="row between"><b className="huge">{Math.round(s.lost / 60)}</b>{I.share}</div><div className="h3">hours lost from delays</div><small>Delayed flights averaged {s.nl ? dur(s.lost / s.nl) : "0m"} late</small></div>
     <div className="pcard aircraft"><div className="h3">Most flown aircraft</div><b className="h1 thin">{s.top?.[0] || "—"}</b><small>{s.top?.[1] || 0} flights</small><div className="acimg">{I.plane}</div></div>
     <PassportExtras L={L} yr={yr} />
-    <div className="row g8 px wrap mt8"><button className="chip" onClick={() => push({ t: "addpast" })}>＋ Add past flight</button><label className="chip">⇪ Import CSV / .ics<input hidden type="file" accept=".csv,.ics" onChange={imp} /></label>
+    <PassportMore L={L} />
+    <div className="row g8 px wrap mt8"><button className="chip" onClick={() => push({ t: "addpast" })}>＋ Add past flight</button><button className="chip" onClick={() => push({ t: "paste" })}>Paste booking email</button><button className="chip" onClick={() => exportIcs(flights.filter((f: Flight) => !f.friend && !f.example))}>{I.cal} Export .ics</button><label className="chip">⇪ Import CSV / .ics<input hidden type="file" accept=".csv,.ics" onChange={imp} /></label>
       <button className="chip" onClick={() => download("skyline.ics", ics(L))}>{I.cal} Export .ics</button>{!flights.length && <button className="chip" onClick={() => setFlights(EXAMPLE)}>Load example data</button>}</div>
     <div className="sorts">{["Date", "From", "To", "Airline", "Aircraft"].map(k => <button key={k} className={sort === k ? "on" : ""} onClick={() => setSort(k)}>{k}{sort === k && " ↓"}</button>)}</div>
     {Object.entries(groups).map(([g, l]) => <div key={g}><div className="ghead"><b>{g}</b><span>{l.length} FLIGHTS</span></div>
@@ -146,6 +149,7 @@ function Overlay(p: { o: Ov; z: number; close: () => void; push: (o: Ov) => void
     <FlightDetail f={p.flights.find(f => f.id === o.f.id) || o.f} {...p} /></Sheet>;
   if (o.t === "board") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Board iata={o.iata} x={x} push={p.push} /></Sheet>;
   if (o.t === "airports") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Airports x={x} push={p.push} flights={p.flights} initial={o.mode} /></Sheet>;
+  if (o.t === "paste") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Head title="Import booking" right={x} /><PasteImport add={(fl: Flight[]) => { p.setFlights((l: Flight[]) => [...l, ...fl.filter(n => !l.some(y => y.id === n.id))]); close(); }} /></Sheet>;
   if (o.t === "addpast") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><AddPast x={x} done={(f: Flight) => { p.setFlights((l: Flight[]) => [...l, f]); close(); }} /></Sheet>;
   return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Settings x={x} theme={p.theme} setTheme={p.setTheme} /></Sheet>;
 }
@@ -230,7 +234,6 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   const tz = tzOffset(f.destination?.tz) - tzOffset(f.origin?.tz);
   const shareUrl = () => shareLink(f);
   const h = (f.history = flights.filter((x: Flight) => x.origin?.iata === f.origin?.iata && x.destination?.iata === f.destination?.iata && !x.friend));
-  const wxRow = (w: any, l: string) => w?.current && <div className="gtk"><span className="ico">{wxIcon(w.current.weather_code)}</span><div><b>{l} Weather</b><div className="muted sm">{Math.round(w.current.temperature_2m)}°C and {wxText(w.current.weather_code)} • wind {Math.round(w.current.wind_speed_10m)} km/h</div></div></div>;
   return <div className="fd">
     {f.example && <div className="exlabel">Example data — not a real flight record</div>}
     <div className={"banner " + banner[1]}><b>{banner[0]}</b><div className="sm">Total {dur(estDurMin(f.origin, f.destination))} est. • {dist(f.origin, f.destination).toLocaleString()} mi{lv ? ` • live ${Math.round(lv.alt || 0).toLocaleString()} ft, ${Math.round(lv.gs || 0)} kt` : ""}</div></div>
@@ -239,10 +242,13 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <div className="sep"><span>◷ {dur(estDurMin(f.origin, f.destination))} • {dist(f.origin, f.destination).toLocaleString()} mi</span></div>
     <TimeBlock dir="arr" a={f.diverted || f.destination} t={g.arr} d={da} est={(g.arr as any).estimatedOnly} badge={<Badge icon={I.bag} v={f.arr.baggage || f.arr.gate} k={f.arr.terminal && `Terminal ${f.arr.terminal}`} />} />
     <div className="muted sm px">Source: {f.source || (f.manual ? "entered manually" : "—")}</div>
+    <Progress f={f} lv={lv} />
+    <Timeline f={f} />
     <Prediction f={f} />
     <LeaveCard f={f} />
+    <WeatherCard w={wx[0]} a={f.origin} label="Departure" />
+    <WeatherCard w={wx[1]} a={f.destination} label="Arrival" />
     <h3 className="px">Good to Know</h3>
-    {wxRow(wx[0], "Departure")}{wxRow(wx[1], "Arrival")}
     <div className="gtk"><span className="ico">🕘</span><div><b>{tz ? `${tz > 0 ? "+" : ""}${tz / 60}h Timezone Change` : "No Timezone Change"}</b><div className="muted sm">{tz ? `${f.destination?.city} is ${Math.abs(tz / 60)}h ${tz > 0 ? "ahead of" : "behind"} ${f.origin?.city}` : "Both airports are in the same timezone"}</div></div></div>
     <div className="card"><h3>Arrival Forecast</h3><div className="muted sm">{f.number} recorded performance{fc ? ` • ${fc.observed} observed flights` : ""}</div>
       {fc && fc.observed ? <><div className="grid3 mt8"><Stat label="Late" v={`${fc.latePct}%`} /><Stat label="Average of Late" v={`${fc.avgLate}m`} /><Stat label="Observed" v={`${fc.observed} Flights`} /></div>
@@ -254,9 +260,6 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
         {inb?.flights?.filter((x: Flight) => x.number !== f.number).map((x: Flight) => <div key={x.id} className="ci"><b>{x.number} {x.origin?.iata} → {x.destination?.iata}</b><span style={{ color: lateColor(delay(x.arr)) }}>{x.statusText} {lateLabel(delay(x.arr))}</span></div>)}
         {inb?.needsKey && <div className="faint sm">Inbound aircraft chain needs a free AeroDataBox key (Settings). The aircraft registration is {reg}.</div>}
         {!reg && <div className="faint sm">The aircraft appears once it is assigned / broadcasting ADS-B (usually ~1h before departure).</div>}</div></div>
-    <div className="card"><h3>Detailed Timetable</h3><div className="muted sm">Scheduled, Estimated, and Actual</div>
-      {[["DEPART", [["Gate Departure", f.dep]]], ["ARRIVE", [["Gate Arrival", g.arr]]]].map(([s, rows]: any) => <div key={s}><div className="tth">{s}</div>{rows.map(([l, t]: any) => <div key={l} className="ttr"><span>{l}</span><div><small>Scheduled</small>{fmtT(t.scheduled, s === "DEPART" ? f.origin?.tz : f.destination?.tz)}</div><div><small>{t.actual ? "Actual" : t.estimatedOnly ? "Predicted" : "Estimated"}</small><b style={{ color: lateColor(delay(t)) }}>{fmtT(t.actual || t.estimated, s === "DEPART" ? f.origin?.tz : f.destination?.tz)}</b></div></div>)}</div>)}
-      <div className="tth">TOTALS</div><div className="ttr"><span>Air + taxi time</span><div><small>Estimated</small>{dur(estDurMin(f.origin, f.destination))}</div><div /></div></div>
     {al && <div className="card"><div className="row g10"><Logo a={al} /><h3>{al.name}</h3></div><div className="grid2b mt8">
       <a className="gbtn" href={al.links?.phone ? "tel:" + al.links.phone : undefined}>PHONE</a><a className="gbtn" href={al.links?.web} target="_blank">WEBSITE</a><a className="gbtn" href={al.links?.x || `https://x.com/search?q=${encodeURIComponent(al.name)}`} target="_blank">X / TWITTER</a><a className="gbtn" href={al.links?.fb || `https://facebook.com/search/top?q=${encodeURIComponent(al.name)}`} target="_blank">FACEBOOK</a></div>
       <div className="grid3 mt8"><Stat label="ATC Callsign" v={al.callsign || "—"} /><Stat label="ICAO" v={al.icao || "—"} /><Stat label="IATA" v={al.iata} /></div></div>}
@@ -291,6 +294,7 @@ function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => voi
     <div className="right"><b>{f.number.replace(/^([A-Z0-9]{2})/, "$1 ")}</b><div className="faint sm">{t.gate || ""}</div></div></div>;
 }
 function Board({ iata, x, push }: any) {
+  const [info, setInfo] = useState(false); const [term, setTerm] = useState(false);
   const [dir, setDir] = useState("dep"); const [date, setDate] = useState(today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState("");
   useEffect(() => { setD(null); api(`/board/${iata}?dir=${dir}&date=${date}`).then(setD).catch(e => setD({ error: e.message, needsKey: e.needsKey })); }, [iata, dir, date]);
   const ap = d?.airport; const [, tick] = useState(0); useEffect(() => { const t = setInterval(() => tick(n => n + 1), 30e3); return () => clearInterval(t); }, []);
@@ -300,10 +304,12 @@ function Board({ iata, x, push }: any) {
   useEffect(() => { if (nowIdx > 0 && date === today()) setTimeout(() => document.getElementById("brow-now")?.scrollIntoView({ block: "start" }), 50); }, [d]);
   const airlines = [...new Set((d?.flights || []).map((f: any) => f.airline?.iata))].filter(Boolean) as string[];
   return <><div className="head"><div><div className="row g6">{[iata, ap?.icao, new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: ap?.tz || "Europe/London" }) + " " + (ap?.tz === "Europe/London" ? "GMT" : "local")].map(t => <span key={t} className="tag">{t}</span>)}</div><h1 className="h1s">{ap?.city || iata}</h1><div className="muted sm">{ap?.name?.toUpperCase()}, {ap?.country?.toUpperCase()}</div></div>{x}</div>
-    <div className="chips"><button className="chip blue" onClick={() => navigator.share?.({ url: location.href, title: `${iata} board` })}>{I.share} Share</button>
+    <div className="chips"><div className="segs sm"><button className={!term ? "on" : ""}>List</button><button onClick={() => setTerm(true)}>Terminal</button></div><button className={"chip " + (info ? "blue" : "")} onClick={() => setInfo(v => !v)}>{info ? "Board" : "Airport info"}</button><button className="chip blue" onClick={() => navigator.share?.({ url: location.href, title: `${iata} board` })}>{I.share} Share</button>
       <select className="chip" value={date} onChange={e => setDate(e.target.value)}>{[-1, 0, 1, 2].map(o => { const v = new Date(Date.now() + o * 864e5).toLocaleDateString("en-CA", { timeZone: "Europe/London" }); return <option key={v} value={v}>{["Yesterday", "Today", "Tomorrow", fmtD(v)][o + 1]}</option>; })}</select>
       <select className="chip" value={dir} onChange={e => setDir(e.target.value)}><option value="dep">Departures</option><option value="arr">Arrivals</option></select>
       <select className="chip" value={airline} onChange={e => setAirline(e.target.value)}><option value="">Airline: All</option>{airlines.sort().map(a => <option key={a}>{a}</option>)}</select></div>
+    {term && <TerminalBoard iata={iata} dir={dir} date={date} onClose={() => setTerm(false)} />}
+    {info ? <AirportInfo iata={iata} /> : <>
     <div className="px"><input className="field" placeholder="Filter city or flight" value={q} onChange={e => setQ(e.target.value)} /></div>
     {!d && <div>{[0,1,2,3,4,5,6].map(i => <div key={i} className="sk-row"><div className="skel" style={{ width: 52 }} /><div className="grow"><div className="skel" style={{ width: (60 + (i * 37) % 30) + "%" }} /><div className="skel" style={{ width: "35%", height: 10, marginTop: 8 }} /></div><div className="skel" style={{ width: 54 }} /></div>)}</div>}
     {d && !d.error && d.sourceKind && d.sourceKind !== "live" && <div className="px"><span className={"srcb " + (d.sourceKind === "official" ? "off" : "")}>{d.sourceKind === "official" ? "OFFICIAL AIRPORT FEED" : "AERODATABOX"}</span> <span className="faint sm">{d.source}{d.site ? ` · ${d.site}` : ""} · real scheduled, estimated & actual times</span></div>}
@@ -311,7 +317,7 @@ function Board({ iata, x, push }: any) {
     {d?.liveOnly && <div className="note live-note"><b>Live traffic only</b> — derived from real ADS-B positions near {iata} (adsb.lol / adsb.fi) with adsbdb routes. No free official schedule feed exists for this airport, so no times or delays are shown (nothing is guessed). Optional: an AeroDataBox key in Settings adds schedules here.{date !== today() && " Live traffic is only available for today."}</div>}
     {d?.liveOnly && d.flights?.length === 0 && date === today() && <div className="empty"><div className="emo">📡</div><b>No aircraft moving right now</b><div className="muted sm">Nothing on the ground or climbing/descending within 30 nm in the last minute.</div></div>}
     {d?.flights && <div className="faint sm px">Source: {d.source} • AI badges are predictions</div>}
-    <div className="board">{list.map((f: any, i: number) => <div key={f.id + i} id={i === nowIdx ? "brow-now" : undefined}><BoardRow f={f} dir={dir} onClick={() => push({ t: "flight", f: { ...f, date } })} /></div>)}</div></>;
+    <div className="board">{list.map((f: any, i: number) => <div key={f.id + i} id={i === nowIdx ? "brow-now" : undefined}><BoardRow f={f} dir={dir} onClick={() => push({ t: "flight", f: { ...f, date } })} /></div>)}</div></>}</>;
 }
 
 function Airports({ x, push, flights, initial }: any) {
@@ -386,6 +392,7 @@ function Settings({ x, theme, setTheme }: any) {
   const load = () => api("/settings").then(r => { setS(r); setLb(r.llmBase); setLm(r.llmModel); }); useEffect(() => { load(); }, []);
   const saveK = (body: any) => api("/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, adminToken: tok, newAdminToken: tok }) }).then(() => { setMsg("Saved ✓"); load(); }).catch(e => setMsg(e.message));
   return <><Head title="Settings" right={x} /><div className="px col g8">
+    <UnitsCard /><AlertPrefsCard onChange={() => syncPush(JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend)).catch(() => {})} />
     <div className="card m0"><h3>Appearance</h3><div className="segs m0">{["auto", "light", "dark"].map(t => <button key={t} className={theme === t ? "on" : ""} onClick={() => setTheme(t)}>{t}</button>)}</div></div>
     <div className="card m0"><h3>Push notifications</h3><div className="muted sm">Gate & terminal changes, delays, cancellations, belt numbers — even when Skyline is closed. The server checks your tracked flights every 4 minutes. iPhone: open Skyline from its Home Screen icon (iOS 16.4+).</div>
       <PushControls /></div>

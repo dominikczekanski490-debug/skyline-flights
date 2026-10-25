@@ -325,8 +325,21 @@ api.get("/aircraft", wrap(async (req, res) => {
 api.get("/inbound", wrap(async (req, res) => { const reg = String(req.query.reg || ""), ymd = String(req.query.date || todayLondon());
   if (!reg) return res.json({ flights: [], note: "aircraft registration not known yet" });
   const r = await adb(`/flights/reg/${reg}/${ymd}?withLocation=false`, 300); res.json({ flights: (r || []).map(normAdb), source: "AeroDataBox" }); }));
+
+// ---- Airport info: runways (OurAirports), sun times + weather (Open-Meteo), live traffic (adsb.lol) ----
+let RWY = null, rwyLoading = null;
+async function runwaysFor(icao) { if (!RWY) { rwyLoading ||= fetch("https://davidmegginson.github.io/ourairports-data/runways.csv").then(r => r.text()).then(t => { RWY = {}; const L = t.split("\n"); const H = csv(L[0]);
+  const ix = k => H.indexOf(k); for (const l of L.slice(1)) { if (!l) continue; const v = csv(l); const id = v[ix("airport_ident")]; if (v[ix("closed")] === "1") continue;
+    (RWY[id] ||= []).push({ le: v[ix("le_ident")], he: v[ix("he_ident")], lengthFt: +v[ix("length_ft")] || null, widthFt: +v[ix("width_ft")] || null, surface: v[ix("surface")], lighted: v[ix("lighted")] === "1", heading: +v[ix("le_heading_degT")] || null }); } }).catch(e => { rwyLoading = null; throw e; }); await rwyLoading; }
+  return RWY[icao] || []; }
+api.get("/airport/:iata/info", wrap(async (req, res) => { const a = AP[req.params.iata.toUpperCase()]; if (!a) return res.status(404).json({ error: "unknown airport" });
+  const [rw, wx, live] = await Promise.all([
+    a.icao ? runwaysFor(a.icao).catch(() => null) : null,
+    cached(`apwx:${a.iata}`, 900, () => getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${a.lat}&longitude=${a.lon}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility,cloud_cover,precipitation&daily=sunrise,sunset&forecast_days=1&wind_speed_unit=kn&timezone=${encodeURIComponent(a.tz || "auto")}`)).catch(() => null),
+    cached(`aplive:${a.iata}`, 60, async () => { const r = await getJSON(`https://api.adsb.lol/v2/point/${a.lat}/${a.lon}/25`); const ac = r.ac || []; return { total: ac.length, ground: ac.filter(x => x.alt_baro === "ground").length, low: ac.filter(x => typeof x.alt_baro === "number" && x.alt_baro < 10000).length, source: "adsb.lol" }; }).catch(() => null)]);
+  res.json({ airport: airportOut(a), runways: rw, weather: wx?.current || null, sun: wx?.daily ? { sunrise: wx.daily.sunrise?.[0], sunset: wx.daily.sunset?.[0] } : null, live }); }));
 api.get("/weather", wrap(async (req, res) => { const lat = (+req.query.lat).toFixed(2), lon = (+req.query.lon).toFixed(2);
-  res.json(await cached(`wx:${lat}:${lon}`, 900, () => getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,wind_gusts_10m,visibility&hourly=temperature_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&forecast_days=7&timezone=auto`))); }));
+  res.json(await cached(`wx:${lat}:${lon}`, 900, () => getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,visibility,cloud_cover,precipitation,relative_humidity_2m,pressure_msl,dew_point_2m&hourly=temperature_2m,weather_code,wind_speed_10m,wind_gusts_10m,precipitation_probability,visibility&daily=temperature_2m_max,temperature_2m_min,weather_code,sunrise,sunset&wind_speed_unit=kn&forecast_days=7&timezone=auto`))); }));
 api.get("/forecast/:number", (req, res) => { const n = req.params.number.toUpperCase(); const h = Object.values(HIST[n] || {});
   const b = { early: 0, ontime: 0, l15: 0, l30: 0, l45: 0, cancelled: 0, diverted: 0 }; let late = [], obs = 0;
   for (const x of h) { obs++; if (x.s === "cancelled") b.cancelled++; else if (x.s === "diverted") b.diverted++; else if (x.d == null) obs--; else if (x.d < -5) b.early++; else if (x.d < 15) b.ontime++; else if (x.d < 30) { b.l15++; late.push(x.d); } else if (x.d < 45) { b.l30++; late.push(x.d); } else { b.l45++; late.push(x.d); } }
@@ -507,7 +520,7 @@ api.get("/push/status", wrap(async (req, r) => { await ready; const ep = req.que
 api.post("/push/subscribe", wrap(async (req, res) => { await ready; const { sub } = req.body || {};
   if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return res.status(400).json({ error: "Invalid subscription (missing endpoint or keys)" });
   const id = subId(sub.endpoint); const prev = STATE.subs[id]?.flights || []; const flights = Array.isArray(req.body.flights) ? req.body.flights : prev;
-  STATE.subs[id] = { ...(STATE.subs[id] || {}), sub, at: Date.now(), flights: flights.slice(0, 30).map(f => { const o = prev.find(p => p.number === f.number && p.date === f.date); return { number: String(f.number).toUpperCase(), date: f.date, snap: o?.snap || f.snap || null }; }) };
+  STATE.subs[id] = { ...(STATE.subs[id] || {}), sub, at: Date.now(), prefs: req.body.prefs || STATE.subs[id]?.prefs || null, flights: flights.slice(0, 30).map(f => { const o = prev.find(p => p.number === f.number && p.date === f.date); return { number: String(f.number).toUpperCase(), date: f.date, snap: o?.snap || f.snap || null }; }) };
   if (!prev.length && !STATE.subs[id].lastOk) plog("subscribed", pushHost(sub.endpoint)); saveState(); res.json({ ok: true, watching: STATE.subs[id].flights.length }); }));
 api.post("/push/test", wrap(async (req, res) => { await ready; const id = subId(req.body?.endpoint); const s = STATE.subs[id];
   if (!s) return res.status(404).json({ error: "Server has no subscription for this device (it may have restarted). Tap Turn on alerts again." });
@@ -524,10 +537,16 @@ function diff(a, b, f) { const m = []; if (!a) return m;
   if (b.belt && b.belt !== a.belt) m.push(`🧳 Baggage belt ${b.belt}`);
   if (b.status !== a.status && ["departed", "landed", "diverted", "boarding"].includes(b.status)) m.push(b.statusText || b.status);
   return m; }
+// prefs: { events: { cancel, gate, delay, belt, status }: bool, quiet: { on, from: "22:00", to: "07:00", tz } } — cancellations always break quiet hours
+function filterPrefs(m, p) { if (!p || !m.length) return m; const ev = p.events || {}; const kind = x => x.startsWith("❌") ? "cancel" : x.startsWith("🚪") || x.startsWith("Terminal") ? "gate" : x.startsWith("⏱") || x.startsWith("✅") ? "delay" : x.startsWith("🧳") ? "belt" : "status";
+  let out = m.filter(x => ev[kind(x)] !== false);
+  if (p.quiet?.on && p.quiet.from && p.quiet.to) { const hm = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: p.quiet.tz || "Europe/London" });
+    const q = p.quiet.from <= p.quiet.to ? hm >= p.quiet.from && hm < p.quiet.to : hm >= p.quiet.from || hm < p.quiet.to; if (q) out = out.filter(x => kind(x) === "cancel"); }
+  return out; }
 async function watch() { await ready; const cache = {};
   for (const [id, s] of Object.entries(STATE.subs)) { const keep = [];
     for (const w of s.flights) { if (w.date < new Date(Date.now() - 36 * 3600e3).toISOString().slice(0, 10)) continue; keep.push(w);
-      try { const k = w.number + w.date; const r = cache[k] ||= await findFlight(w.number, w.date); if (!r.flight) continue; const n = snapOf(r.flight); const msg = diff(w.snap, n, r.flight); w.snap = n;
+      try { const k = w.number + w.date; const r = cache[k] ||= await findFlight(w.number, w.date); if (!r.flight) continue; const n = snapOf(r.flight); const msg = filterPrefs(diff(w.snap, n, r.flight), s.prefs); w.snap = n;
         if (msg.length) await sendPush(id, s, { title: `${r.flight.number} ${r.flight.origin?.iata || ""}→${r.flight.destination?.iata || ""}`, body: msg.join(" • "), tag: k, url: "/" }, { topic: k.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) });
       } catch {} }
     if (STATE.subs[id]) STATE.subs[id].flights = keep; }
