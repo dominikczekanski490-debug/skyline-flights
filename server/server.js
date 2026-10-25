@@ -289,9 +289,9 @@ async function liveBoard(iata, dir) { const a = AP[iata]; if (!a) throw new Erro
       let side = rt ? (o === iata ? "dep" : d === iata ? "arr" : null) : (c.phase === "departed" ? "dep" : c.phase === "approaching" ? "arr" : null);
       if (rt && !side) continue; if (!side && c.phase === "ground") continue; if (side !== dir) continue;
       const num = rt?.airline?.iata && rt.callsign_iata ? rt.callsign_iata : c.cs;
-      out.push({ id: `${num}-live`, number: num, callsign: c.cs, airline: airlineOut(rt?.airline?.iata || num.slice(0, 2)), origin: o ? airportOut(AP[o]) || { iata: o } : null, destination: d ? airportOut(AP[d]) || { iata: d } : null, dep: {}, arr: {},
+      out.push({ id: `${num}-live`, number: num, callsign: c.cs, airline: rt?.airline?.iata ? airlineOut(rt.airline.iata) : null, origin: o ? airportOut(AP[o]) || { iata: o } : null, destination: d ? airportOut(AP[d]) || { iata: d } : null, dep: {}, arr: {},
         status: c.phase === "ground" ? (dir === "dep" ? "on ground" : "landed") : c.phase === "departed" ? "departed" : "approaching", statusText: { ground: dir === "dep" ? "On ground — taxiing / at stand" : "Landed — on ground", departed: "Just departed (climbing)", approaching: `Approaching — ${Math.round(c.km)} km out` }[c.phase],
-        aircraft: { reg: x.r, type: x.t }, live: { lat: x.lat, lon: x.lon, alt: x.alt_baro, gs: x.gs, track: x.track, hex: x.hex, src }, liveOnly: true, source: src + (rt ? " + adsbdb route" : "") }); }
+        aircraft: { reg: x.r, type: x.t }, live: { dist: Math.round(c.km), lat: x.lat, lon: x.lon, alt: x.alt_baro, gs: x.gs, track: x.track, hex: x.hex, src }, liveOnly: true, source: src + (rt ? " + adsbdb route" : "") }); }
     return out; }); }
 async function liveCounts(iata) { const a = AP[iata]; const { ac } = await nearAir(a); const c = ac.map(x => classify(a, x)).filter(Boolean);
   return { ground: c.filter(x => x.phase === "ground").length, departing: c.filter(x => x.phase === "departed").length, arriving: c.filter(x => x.phase === "approaching").length, airborneNearby: ac.filter(x => x.alt_baro !== "ground").length }; }
@@ -375,6 +375,14 @@ api.get("/route", wrap(async (req, res) => { const from = String(req.query.from 
 api.get("/live/:callsign", wrap(async (req, res) => res.json(await liveByCallsign(req.params.callsign.toUpperCase()))));
 api.get("/live-area", wrap(async (req, res) => { const lat = (+req.query.lat).toFixed(1), lon = (+req.query.lon).toFixed(1);
   res.json(await cached(`area:${lat}:${lon}`, 15, async () => { const r = await getJSON(`https://api.adsb.lol/v2/point/${lat}/${lon}/100`); return (r.ac || []).filter(a => a.lat).slice(0, 300).map(a => ({ hex: a.hex, cs: (a.flight || "").trim(), lat: a.lat, lon: a.lon, track: a.track, alt: a.alt_baro, type: a.t, reg: a.r })); })); }));
+// "Is my plane here yet?": live position of the assigned aircraft (by hex or registration) relative to the departure airport. adsb.lol, fallback adsb.fi.
+api.get("/plane-here", wrap(async (req, res) => { const hex = String(req.query.hex || "").toLowerCase().replace(/[^0-9a-f]/g, ""), reg = String(req.query.reg || "").toUpperCase().replace(/[^A-Z0-9-]/g, ""); const ap = AP[String(req.query.at || "").toUpperCase()];
+  if (!hex && !reg) return res.status(400).json({ error: "No aircraft assigned yet" });
+  const r = await cached(`ph:${hex || reg}`, 45, () => adsbGate(async () => { const us = hex ? [`https://api.adsb.lol/v2/hex/${hex}`, `https://opendata.adsb.fi/api/v2/hex/${hex}`] : [`https://api.adsb.lol/v2/reg/${reg}`, `https://opendata.adsb.fi/api/v2/registration/${reg}`];
+    for (const u of us) { try { const j = await getJSON(u); return { ac: (j.ac || j.aircraft || [])[0] || null, src: u.includes("lol") ? "adsb.lol" : "adsb.fi" }; } catch {} } throw new Error("ADS-B sources unavailable, try again shortly"); }));
+  const x = r.ac; if (!x || x.lat == null) return res.json({ seen: false, src: r.src, note: "Not broadcasting a position right now (parked with transponder off, or outside receiver coverage)" });
+  const km = ap ? Math.round(kmTo(ap, x.lat, x.lon)) : null; const gnd = x.alt_baro === "ground" || (x.gs ?? 99) < 40;
+  res.json({ seen: true, src: r.src, callsign: (x.flight || "").trim(), reg: x.r, type: x.t, alt: x.alt_baro, gs: x.gs, lat: x.lat, lon: x.lon, km, onGround: gnd, here: km != null && km < 6 && gnd, seenSec: x.seen_pos ?? x.seen }); }));
 api.get("/aircraft", wrap(async (req, res) => {
   let hex = String(req.query.hex || ""), reg = String(req.query.reg || ""); const out = {};
   if (hex) { try { const h = await cached("hexdb:" + hex, 86400 * 7, () => getJSON(`https://hexdb.io/api/v1/aircraft/${hex}`)); Object.assign(out, { reg: h.Registration, type: h.Type, icaoType: h.ICAOTypeCode, manufacturer: h.Manufacturer, owner: h.RegisteredOwners }); reg = reg || h.Registration; } catch {} }
@@ -517,16 +525,22 @@ function disruptFrom(list, now = Date.now()) {
   const score = 5 * (0.45 * Math.min(canc / 0.2, 1) + 0.35 * Math.min(avg / 60, 1) + 0.2 * Math.min(late30 / 0.5, 1));
   return { n: recent.length, score: Math.round(score * 10) / 10, cancelledPct: Math.round(canc * 100), avgDelay: Math.round(avg), late30Pct: Math.round(late30 * 100) };
 }
+function airlineBreak(list, now = Date.now()) { const m = {};
+  for (const f of list) { const t = new Date(f.dep.scheduled || f.arr.scheduled); if (!(t <= now && t > now - 4 * 3600e3)) continue; const k = f.airline?.iata || f.number.slice(0, 2); const r = m[k] ||= { iata: k, name: f.airline?.name || k, n: 0, canc: 0, d: [] }; r.n++;
+    if (f.status === "cancelled") r.canc++; else { const d = delayMin(f); if (d != null && !Number.isNaN(d)) r.d.push(Math.max(0, d)); } }
+  return Object.values(m).filter(r => r.n >= 3).map(r => ({ iata: r.iata, name: r.name, n: r.n, cancelled: r.canc, avgDelay: r.d.length ? Math.round(r.d.reduce((a, c) => a + c, 0) / r.d.length) : 0 })).sort((a, b) => (b.cancelled * 30 + b.avgDelay) - (a.cancelled * 30 + a.avgDelay)).slice(0, 6); }
+function wxCause(w) { if (!w) return null; const c = w.code; const t = c >= 95 ? "Thunderstorms" : c >= 71 && c <= 77 || c === 85 || c === 86 ? "Snow" : c === 45 || c === 48 ? "Fog" : c === 66 || c === 67 || c === 56 || c === 57 ? "Freezing rain" : null;
+  const parts = [t, w.windKts >= 30 ? `Strong wind ${w.windKts} kt` : null].filter(Boolean); return parts.length ? parts.join(" · ") : null; }
 const wxNow = a => cached(`wxnow:${a.iata}`, 600, async () => { const j = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${a.lat}&longitude=${a.lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,weather_code,is_day&wind_speed_unit=kn`); const c = j.current || {};
   return { temp: c.temperature_2m, windKts: c.wind_speed_10m != null ? Math.round(c.wind_speed_10m) : null, windDir: c.wind_direction_10m, code: c.weather_code, isDay: c.is_day }; });
 api.get("/disruptions", wrap(async (req, res) => {
   const out = await cached("disruptions:" + !!cfg.aerodataboxKey + ":" + Object.keys(LIVEC).length, 600, async () => { const codes = Object.values(STATUS_AIRPORTS).flat().filter(c => AP[c]);
     const rows = await Promise.all(codes.map(async c => { const ap = AP[c]; if (!ap) return null; const a = airportOut(ap); let wx = null; try { wx = await wxNow(ap); } catch {}
       try {
-        if (OFFICIAL[c]) { const ymd = todayLondon(); const [d, r] = await Promise.all([officialBoard(c, "dep", ymd), officialBoard(c, "arr", ymd)]); return { airport: a, wx, dep: disruptFrom(d), arr: disruptFrom(r), source: "Official airport board" }; }
+        if (OFFICIAL[c]) { const ymd = todayLondon(); const [d, r] = await Promise.all([officialBoard(c, "dep", ymd), officialBoard(c, "arr", ymd)]); return { airport: a, wx, cause: wxCause(wx), dep: disruptFrom(d), arr: disruptFrom(r), airlines: airlineBreak([...d, ...r]), source: "Official airport board" }; }
         if (cfg.aerodataboxKey) { const x = await adb(`/airports/iata/${c}/delays`, 1800); const s = v => { if (!v?.numTotal) return { score: null }; const canc = (v.numCancelled || 0) / v.numTotal, avg = v.medianDelay ? parseMed(v.medianDelay) : 0, l30 = Math.min(1, (v.numQualifiedDelayed || 0) / v.numTotal);
             return { n: v.numTotal, score: Math.round(50 * (0.45 * Math.min(canc / 0.2, 1) + 0.35 * Math.min(avg / 60, 1) + 0.2 * Math.min(l30 / 0.5, 1))) / 10, cancelledPct: Math.round(canc * 100), avgDelay: avg }; };
-          return { airport: a, wx, dep: s(x.departuresDelayInformation), arr: s(x.arrivalsDelayInformation), source: "AeroDataBox" }; }
+          return { airport: a, wx, cause: wxCause(wx), dep: s(x.departuresDelayInformation), arr: s(x.arrivalsDelayInformation), source: "AeroDataBox" }; }
       } catch {}
       return { airport: a, wx, dep: { score: null }, arr: { score: null }, noData: true, live: LIVEC[c] || null, source: "Live traffic only" }; }));
     const R = rows.filter(Boolean), worst = r => Math.max(r.dep.score ?? -1, r.arr.score ?? -1);
@@ -594,6 +608,8 @@ function diff(a, b, f) { const m = []; if (!a) return m;
   if (b.dly != null && (a.dly ?? 0) + 10 <= b.dly && b.dly >= 15) m.push(`⏱ Now ${b.dly} min late`);
   if (b.dly != null && a.dly != null && a.dly >= 15 && b.dly <= a.dly - 15) m.push(`✅ Delay reduced to ${Math.max(0, b.dly)} min`);
   if (b.belt && b.belt !== a.belt) m.push(`🧳 Baggage belt ${b.belt}`);
+  { const ph = x => { const t = (x || "").toLowerCase(); return /final call/.test(t) ? "Final call" : /boarding/.test(t) ? "Boarding" : /go to gate|gate open/.test(t) ? "Gate open" : null; };
+    const pa = ph(a.statusText), pb = ph(b.statusText); if (pb && pb !== pa) m.push(`🚪 ${pb}${b.gate ? " · Gate " + b.gate : ""}`); }
   if (b.status !== a.status && ["departed", "enroute", "landed", "diverted", "boarding"].includes(b.status) && !(a.status === "enroute" && b.status === "departed") && !(a.status === "departed" && b.status === "enroute")) m.push(b.status === "enroute" ? "Departed, now en route" : b.statusText || b.status);
   return m; }
 // prefs: { events: { cancel, gate, delay, belt, status }: bool, quiet: { on, from: "22:00", to: "07:00", tz } } — cancellations always break quiet hours
@@ -650,7 +666,10 @@ api.get("/sigmets", wrap(async (req, res) => { const [i, u] = await Promise.all(
 api.get("/winds", wrap(async (req, res) => res.json({ raw: await cached("winds", 1800, () => getT("https://aviationweather.gov/api/data/windtemp?region=all&level=high&fcst=06")), source: "aviationweather.gov FB winds (US stations)" })));
 const slimAc = a => ({ hex: a.hex, flight: (a.flight || "").trim(), reg: a.r, type: a.t, desc: a.desc, alt: a.alt_baro, gs: a.gs, track: a.track, lat: a.lat, lon: a.lon, squawk: a.squawk, emergency: a.emergency, mil: !!(a.dbFlags & 1), vs: a.baro_rate, seen: a.seen });
 let ADQ = Promise.resolve(); const adq = fn => { const p = ADQ.then(fn); ADQ = p.catch(() => {}).then(() => new Promise(r => setTimeout(r, 1100))); return p; }; // adsb.lol allows ~1 req/s
-const adsb = p => cached("adsb:" + p, 20, () => adq(() => getJ("https://api.adsb.lol/v2/" + p)).catch(() => getJ("https://api.airplanes.live/v2/" + p))).then(j => (j.ac || []).map(slimAc));
+// adsb.lol, then airplanes.live, then adsb.fi (path-mapped); last good answer is kept for 10 min if all three are rate-limiting.
+const ADSB_STALE = {}; const fiPath = p => p.replace(/^reg\//, "registration/").replace(/^point\/([-\d.]+)\/([-\d.]+)\/(\d+)/, "lat/$1/lon/$2/dist/$3");
+const adsb = p => cached("adsb:" + p, 45, async () => { for (const u of ["https://api.adsb.lol/v2/" + p, "https://api.airplanes.live/v2/" + p, "https://opendata.adsb.fi/api/v2/" + fiPath(p)]) { try { const j = await adq(() => getJ(u)); ADSB_STALE[p] = { j, at: Date.now() }; return j; } catch {} }
+  const st = ADSB_STALE[p]; if (st && Date.now() - st.at < 600e3) return st.j; throw new Error("Live ADS-B sources are busy (rate-limited). Try again in a minute."); }).then(j => (j.ac || j.aircraft || []).map(slimAc));
 api.get("/squawks", wrap(async (req, res) => { const out = []; for (const s of ["7500", "7600", "7700"]) out.push(...(await adsb("sqk/" + s)).map(a => ({ ...a, code: s }))); res.json({ list: out, at: Date.now(), source: "adsb.lol" }); }));
 api.get("/mil", wrap(async (req, res) => res.json({ list: (await adsb("mil")).filter(a => a.lat).slice(0, 300), source: "adsb.lol" })));
 api.get("/overhead", wrap(async (req, res) => { const lat = +req.query.lat, lon = +req.query.lon, r = Math.min(250, +req.query.r || 25); if (!isFinite(lat) || !isFinite(lon)) return res.status(400).json({ error: "lat/lon required" });

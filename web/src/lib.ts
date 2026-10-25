@@ -2,7 +2,13 @@ export type Ap = { iata: string; icao?: string; name: string; city?: string; cou
 export type Times = { scheduled?: string | null; estimated?: string | null; actual?: string | null; gate?: string; terminal?: string; baggage?: string };
 export type Flight = { id: string; number: string; date: string; airline?: any; origin?: Ap; destination?: Ap; dep: Times; arr: Times; status?: string; statusText?: string; source?: string;
   callsign?: string; aircraft?: { reg?: string; hex?: string; model?: string }; notes?: string; example?: boolean; manual?: boolean; diverted?: Ap; scheduleUnknown?: boolean; updates?: { at: number; text: string }[]; friend?: string };
-export const api = async (p: string, o?: RequestInit) => { const r = await fetch("/api" + p, o); const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || r.statusText), j); return j; };
+// GETs retry twice on network errors, 429 and 5xx (upstream feeds such as adsb.lol/adsb.fi rate-limit), with backoff.
+export const api = async (p: string, o?: RequestInit): Promise<any> => { const get = !o?.method || o.method === "GET";
+  for (let i = 0; ; i++) { let r: Response;
+    try { r = await fetch("/api" + p, o); } catch (e: any) { if (get && i < 2) { await new Promise(s => setTimeout(s, 800 * (i + 1))); continue; } throw new Error("Network error. Check your connection and try again."); }
+    const j = await r.json().catch(() => ({})); if (r.ok) return j;
+    if (get && i < 2 && (r.status === 429 || r.status >= 500) && !j.needsKey) { await new Promise(s => setTimeout(s, 1000 * (i + 1))); continue; }
+    throw Object.assign(new Error(j.error || r.statusText || `Request failed (${r.status})`), j); } };
 export const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 export function dist(a?: Ap, b?: Ap) { if (!a?.lat || !b?.lat) return 0; const R = 3958.8, r = Math.PI / 180; const dl = (b.lat - a.lat) * r, dn = (b.lon! - a.lon!) * r;
   const h = Math.sin(dl / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dn / 2) ** 2; return Math.round(2 * R * Math.asin(Math.sqrt(h))); }
