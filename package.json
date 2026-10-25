@@ -1,0 +1,9 @@
+{
+  "name": "skyline-flights",
+  "private": true,
+  "engines": { "node": "20.x" },
+  "scripts": {
+    "build": "npm ci --prefix server --omit=dev && npm ci --prefix web --include=dev && npm run build --prefix web",
+    "start": "node server/server.js"
+  }
+}

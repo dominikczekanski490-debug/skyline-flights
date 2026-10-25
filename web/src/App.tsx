@@ -1,0 +1,311 @@
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import MapView, { MAP_STYLES } from "./MapView";
+import { Sheet, RoundBtn, I, Badge } from "./ui";
+import { api, today, dist, fmtT, fmtD, best, delay, dur, lateLabel, lateColor, withEstArr, load, save, logo, ics, download, wxText, wxIcon, tzOffset, estDurMin, type Flight, type Ap } from "./lib";
+import { EXAMPLE } from "./example";
+
+type Ov = { t: "flight"; f: Flight } | { t: "board"; iata: string } | { t: "airports" } | { t: "search" } | { t: "settings" } | { t: "addpast" };
+const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <img className="alogo" style={{ width: s, height: s }} src={logo(a?.iata)} onError={e => (e.currentTarget.style.visibility = "hidden")} alt="" />;
+
+export default function App() {
+  const [tab, setTab] = useState<"mine" | "friends" | "passport">("mine");
+  const [flights, setFlights] = useState<Flight[]>(load);
+  const [ov, setOv] = useState<Ov[]>([]);
+  const [live, setLive] = useState<Record<string, any>>({});
+  const [mapStyle, setMapStyle] = useState(localStorage.getItem("sk.map") || "hybrid");
+  const [radar, setRadar] = useState(false); const [locate, setLocate] = useState(0);
+  const [theme, setTheme] = useState(localStorage.getItem("sk.theme") || "auto");
+  useEffect(() => save(flights), [flights]);
+  useEffect(() => { localStorage.setItem("sk.theme", theme); document.documentElement.dataset.theme = theme; }, [theme]);
+  useEffect(() => { localStorage.setItem("sk.map", mapStyle); }, [mapStyle]);
+  // import a friend's shared flight from URL
+  useEffect(() => { const p = new URLSearchParams(location.search).get("share"); if (p) { try { const f = JSON.parse(decodeURIComponent(escape(atob(p)))); f.friend = f.friend || "Friend"; setFlights(l => l.some(x => x.id === f.id && x.friend) ? l : [...l, { ...f, id: f.id }]); setTab("friends"); history.replaceState(null, "", "/"); } catch {} } }, []);
+  const push = (o: Ov) => setOv(s => [...s, o]); const pop = () => setOv(s => s.slice(0, -1));
+  const upd = (f: Flight) => setFlights(l => l.map(x => x.id === f.id && !!x.friend === !!f.friend ? f : x));
+  const active = flights.filter(f => !f.example && f.date >= new Date(Date.now() - 86400e3).toISOString().slice(0, 10));
+  // refresh active flights + live positions, notify on change
+  useEffect(() => { const tick = async () => { for (const f of active) { try { const r = await api(`/flight/${f.number}?date=${f.date}`); if (r.live) setLive(l => ({ ...l, [f.id]: r.live }));
+    if (r.flight && !f.manual) { const n = { ...f, ...r.flight, id: f.id, date: f.date, notes: f.notes, friend: f.friend, aircraft: { ...f.aircraft, ...r.flight.aircraft, ...(r.live ? { reg: r.live.reg, hex: r.live.hex, model: r.live.type } : {}) } };
+      const msg: string[] = []; if (n.statusText !== f.statusText && n.statusText) msg.push(n.statusText!); if (n.dep.gate !== f.dep.gate && n.dep.gate) msg.push(`Gate ${n.dep.gate}`);
+      if (msg.length) { n.updates = [...(f.updates || []), { at: Date.now(), text: msg.join(" • ") }]; if (Notification?.permission === "granted") new Notification(`${n.number} ${n.origin?.iata}→${n.destination?.iata}`, { body: msg.join(" • "), icon: "/icon-192.png" }); }
+      upd(n); } } catch {} } }; tick(); const t = setInterval(tick, 90e3); return () => clearInterval(t); }, [active.map(f => f.id).join()]);
+  const top = ov.at(-1); const focus = top?.t === "flight" ? top.f : null;
+  const mapFlights = focus ? [focus] : tab === "passport" ? flights.filter(f => !f.friend) : tab === "friends" ? flights.filter(f => f.friend) : active.filter(f => !f.friend);
+  return <div className="app">
+    <MapView flights={mapFlights} live={live} style={mapStyle} radar={radar} focus={focus} locate={locate} onPlane={id => { const f = flights.find(x => x.id === id); f && push({ t: "flight", f }); }} />
+    <div className="mapbtns"><button onClick={() => setMapStyle(MAP_STYLES[(MAP_STYLES.indexOf(mapStyle) + 1) % MAP_STYLES.length])}>{I.layers}</button><button className={radar ? "on" : ""} onClick={() => setRadar(!radar)}>{I.cloud}</button><button onClick={() => setLocate(Date.now())}>{I.locate}</button></div>
+    <Sheet snaps={[0.3, 0.55, 0.94]} initial={1} z={5}>
+      {tab === "mine" && <MyFlights list={active.filter(f => !f.friend)} open={f => push({ t: "flight", f })} push={push} />}
+      {tab === "friends" && <Friends list={flights.filter(f => f.friend)} open={f => push({ t: "flight", f })} push={push} />}
+      {tab === "passport" && <Passport flights={flights.filter(f => !f.friend)} setFlights={setFlights} open={f => push({ t: "flight", f })} push={push} />}
+      <div style={{ height: 120 }} />
+    </Sheet>
+    {!ov.length && <nav className="tabbar"><div className="pill">
+      {([["mine", "My Flights", I.plane], ["friends", "Friends", I.friends], ["passport", "Passport", I.passport]] as const).map(([k, l, ic]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{ic}<span>{l}</span></button>)}
+    </div><button className="searchbtn" onClick={() => push({ t: "search" })}>{I.search}</button></nav>}
+    {ov.map((o, i) => <Overlay key={i + o.t} o={o} z={20 + i} close={pop} push={push} flights={flights} setFlights={setFlights} upd={upd} live={live} theme={theme} setTheme={setTheme} tab={tab} />)}
+  </div>;
+}
+
+function Head({ title, sub, right }: { title: ReactNode; sub?: ReactNode; right?: ReactNode }) { return <div className="head"><div><h1>{title}</h1>{sub && <div className="sub">{sub}</div>}</div><div className="row g8">{right}</div></div>; }
+const Avatar = ({ onClick }: { onClick?: () => void }) => <button className="avatar" onClick={onClick}>D</button>;
+
+function FlightCard({ f, onClick, pred }: { f: Flight; onClick: () => void; pred?: boolean }) {
+  const g = withEstArr(f); const dd = delay(f.dep); const [p, setP] = useState<any>(null);
+  useEffect(() => { if (pred && !f.example) api(`/predict/${f.number}?date=${f.date}`).then(setP).catch(() => {}); }, [f.id]);
+  const until = best(f.dep) ? (+new Date(best(f.dep)!) - Date.now()) / 60000 : null;
+  return <div className="card fcard" onClick={onClick}>
+    <div className="row between"><div className="row g10"><Logo a={f.airline} s={28} /><div><div className="muted sm">{f.number} • {fmtD(f.date, { weekday: "short", day: "numeric", month: "short" })}{f.friend && ` • ${f.friend}`}</div><b>{f.origin?.city || f.origin?.iata} to {f.destination?.city || f.destination?.iata}</b></div></div>
+      {p && !p.cancelled && <span className="aibadge" style={{ color: lateColor(p.predictedDelay) }}>AI {p.predictedDelay >= 5 ? `+${p.predictedDelay}m` : "on time"}</span>}</div>
+    <div className="row between mt8"><div><div className="big" style={{ color: lateColor(dd) }}>{fmtT(best(f.dep), f.origin?.tz)}</div><small className="muted">{f.origin?.iata} {until != null && until > 0 ? `• departs in ${dur(until)}` : f.statusText ? "• " + f.statusText : ""}</small></div>
+      <div className="line" /><div className="right"><div className="big">{fmtT(best(g.arr), f.destination?.tz)}</div><small className="muted">{f.destination?.iata}{(g.arr as any).estimatedOnly && " • est."}</small></div></div>
+  </div>;
+}
+
+function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => void; push: (o: Ov) => void }) {
+  return <>
+    <Head title="My Flights" right={<><RoundBtn onClick={() => push({ t: "airports" })}>{I.share}</RoundBtn><Avatar onClick={() => push({ t: "settings" })} /></>} />
+    {!list.length ? <div className="empty"><b>Let's Fly Somewhere</b><span>Tap <span className="mini">{I.search}</span> Search to add your next flight</span>
+      <div className="row g8 mt16 wrap center"><button className="chip" onClick={() => push({ t: "board", iata: "MAN" })}>Manchester board</button><button className="chip" onClick={() => push({ t: "airports" })}>Airport delays</button></div></div>
+      : list.sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1).map(f => <FlightCard key={f.id} f={f} onClick={() => open(f)} pred />)}
+    <div className="row g8 wrap px mt16"><button className="chip" onClick={() => push({ t: "airports" })}>🌍 Airports status</button><button className="chip" onClick={() => push({ t: "board", iata: "MAN" })}>🛫 MAN departures</button><button className="chip" onClick={() => push({ t: "settings" })}>⚙️ Settings & keys</button></div>
+  </>;
+}
+
+function Friends({ list, open, push }: { list: Flight[]; open: (f: Flight) => void; push: (o: Ov) => void }) {
+  return <><Head title="Friends" right={<Avatar onClick={() => push({ t: "settings" })} />} />
+    {!list.length && <div className="empty"><b>Follow friends' flights</b><span>Open any flight → Share to send a link. When a friend opens your link (or you open theirs) the flight appears here and updates live.</span></div>}
+    {list.map(f => <FlightCard key={f.id} f={f} onClick={() => open(f)} pred />)}
+    <div className="px mt16"><button className="primary wide" onClick={() => push({ t: "search" })}>＋ Add Friend's Flight</button></div></>;
+}
+
+// ---------------- Passport ----------------
+function Passport({ flights, setFlights, open, push }: { flights: Flight[]; setFlights: (f: any) => void; open: (f: Flight) => void; push: (o: Ov) => void }) {
+  const years = [...new Set(flights.map(f => f.date.slice(0, 4)))].sort().reverse();
+  const [yr, setYr] = useState("All"); const [sort, setSort] = useState("Date");
+  const L = flights.filter(f => yr === "All" || f.date.startsWith(yr)).filter(f => f.date <= today() || f.status === "landed");
+  const s = useMemo(() => { let mi = 0, min = 0, lh = 0, lost = 0, nl = 0; const ap = new Set<string>(), al = new Set<string>(), ac: Record<string, number> = {};
+    for (const f of L) { const d = dist(f.origin, f.diverted || f.destination); mi += d; if (d > 3000) lh++; const a = withEstArr(f); const t = best(a.arr) && best(f.dep) ? (+new Date(best(a.arr)!) - +new Date(best(f.dep)!)) / 60000 : estDurMin(f.origin, f.destination); min += Math.max(0, t);
+      f.origin && ap.add(f.origin.iata); f.destination && ap.add(f.destination.iata); f.airline?.iata && al.add(f.airline.iata); const m = f.aircraft?.model; if (m) ac[m] = (ac[m] || 0) + 1;
+      const dl = delay(f.arr) ?? delay(f.dep); if (dl && dl > 0) { lost += dl; nl++; } }
+    const top = Object.entries(ac).sort((a, b) => b[1] - a[1])[0]; return { mi, min, lh, lost, nl, ap: ap.size, al: al.size, top }; }, [L]);
+  const ex = flights.some(f => f.example);
+  const sorted = [...L].sort((a, b) => sort === "From" ? (a.origin?.city || "").localeCompare(b.origin?.city || "") : sort === "To" ? (a.destination?.city || "").localeCompare(b.destination?.city || "") : sort === "Airline" ? (a.airline?.name || "").localeCompare(b.airline?.name || "") : sort === "Aircraft" ? (a.aircraft?.model || "").localeCompare(b.aircraft?.model || "") : a.date < b.date ? 1 : -1);
+  const groups: Record<string, Flight[]> = {}; sorted.forEach(f => (groups[sort === "Date" ? f.date.slice(0, 4) : sort] ||= []).push(f));
+  const imp = (e: any) => { const file = e.target.files[0]; if (!file) return; file.text().then(async (t: string) => { const rows = file.name.endsWith(".ics") ? parseIcs(t) : parseCsv(t); const out: Flight[] = [];
+    for (const r of rows) out.push(await manualFlight(r.number, r.date, r.from, r.to)); setFlights((l: Flight[]) => [...l, ...out]); alert(`Imported ${out.length} flights`); }); };
+  return <>
+    <Head title="Passport" right={<><RoundBtn onClick={() => navigator.share?.({ title: "My Skyline Passport", text: `${L.length} flights • ${s.mi.toLocaleString()} mi • ${s.ap} airports` })}>{I.share}</RoundBtn><Avatar onClick={() => push({ t: "settings" })} /></>} />
+    <div className="segs">{["All", ...years].map(y => <button key={y} className={yr === y ? "on" : ""} onClick={() => setYr(y)}>{y === "All" ? "All-Time" : y}</button>)}</div>
+    {ex && <div className="exlabel">Example data — sample flights so you can see the layout. <button onClick={() => setFlights((l: Flight[]) => l.filter(f => !f.example))}>Remove</button></div>}
+    <div className="pcard passport"><div className="row between"><div><div className="ptitle">{yr === "All" ? "ALL-TIME" : yr} SKYLINE PASSPORT</div><div className="psub">▭ PASSPORT • PASS • PASAPORTE</div></div>{I.share}</div>
+      <div className="grid2"><div><label>FLIGHTS</label><b className="h1">{L.length}</b><small>{s.lh} Long Haul</small></div><div><label>DISTANCE</label><b className="h1">{s.mi.toLocaleString()} mi</b><small>{(s.mi / 24901).toFixed(1)}x around the world</small></div></div>
+      <div className="grid3"><div><label>FLIGHT TIME</label><b className="h2">{dur(s.min)}</b></div><div><label>AIRPORTS</label><b className="h2">{s.ap}</b></div><div><label>AIRLINES</label><b className="h2">{s.al}</b></div></div>
+    </div>
+    <div className="pcard delays"><div className="row between"><b className="huge">{Math.round(s.lost / 60)}</b>{I.share}</div><div className="h3">hours lost from delays</div><small>Delayed flights averaged {s.nl ? dur(s.lost / s.nl) : "0m"} late</small></div>
+    <div className="pcard aircraft"><div className="h3">Most flown aircraft</div><b className="h1 thin">{s.top?.[0] || "—"}</b><small>{s.top?.[1] || 0} flights</small><div className="acimg">{I.plane}</div></div>
+    <div className="row g8 px wrap mt8"><button className="chip" onClick={() => push({ t: "addpast" })}>＋ Add past flight</button><label className="chip">⇪ Import CSV / .ics<input hidden type="file" accept=".csv,.ics" onChange={imp} /></label>
+      <button className="chip" onClick={() => download("skyline.ics", ics(L))}>📅 Export .ics</button>{!flights.length && <button className="chip" onClick={() => setFlights(EXAMPLE)}>Load example data</button>}</div>
+    <div className="sorts">{["Date", "From", "To", "Airline", "Aircraft"].map(k => <button key={k} className={sort === k ? "on" : ""} onClick={() => setSort(k)}>{k}{sort === k && " ↓"}</button>)}</div>
+    {Object.entries(groups).map(([g, l]) => <div key={g}><div className="ghead"><b>{g}</b><span>{l.length} FLIGHTS</span></div>
+      {l.map(f => <div key={f.id} className="lrow" onClick={() => open(f)}><Logo a={f.airline} /><div className="grow"><div className="row between muted sm"><span>{f.number} <span className="faint">{f.origin?.iata} → {f.diverted ? <s>{f.destination?.iata}</s> : f.destination?.iata}</span>{f.example && <em className="ex"> example</em>}</span><span>{fmtD(f.date)}</span></div>
+        <b>{f.origin?.city} to {f.diverted ? <s>{f.destination?.city}</s> : f.destination?.city}</b></div></div>)}</div>)}
+  </>;
+}
+function parseCsv(t: string) { const [h, ...rows] = t.trim().split(/\r?\n/); const k = h.toLowerCase().split(",").map(x => x.trim()); const ix = (n: string[]) => k.findIndex(x => n.includes(x));
+  const [a, b, c, d] = [ix(["flight", "number", "flight number"]), ix(["date"]), ix(["from", "origin"]), ix(["to", "destination"])];
+  return rows.map(r => r.split(",").map(x => x.trim())).map(r => ({ number: r[a], date: r[b], from: r[c], to: r[d] })).filter(r => r.date); }
+function parseIcs(t: string) { return t.split("BEGIN:VEVENT").slice(1).map(e => { const sm = (e.match(/SUMMARY:(.*)/)?.[1] || ""); const n = sm.match(/\b([A-Z0-9]{2}\s?\d{1,4})\b/)?.[1]?.replace(" ", "") || "";
+  const ap = sm.match(/\b([A-Z]{3})\s*(?:→|-|to)\s*([A-Z]{3})\b/); const d = e.match(/DTSTART[^:]*:(\d{8})/)?.[1] || ""; return { number: n, date: d && `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`, from: ap?.[1], to: ap?.[2] }; }).filter(r => r.date); }
+async function manualFlight(number: string, date: string, from?: string, to?: string, ac?: string): Promise<Flight> {
+  const [o, d, al] = await Promise.all([from ? api("/airport/" + from).catch(() => null) : null, to ? api("/airport/" + to).catch(() => null) : null, number ? api("/airline/" + number.slice(0, 2)).catch(() => null) : null]);
+  return { id: `${number}-${date}-${Math.random().toString(36).slice(2, 6)}`, number: (number || "").toUpperCase(), date, origin: o, destination: d, airline: al, dep: {}, arr: {}, manual: true, status: "landed", aircraft: ac ? { model: ac } : undefined };
+}
+
+// ---------------- overlays ----------------
+function Overlay(p: { o: Ov; z: number; close: () => void; push: (o: Ov) => void; flights: Flight[]; setFlights: any; upd: (f: Flight) => void; live: any; theme: string; setTheme: any; tab: string }) {
+  const { o, z, close } = p;
+  const x = <RoundBtn onClick={close}>{I.close}</RoundBtn>;
+  if (o.t === "search") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><SearchView {...p} x={x} /></Sheet>;
+  if (o.t === "flight") return <Sheet z={z} onClose={close} snaps={[0.5, 0.94]} initial={0} header={<div className="head fhead"><div className="row g10"><Logo a={o.f.airline} /><div><div className="muted sm">{o.f.number} • {fmtD(o.f.date, { weekday: "short", day: "numeric", month: "short" }).toUpperCase()}</div><h2>{o.f.origin?.city} to {o.f.diverted ? <s>{o.f.destination?.city}</s> : o.f.destination?.city}</h2></div></div>{x}</div>}>
+    <FlightDetail f={p.flights.find(f => f.id === o.f.id) || o.f} {...p} /></Sheet>;
+  if (o.t === "board") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Board iata={o.iata} x={x} push={p.push} /></Sheet>;
+  if (o.t === "airports") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Airports x={x} push={p.push} flights={p.flights} /></Sheet>;
+  if (o.t === "addpast") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><AddPast x={x} done={(f: Flight) => { p.setFlights((l: Flight[]) => [...l, f]); close(); }} /></Sheet>;
+  return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Settings x={x} theme={p.theme} setTheme={p.setTheme} /></Sheet>;
+}
+
+function SearchView({ x, push, setFlights, close }: any) {
+  const [q, setQ] = useState(""); const [date, setDate] = useState(today()); const [res, setRes] = useState<any>(null); const [busy, setBusy] = useState(false); const [aps, setAps] = useState<Ap[]>([]);
+  const [mode, setMode] = useState<"flight" | "route" | "airport">("flight"); const [to, setTo] = useState("");
+  useEffect(() => { if (mode !== "flight" && q.length >= 2) api("/airports/search?q=" + q).then(setAps).catch(() => {}); else setAps([]); }, [q, mode]);
+  const go = async () => { setBusy(true); setRes(null); try { if (mode === "flight") setRes(await api(`/flight/${q.replace(/\s/g, "")}?date=${date}`)); else if (mode === "route") setRes({ list: (await api(`/route?from=${q}&to=${to}&date=${date}`)).flights }); } catch (e: any) { setRes({ error: e.message, needsKey: e.needsKey }); } setBusy(false); };
+  const add = (f: Flight, friend?: boolean) => { const n = { ...f, id: f.id || `${f.number}-${date}`, date }; setFlights((l: Flight[]) => [...l.filter(y => !(y.id === n.id && !!y.friend === !!friend)), friend ? { ...n, friend: "Friend" } : n]); close(); };
+  return <><Head title="Search" right={x} />
+    <div className="segs">{(["flight", "route", "airport"] as const).map(m => <button key={m} className={mode === m ? "on" : ""} onClick={() => { setMode(m); setRes(null); }}>{m === "flight" ? "Flight #" : m === "route" ? "Route" : "Airport"}</button>)}</div>
+    <div className="px col g8"><input className="field" autoFocus placeholder={mode === "flight" ? "e.g. LS965, FR2141, BA1393" : "From airport (e.g. MAN)"} value={q} onChange={e => setQ(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && go()} />
+      {mode === "route" && <input className="field" placeholder="To airport (optional, e.g. LCA)" value={to} onChange={e => setTo(e.target.value.toUpperCase())} />}
+      {mode !== "airport" && <div className="row g8"><input className="field grow" type="date" value={date} onChange={e => setDate(e.target.value)} /><button className="primary" onClick={go}>{busy ? "…" : "Search"}</button></div>}</div>
+    {mode !== "flight" && aps.length > 0 && <div className="mt8">{aps.map(a => <div key={a.iata} className="lrow" onClick={() => mode === "airport" ? push({ t: "board", iata: a.iata }) : (setQ(a.iata), setAps([]))}><span className="code">{a.iata}</span><div><b>{a.name}</b><div className="muted sm">{a.city}, {a.country}</div></div></div>)}</div>}
+    {res?.error && <div className="note warn">{res.error}{res.needsKey && " — this airport needs a free AeroDataBox key (Settings)."}</div>}
+    {res?.flight && <div className="mt8"><FlightCard f={{ ...res.flight, date }} onClick={() => push({ t: "flight", f: { ...res.flight, date } })} />
+      <div className="muted sm px">Sources: {res.sources.join(", ")}{res.flight.scheduleUnknown && " — schedule times need an AeroDataBox key for this airport"}</div>
+      <div className="row g8 px mt8"><button className="primary grow" onClick={() => add(res.flight)}>＋ Track flight</button><button className="secondary grow" onClick={() => add(res.flight, true)}>＋ Friend's flight</button></div></div>}
+    {res && !res.flight && !res.list && !res.error && <div className="note">No schedule found for {q} on {date}. Free schedule data covers flights at MAN, STN and EMA; add a free AeroDataBox key in Settings for worldwide coverage.</div>}
+    {res?.list && <div className="mt8">{res.list.map((f: Flight) => <BoardRow key={f.id} f={f} dir="dep" onClick={() => push({ t: "flight", f: { ...f, date } })} />)}{!res.list.length && <div className="note">No flights found.</div>}</div>}
+    <div className="note mt16">Tip: free real-time schedules, gates & delays come straight from Manchester, Stansted and East Midlands airports. Live positions come from ADS-B (adsb.lol).</div>
+  </>;
+}
+
+function Stat({ label, v }: { label: string; v: ReactNode }) { return <div><label>{label}</label><b>{v}</b></div>; }
+function Prediction({ f }: { f: Flight }) {
+  const [p, setP] = useState<any>(null); const [err, setErr] = useState("");
+  useEffect(() => { if (!f.example) api(`/predict/${f.number}?date=${f.date}`).then(setP).catch(e => setErr(e.message)); }, [f.id, f.statusText]);
+  if (f.example) return null;
+  if (!p) return <div className="card"><h3>✦ AI Delay Prediction</h3><div className="muted sm">{err || "Computing…"}</div></div>;
+  const d = p.predictedDelay ?? 0; const ang = Math.max(-90, Math.min(90, -90 + (Math.min(90, Math.max(-10, d)) + 10) / 100 * 180));
+  const bars = [["On time (<15m)", p.probs.onTime, "var(--green)"], ["15m+ late", p.probs.late15, "var(--orange)"], ["45m+ late", p.probs.late45, "var(--red)"], ["Cancelled", p.probs.cancel, "#8b1a1a"], ["Diverted", p.probs.divert, "#5a1010"]];
+  return <div className="card ai"><div className="row between"><h3>✦ AI Delay Prediction</h3><span className={"conf " + p.confidence}>{p.confidence} confidence</span></div>
+    <div className="muted sm">Estimate from a statistical model — not observed data</div>
+    <div className="row g16 mt8"><svg viewBox="0 0 120 70" width="130"><path d="M10 64a50 50 0 0 1 100 0" stroke="url(#gg)" strokeWidth="10" fill="none" strokeLinecap="round" /><defs><linearGradient id="gg"><stop offset="0" stopColor="#34c759" /><stop offset=".5" stopColor="#ff9f0a" /><stop offset="1" stopColor="#ff3b30" /></linearGradient></defs>
+      <line x1="60" y1="64" x2="60" y2="22" stroke="var(--text)" strokeWidth="3" strokeLinecap="round" transform={`rotate(${ang} 60 64)`} /><circle cx="60" cy="64" r="5" fill="var(--text)" /></svg>
+      <div><div className="big" style={{ color: lateColor(d) }}>{p.cancelled ? "Cancelled" : d >= 5 ? `+${d}m` : "On time"}</div><div className="muted sm">{p.range && `likely ${p.range[0]}m to +${p.range[1]}m`}</div></div></div>
+    {bars.map(([l, v, c]: any) => <div key={l} className="bar"><span>{l}</span><div><i style={{ width: `${v}%`, background: c }} /></div><b>{v}%</b></div>)}
+    <ul className="reasons">{p.reasons.map((r: string) => <li key={r}>{r}</li>)}</ul>
+    <div className="explain">{p.explanation?.text}<div className="faint sm">{p.explanation?.by === "llm" ? "Written by your LLM from the model's features" : "Template explanation (add an LLM key in Settings for AI-written text)"}</div></div></div>;
+}
+
+function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
+  const g = withEstArr(f); const dd = delay(f.dep), da = delay(g.arr); const lv = live[f.id];
+  const [wx, setWx] = useState<any[]>([]); const [ac, setAc] = useState<any>(null); const [fc, setFc] = useState<any>(null); const [inb, setInb] = useState<any>(null); const [al, setAl] = useState<any>(f.airline);
+  useEffect(() => { Promise.all([f.origin, f.destination].map((a: Ap) => a?.lat ? api(`/weather?lat=${a.lat}&lon=${a.lon}`).catch(() => null) : null)).then(setWx);
+    if (!f.example) api(`/forecast/${f.number}`).then(setFc).catch(() => {}); if (f.airline?.iata && !f.airline.links) api("/airline/" + f.airline.iata).then(setAl).catch(() => {}); }, [f.id]);
+  const hex = lv?.hex || f.aircraft?.hex, reg = lv?.reg || f.aircraft?.reg;
+  useEffect(() => { if (hex || reg) api(`/aircraft?hex=${hex || ""}&reg=${reg || ""}`).then(setAc).catch(() => {}); if (reg) api(`/inbound?reg=${reg}&date=${f.date}`).then(setInb).catch(e => setInb({ err: e.message, needsKey: e.needsKey })); }, [hex, reg]);
+  const tracked = flights.some((x: Flight) => x.id === f.id);
+  const until = best(f.dep) ? (+new Date(best(f.dep)!) - Date.now()) / 60000 : 0;
+  const banner = f.status === "cancelled" ? ["Cancelled", "red"] : f.status === "landed" ? [`Arrived ${da != null ? lateLabel(da) : ""}`, da && da > 14 ? "red" : "green"] : f.status === "departed" ? ["In the air", "blue"] : until > 0 ? [`Gate Departure in ${dur(until)}`, dd && dd > 14 ? "red" : "green"] : [f.statusText || "Scheduled", "green"];
+  const tz = tzOffset(f.destination?.tz) - tzOffset(f.origin?.tz);
+  const shareUrl = () => location.origin + "/?share=" + btoa(unescape(encodeURIComponent(JSON.stringify({ ...f, notes: undefined, updates: undefined }))));
+  const h = (f.history = flights.filter((x: Flight) => x.origin?.iata === f.origin?.iata && x.destination?.iata === f.destination?.iata && !x.friend));
+  const wxRow = (w: any, l: string) => w?.current && <div className="gtk"><span className="ico">{wxIcon(w.current.weather_code)}</span><div><b>{l} Weather</b><div className="muted sm">{Math.round(w.current.temperature_2m)}°C and {wxText(w.current.weather_code)} • wind {Math.round(w.current.wind_speed_10m)} km/h</div></div></div>;
+  return <div className="fd">
+    {f.example && <div className="exlabel">Example data — not a real flight record</div>}
+    <div className={"banner " + banner[1]}><b>{banner[0]}</b><div className="sm">Total {dur(estDurMin(f.origin, f.destination))} est. • {dist(f.origin, f.destination).toLocaleString()} mi{lv ? ` • live ${Math.round(lv.alt || 0).toLocaleString()} ft, ${Math.round(lv.gs || 0)} kt` : ""}</div></div>
+    <TimeBlock dir="dep" a={f.origin} t={f.dep} d={dd} badge={<Badge icon={<span>↗</span>} v={f.dep.gate} k={f.dep.terminal && `Terminal ${f.dep.terminal}`} />} />
+    {f.diverted && <div className="divert">⑂ DIVERTED TO {f.diverted.iata}<span>Search for Recovery Flight ›</span></div>}
+    <div className="sep"><span>◷ {dur(estDurMin(f.origin, f.destination))} • {dist(f.origin, f.destination).toLocaleString()} mi</span></div>
+    <TimeBlock dir="arr" a={f.diverted || f.destination} t={g.arr} d={da} est={(g.arr as any).estimatedOnly} badge={<Badge icon={<span>🧳</span>} v={f.arr.baggage || f.arr.gate} k={f.arr.terminal && `Terminal ${f.arr.terminal}`} />} />
+    <div className="muted sm px">Source: {f.source || (f.manual ? "entered manually" : "—")}</div>
+    <Prediction f={f} />
+    <h3 className="px">Good to Know</h3>
+    {wxRow(wx[0], "Departure")}{wxRow(wx[1], "Arrival")}
+    <div className="gtk"><span className="ico">🕘</span><div><b>{tz ? `${tz > 0 ? "+" : ""}${tz / 60}h Timezone Change` : "No Timezone Change"}</b><div className="muted sm">{tz ? `${f.destination?.city} is ${Math.abs(tz / 60)}h ${tz > 0 ? "ahead of" : "behind"} ${f.origin?.city}` : "Both airports are in the same timezone"}</div></div></div>
+    <div className="card"><h3>Arrival Forecast</h3><div className="muted sm">{f.number} recorded performance{fc ? ` • ${fc.observed} observed flights` : ""}</div>
+      {fc && fc.observed ? <><div className="grid3 mt8"><Stat label="Late" v={`${fc.latePct}%`} /><Stat label="Average of Late" v={`${fc.avgLate}m`} /><Stat label="Observed" v={`${fc.observed} Flights`} /></div>
+        {[["Early", fc.buckets.early, "#2f9e44"], ["On Time", fc.buckets.ontime, "#69db7c"], ["15m late", fc.buckets.l15, "#fcc419"], ["30m late", fc.buckets.l30, "#fd7e14"], ["45m+ late", fc.buckets.l45, "#fa5252"], ["Canceled", fc.buckets.cancelled, "#c92a2a"], ["Diverted", fc.buckets.diverted, "#862e2e"]].map(([l, v, c]: any) => <div key={l} className="bar"><span>{l}</span><div><i style={{ width: `${v / fc.observed * 100}%`, background: c }} /></div><b>{Math.round(v / fc.observed * 100)}%</b></div>)}
+        <div className="faint sm mt8">{fc.source}</div></> : <div className="muted sm mt8">No recorded history yet. Skyline records every MAN/STN/EMA flight outcome every 30 min, so this fills up over the coming days (up to 60 days).</div>}</div>
+    <div className="card plane"><h3>Where's My Plane?</h3><div className="muted">{ac?.type || lv?.type || f.aircraft?.model || "Aircraft not assigned yet"}{reg && ` • ${reg}`}</div>
+      {ac?.photo ? <a href={ac.photo.link} target="_blank"><img src={ac.photo.src} className="acphoto" /><div className="faint sm">Photo © {ac.photo.credit} / planespotters.net</div></a> : <div className="acimg big">{I.plane}</div>}
+      <div className="chain"><div className="ci on"><b>This Flight</b><span style={{ color: lateColor(dd) }}>{f.status === "departed" || f.status === "landed" ? `Departed ${lateLabel(dd)}` : lateLabel(dd) || "Scheduled"}</span></div>
+        {inb?.flights?.filter((x: Flight) => x.number !== f.number).map((x: Flight) => <div key={x.id} className="ci"><b>{x.number} {x.origin?.iata} → {x.destination?.iata}</b><span style={{ color: lateColor(delay(x.arr)) }}>{x.statusText} {lateLabel(delay(x.arr))}</span></div>)}
+        {inb?.needsKey && <div className="faint sm">Inbound aircraft chain needs a free AeroDataBox key (Settings). The aircraft registration is {reg}.</div>}
+        {!reg && <div className="faint sm">The aircraft appears once it is assigned / broadcasting ADS-B (usually ~1h before departure).</div>}</div></div>
+    <div className="card"><h3>Detailed Timetable</h3><div className="muted sm">Scheduled, Estimated, and Actual</div>
+      {[["DEPART", [["Gate Departure", f.dep]]], ["ARRIVE", [["Gate Arrival", g.arr]]]].map(([s, rows]: any) => <div key={s}><div className="tth">{s}</div>{rows.map(([l, t]: any) => <div key={l} className="ttr"><span>{l}</span><div><small>Scheduled</small>{fmtT(t.scheduled, s === "DEPART" ? f.origin?.tz : f.destination?.tz)}</div><div><small>{t.actual ? "Actual" : t.estimatedOnly ? "Predicted" : "Estimated"}</small><b style={{ color: lateColor(delay(t)) }}>{fmtT(t.actual || t.estimated, s === "DEPART" ? f.origin?.tz : f.destination?.tz)}</b></div></div>)}</div>)}
+      <div className="tth">TOTALS</div><div className="ttr"><span>Air + taxi time</span><div><small>Estimated</small>{dur(estDurMin(f.origin, f.destination))}</div><div /></div></div>
+    {al && <div className="card"><div className="row g10"><Logo a={al} /><h3>{al.name}</h3></div><div className="grid2b mt8">
+      <a className="gbtn" href={al.links?.phone ? "tel:" + al.links.phone : undefined}>PHONE</a><a className="gbtn" href={al.links?.web} target="_blank">WEBSITE</a><a className="gbtn" href={al.links?.x || `https://x.com/search?q=${encodeURIComponent(al.name)}`} target="_blank">X / TWITTER</a><a className="gbtn" href={al.links?.fb || `https://facebook.com/search/top?q=${encodeURIComponent(al.name)}`} target="_blank">FACEBOOK</a></div>
+      <div className="grid3 mt8"><Stat label="ATC Callsign" v={al.callsign || "—"} /><Stat label="ICAO" v={al.icao || "—"} /><Stat label="IATA" v={al.iata} /></div></div>}
+    <div className="card"><h3>My History on This Route</h3><div className="muted sm">{f.origin?.iata} → {f.destination?.iata}</div><div className="grid3 mt8"><Stat label="Flights" v={h.length} /><Stat label="Distance" v={`${(h.length * dist(f.origin, f.destination)).toLocaleString()} mi`} /><Stat label="Flight Time" v={dur(h.length * estDurMin(f.origin, f.destination))} /></div>
+      {h.slice(0, 3).map((x: Flight) => <div key={x.id} className="row between mt8"><b>{fmtD(x.date)}</b><span className="muted">{x.number}{x.aircraft?.reg && ` • ${x.aircraft.reg}`}</span></div>)}</div>
+    <div className="card"><h3>Updates</h3><div className="muted sm">{(f.updates || []).length} updates for this flight</div>{(f.updates || []).slice().reverse().map((u: any) => <div key={u.at} className="upd"><i />{u.text}<small>{new Date(u.at).toLocaleString("en-GB")}</small></div>)}</div>
+    <div className="card"><h3>Notes</h3><textarea placeholder="Tap to Edit" defaultValue={f.notes} onBlur={e => tracked ? upd({ ...f, notes: e.target.value }) : null} /></div>
+    <div className="card cal"><b>📅 Calendar Sync</b><div className="muted sm">Add this flight to your calendar (.ics works with Apple/Google Calendar)</div><button className="secondary mt8" onClick={() => download(`${f.number}.ics`, ics([f]))}>Add to Calendar</button></div>
+    <a className="report" href={`mailto:?subject=Skyline data issue ${f.number} ${f.date}`}>ⓘ Report Data Issue</a>
+    <div style={{ height: 100 }} />
+    <div className="fbar"><div className="pill small"><button onClick={() => navigator.share ? navigator.share({ title: `${f.number} ${f.origin?.iata}→${f.destination?.iata}`, url: shareUrl() }) : (navigator.clipboard.writeText(shareUrl()), alert("Share link copied"))}>{I.share}</button>
+      <button onClick={() => { const n = prompt("Diverted to (IATA), or leave blank"); if (n !== null) api("/airport/" + n).then(a => upd({ ...f, diverted: a })).catch(() => upd({ ...f, diverted: undefined })); }}>{I.edit}</button>
+      <button onClick={() => { if (confirm("Remove this flight?")) { setFlights((l: Flight[]) => l.filter(x => x.id !== f.id)); close(); } }}>{I.more}</button></div>
+      {!tracked ? <button className="primary" onClick={() => { setFlights((l: Flight[]) => [...l, f]); Notification?.requestPermission?.(); }}>＋ Track Flight</button> : <button className="primary" onClick={() => push({ t: "board", iata: f.origin?.iata })}>{f.origin?.iata} Board</button>}</div>
+  </div>;
+}
+function TimeBlock({ dir, a, t, d, badge, est }: any) {
+  const shown = t.actual || t.estimated || t.scheduled; const changed = t.scheduled && shown && fmtT(shown, a?.tz) !== fmtT(t.scheduled, a?.tz);
+  return <div className="tb"><div className="muted row g6">{dir === "dep" ? I.dep : I.arr}<b className="text">{a?.iata} • {a?.city || a?.name}</b> ›</div>
+    <div className="row between"><div><div className="row g8 base"><span className="huge2" style={{ color: d != null ? lateColor(d) : undefined }}>{fmtT(shown, a?.tz)}</span>{changed && <s className="faint">{fmtT(t.scheduled, a?.tz)}</s>}</div>
+      <small style={{ color: lateColor(d) }}>{lateLabel(d)}{est && <span className="faint"> • estimated from distance</span>}</small></div>{badge}</div></div>;
+}
+
+function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => void }) {
+  const t = dir === "dep" ? f.dep : f.arr; const a = dir === "dep" ? f.destination : f.origin; const d = delay(t); const tz = (dir === "dep" ? f.origin : f.destination)?.tz;
+  const st = f.status === "cancelled" ? ["Cancelled", "var(--red)"] : f.status === "landed" ? ["Landed " + (t.actual ? fmtT(t.actual, tz) : ""), "var(--green)"] : f.status === "departed" ? ["Departed " + lateLabel(d), lateColor(d)] : [lateLabel(d) || f.statusText || "Scheduled", lateColor(d)];
+  return <div className="brow" onClick={onClick}><div className="bt">{d != null && Math.abs(d) >= 5 ? <><s>{fmtT(t.scheduled, tz)}</s><b style={{ color: lateColor(d) }}>{fmtT(t.actual || t.estimated, tz)}</b></> : <b>{fmtT(t.scheduled, tz)}</b>}</div>
+    <div className="grow"><b>{a?.city || a?.name || a?.iata}</b><div className="sm" style={{ color: st[1] }}>● {st[0]}{f.pred && f.pred.d >= 10 && f.status !== "cancelled" && <span className="aibadge sm"> AI +{f.pred.d}m</span>}</div></div>
+    <div className="right"><b>{f.number.replace(/^([A-Z0-9]{2})/, "$1 ")}</b><div className="faint sm">{t.gate || ""}</div></div></div>;
+}
+function Board({ iata, x, push }: any) {
+  const [dir, setDir] = useState("dep"); const [date, setDate] = useState(today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState("");
+  useEffect(() => { setD(null); api(`/board/${iata}?dir=${dir}&date=${date}`).then(setD).catch(e => setD({ error: e.message, needsKey: e.needsKey })); }, [iata, dir, date]);
+  const ap = d?.airport; const [, tick] = useState(0); useEffect(() => { const t = setInterval(() => tick(n => n + 1), 30e3); return () => clearInterval(t); }, []);
+  const list = (d?.flights || []).filter((f: any) => (!airline || f.airline?.iata === airline) && (!q || JSON.stringify([f.number, f.destination?.city, f.origin?.city]).toLowerCase().includes(q.toLowerCase())))
+    .sort((a: any, b: any) => ((dir === "dep" ? a.dep : a.arr).scheduled < (dir === "dep" ? b.dep : b.arr).scheduled ? -1 : 1));
+  const nowIdx = list.findIndex((f: any) => +new Date((dir === "dep" ? f.dep : f.arr).scheduled) > Date.now() - 30 * 60e3);
+  useEffect(() => { if (nowIdx > 0 && date === today()) setTimeout(() => document.getElementById("brow-now")?.scrollIntoView({ block: "start" }), 50); }, [d]);
+  const airlines = [...new Set((d?.flights || []).map((f: any) => f.airline?.iata))].filter(Boolean) as string[];
+  return <><div className="head"><div><div className="row g6">{[iata, ap?.icao, new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: ap?.tz || "Europe/London" }) + " " + (ap?.tz === "Europe/London" ? "GMT" : "local")].map(t => <span key={t} className="tag">{t}</span>)}</div><h1 className="h1s">{ap?.city || iata}</h1><div className="muted sm">{ap?.name?.toUpperCase()}, {ap?.country?.toUpperCase()}</div></div>{x}</div>
+    <div className="chips"><button className="chip blue" onClick={() => navigator.share?.({ url: location.href, title: `${iata} board` })}>{I.share} Share</button>
+      <select className="chip" value={date} onChange={e => setDate(e.target.value)}>{[-1, 0, 1, 2].map(o => { const v = new Date(Date.now() + o * 864e5).toLocaleDateString("en-CA", { timeZone: "Europe/London" }); return <option key={v} value={v}>{["Yesterday", "Today", "Tomorrow", fmtD(v)][o + 1]}</option>; })}</select>
+      <select className="chip" value={dir} onChange={e => setDir(e.target.value)}><option value="dep">✈ To (Departures)</option><option value="arr">✈ From (Arrivals)</option></select>
+      <select className="chip" value={airline} onChange={e => setAirline(e.target.value)}><option value="">Airline: All</option>{airlines.sort().map(a => <option key={a}>{a}</option>)}</select></div>
+    <div className="px"><input className="field" placeholder="Filter city or flight" value={q} onChange={e => setQ(e.target.value)} /></div>
+    {!d && <div className="note">Loading live board…</div>}
+    {d?.error && <div className="note warn">{d.needsKey ? `Free real-time boards are available for MAN, STN and EMA. For ${iata}, add a free AeroDataBox key in Settings.` : d.error}</div>}
+    {d?.flights && <div className="faint sm px">Source: {d.source} • AI badges are predictions</div>}
+    <div className="board">{list.map((f: any, i: number) => <div key={f.id + i} id={i === nowIdx ? "brow-now" : undefined}><BoardRow f={f} dir={dir} onClick={() => push({ t: "flight", f: { ...f, date } })} /></div>)}</div></>;
+}
+
+function Airports({ x, push, flights }: any) {
+  const [region, setRegion] = useState("All"); const [d, setD] = useState<any>(null); const [fav, setFav] = useState<string[]>(() => JSON.parse(localStorage.getItem("sk.fav") || "[]"));
+  useEffect(() => { setD(null); api("/status?region=" + encodeURIComponent(region)).then(setD).catch(() => setD({ airports: [] })); }, [region]);
+  useEffect(() => localStorage.setItem("sk.fav", JSON.stringify(fav)), [fav]);
+  const sev = (a: any) => a.unavailable ? -1 : Math.max(a.dep?.avgDelay || 0, a.arr?.avgDelay || 0) >= 30 || Math.max(a.dep?.cancelled || 0, a.arr?.cancelled || 0) >= 10 ? 2 : Math.max(a.dep?.avgDelay || 0, a.arr?.avgDelay || 0) >= 15 || Math.max(a.dep?.cancelled || 0, a.arr?.cancelled || 0) >= 3 ? 1 : 0;
+  const issues = (a: any) => [a.dep?.cancelled >= 3 || a.arr?.cancelled >= 3 ? "High Cancellations" : "", (a.dep?.avgDelay || 0) >= 30 ? "Long departure delays" : "", (a.arr?.avgDelay || 0) >= 30 ? "Long arrival delays" : ""].filter(Boolean).join(" • ");
+  const mine = new Set(flights.filter((f: Flight) => !f.example).flatMap((f: Flight) => [f.origin?.iata, f.destination?.iata]));
+  const row = (a: any) => { const s = sev(a); return <div key={a.airport.iata} className="arow" onClick={() => push({ t: "board", iata: a.airport.iata })}><div className={"sdot s" + s}><i /><span>{a.airport.iata}</span></div>
+    <div className="grow"><div className="row between"><b>{a.airport.name.replace(/ (International )?Airport$/, "")}</b><button className="star" onClick={e => { e.stopPropagation(); setFav(v => v.includes(a.airport.iata) ? v.filter(y => y !== a.airport.iata) : [...v, a.airport.iata]); }}>{I.star(fav.includes(a.airport.iata))}</button></div>
+      {issues(a) && <div className={"sm " + (s === 2 ? "red" : "orange")}>{issues(a)}</div>}
+      {a.unavailable ? <div className="faint sm">Live stats need an AeroDataBox key</div> : <div className="grid3 st"><div><label>ON TIME</label><div>↗ {a.dep?.onTime ?? "–"}%</div><div>↘ {a.arr?.onTime ?? "–"}%</div></div><div><label>AVG. DELAY</label><div>{a.dep?.avgDelay ?? "–"}m</div><div>{a.arr?.avgDelay ?? "–"}m</div></div><div><label>CANCELED</label><div>{a.dep?.cancelled ?? 0}%</div><div>{a.arr?.cancelled ?? 0}%</div></div></div>}</div></div>; };
+  const A = d?.airports || []; const favs = A.filter((a: any) => fav.includes(a.airport.iata) || mine.has(a.airport.iata));
+  return <><Head title="Airports" right={<><RoundBtn onClick={() => navigator.share?.({ title: "Airport delays", url: location.href })}>{I.share}</RoundBtn>{x}</>} />
+    <div className="chips"><span className="chip plain">Now ⌄</span>{["All", "Europe", "North America", "Asia", "Oceania", "Africa"].map(r => <button key={r} className={"chip" + (region === r ? " on" : " plain")} onClick={() => setRegion(r)}>{r}</button>)}</div>
+    <div className="px"><b>For You</b><div className="muted sm">Favorites and airports from your active flights</div>{!favs.length && <div className="faint">No Favorites – Tap ★ in an airport to favorite</div>}</div>{favs.map(row)}
+    {!d && <div className="note">Loading…</div>}
+    {[[2, "Major Issues"], [1, "Minor Issues"], [0, "Normal Operations"], [-1, "No free live data"]].map(([s, l]) => { const L = A.filter((a: any) => sev(a) === s); return L.length ? <div key={l}><h4 className="px">{l}</h4>{L.map(row)}</div> : null; })}
+    <div className="note">Stats cover the last 4 hours. MAN/STN/EMA are computed live from the airports' official boards. {d && !d.keys?.aerodatabox && "Add a free AeroDataBox key in Settings for worldwide airports."}</div></>;
+}
+
+function AddPast({ x, done }: any) {
+  const [v, setV] = useState({ number: "", date: today(), from: "MAN", to: "", ac: "" });
+  return <><Head title="Add Past Flight" right={x} /><div className="px col g8">{(["number", "date", "from", "to", "ac"] as const).map(k => <input key={k} className="field" type={k === "date" ? "date" : "text"} placeholder={{ number: "Flight number (LS1709)", date: "", from: "From IATA (MAN)", to: "To IATA (ATH)", ac: "Aircraft (optional, e.g. Boeing 737-800)" }[k]} value={v[k]} onChange={e => setV({ ...v, [k]: k === "ac" ? e.target.value : e.target.value.toUpperCase() })} />)}
+    <button className="primary" onClick={async () => done(await manualFlight(v.number, v.date, v.from, v.to, v.ac))}>Add to Passport</button>
+    <div className="note">CSV import columns: flight,date,from,to (e.g. LS1709,2026-09-20,MAN,ATH). .ics import reads flight numbers and IATA pairs from event titles.</div></div></>;
+}
+
+function Settings({ x, theme, setTheme }: any) {
+  const [s, setS] = useState<any>({}); const [k, setK] = useState(""); const [lk, setLk] = useState(""); const [lb, setLb] = useState(""); const [lm, setLm] = useState(""); const [tok, setTok] = useState(""); const [msg, setMsg] = useState("");
+  const load = () => api("/settings").then(r => { setS(r); setLb(r.llmBase); setLm(r.llmModel); }); useEffect(() => { load(); }, []);
+  const saveK = (body: any) => api("/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, adminToken: tok, newAdminToken: tok }) }).then(() => { setMsg("Saved ✓"); load(); }).catch(e => setMsg(e.message));
+  return <><Head title="Settings" right={x} /><div className="px col g8">
+    <div className="card m0"><h3>Appearance</h3><div className="segs m0">{["auto", "light", "dark"].map(t => <button key={t} className={theme === t ? "on" : ""} onClick={() => setTheme(t)}>{t}</button>)}</div></div>
+    <div className="card m0"><h3>Notifications</h3><div className="muted sm">Alerts for gate/status changes of tracked flights while Skyline is open (iOS: add to Home Screen first).</div><button className="secondary mt8" onClick={() => Notification?.requestPermission?.().then(p => setMsg("Notifications: " + p))}>Enable notifications</button></div>
+    <div className="card m0"><h3>All features unlocked</h3><div className="muted sm">Skyline has no paywall. Everything is free.</div></div>
+    <div className="card m0"><h3>AeroDataBox key (worldwide schedules)</h3><div className="muted sm">Free “Basic” plan at rapidapi.com/aedbx-aedbx/api/aerodatabox → Subscribe → copy X-RapidAPI-Key. Enables boards & flight search at any airport, aircraft registration, inbound-plane chain and global airport delay stats. Status: <b>{s.aerodatabox || "not set"}</b></div>
+      <input className="field mt8" placeholder="Paste RapidAPI key" value={k} onChange={e => setK(e.target.value)} /><button className="primary mt8" onClick={() => saveK({ aerodataboxKey: k })}>Save key</button></div>
+    <div className="card m0"><h3>LLM explanations (optional)</h3><div className="muted sm">Any OpenAI-compatible API (default xAI: console.x.ai). Used only to word the AI-prediction explanation. Status: <b>{s.llm || "not set"}</b></div>
+      <input className="field mt8" placeholder="API key" value={lk} onChange={e => setLk(e.target.value)} /><input className="field mt8" placeholder="Base URL" value={lb} onChange={e => setLb(e.target.value)} /><input className="field mt8" placeholder="Model" value={lm} onChange={e => setLm(e.target.value)} />
+      <button className="primary mt8" onClick={() => saveK({ llmKey: lk, llmBase: lb, llmModel: lm })}>Save</button></div>
+    <div className="card m0"><h3>Admin token</h3><div className="muted sm">{s.protected ? "Keys are protected — enter your admin token to change them." : "Set a token so nobody else with the URL can change your keys (saved with your next key save)."}</div><input className="field mt8" type="password" placeholder="Admin token" value={tok} onChange={e => setTok(e.target.value)} /></div>
+    {msg && <div className="note">{msg}</div>}
+    <div className="note">Data: MAN/STN/EMA official flight info • adsb.lol / adsb.fi (ADS-B live positions) • adsbdb (routes) • hexdb.io (aircraft) • planespotters.net (photos) • Open-Meteo (weather) • RainViewer (radar) • OpenFlights (airports/airlines) • Esri / CARTO / OSM (maps). Skyline is an independent app, not affiliated with Flighty.</div></div></>;
+}

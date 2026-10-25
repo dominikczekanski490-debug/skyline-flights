@@ -1,0 +1,8 @@
+import type { Flight } from "./lib";
+// EXAMPLE DATA — clearly labelled sample flights for the Passport layout; not real records.
+const A: any = { MAN: { iata: "MAN", name: "Manchester Airport", city: "Manchester", lat: 53.354, lon: -2.275, tz: "Europe/London" }, ATH: { iata: "ATH", name: "Athens Intl.", city: "Athens", lat: 37.936, lon: 23.947, tz: "Europe/Athens" },
+  LPA: { iata: "LPA", name: "Gran Canaria", city: "Las Palmas", lat: 27.932, lon: -15.387, tz: "Atlantic/Canary" }, FUE: { iata: "FUE", name: "Fuerteventura", city: "Puerto del Rosario", lat: 28.453, lon: -13.864, tz: "Atlantic/Canary" }, KRK: { iata: "KRK", name: "Kraków", city: "Kraków", lat: 50.078, lon: 19.785, tz: "Europe/Warsaw" } };
+const al: any = { LS: { iata: "LS", name: "Jet2.com", icao: "EXS", callsign: "CHANNEX" }, FR: { iata: "FR", name: "Ryanair", icao: "RYR", callsign: "RYANAIR" } };
+const mk = (n: string, d: string, o: string, t: string, ac: string, late = 0, div?: string): Flight => { const dep = `${d}T06:30:00Z`; return { id: `ex-${n}-${d}`, example: true, number: n, date: d, airline: al[n.slice(0, 2)], origin: A[o], destination: A[t], diverted: div ? A[div] : undefined,
+  dep: { scheduled: dep, actual: new Date(+new Date(dep) + late * 60000).toISOString() }, arr: {}, status: "landed", aircraft: { model: ac }, source: "Example data" }; };
+export const EXAMPLE: Flight[] = [mk("LS1709", "2026-09-20", "MAN", "ATH", "Boeing 737-800", 27, "MAN"), mk("LS1747", "2026-09-13", "MAN", "LPA", "A321neo", 12), mk("LS997", "2026-09-08", "MAN", "FUE", "A321neo", 55), mk("LS909", "2026-08-26", "MAN", "FUE", "A321neo"), mk("FR2141", "2025-11-15", "MAN", "KRK", "Boeing 737 MAX 8", 80)];
