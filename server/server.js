@@ -322,8 +322,8 @@ const UKI = { "England": "LHR LGW STN LTN LCY SEN MAN BHX BRS NCL LBA LPL EMA BO
 const officialBoard = (apt, dir, ymd) => OFFICIAL[apt].fn(apt, dir, ymd);
 
 // ---------- AeroDataBox (optional key, RapidAPI) ----------
-const ADB = "https://aerodatabox.p.rapidapi.com";
-const adb = (p, ttl = 300) => { if (!cfg.aerodataboxKey) { const e = new Error("no key"); e.needsKey = true; throw e; }
+const ADB = process.env.ADB_BASE || "https://aerodatabox.p.rapidapi.com"; // ADB_BASE only for local mock tests
+const adb = (p, ttl = 300) => { if (true) { /* budget: only board FIDS may call AeroDataBox (see adbFids) */ const e = new Error("no key"); e.needsKey = true; throw e; }
   return cached("adb:" + p, ttl, () => getJSON(ADB + p, { headers: { "x-rapidapi-key": cfg.aerodataboxKey, "x-rapidapi-host": "aerodatabox.p.rapidapi.com" } })); };
 const adbStatus = s => ({ Expected: "scheduled", Scheduled: "scheduled", EnRoute: "departed", CheckIn: "scheduled", Boarding: "boarding", GateClosed: "gate", Departed: "departed", Delayed: "delayed", Approaching: "departed", Arrived: "landed", Canceled: "cancelled", Diverted: "diverted", CanceledUncertain: "cancelled" }[s] || "scheduled");
 const utcz = t => t?.utc ? new Date(t.utc.replace(" ", "T").replace(/Z?$/, "Z")).toISOString() : undefined;
@@ -335,7 +335,7 @@ function normAdb(f) {
     dep: { scheduled: utcz(f.departure?.scheduledTime), estimated: utcz(f.departure?.revisedTime) || utcz(f.departure?.predictedTime), actual: utcz(f.departure?.runwayTime), gate: f.departure?.gate, terminal: f.departure?.terminal },
     arr: { scheduled: utcz(f.arrival?.scheduledTime), estimated: utcz(f.arrival?.revisedTime) || utcz(f.arrival?.predictedTime), actual: utcz(f.arrival?.runwayTime), gate: f.arrival?.gate, terminal: f.arrival?.terminal, baggage: f.arrival?.baggageBelt },
     aircraft: f.aircraft ? { reg: f.aircraft.reg, hex: f.aircraft.modeS, model: f.aircraft.model } : undefined,
-    statusText: f.status, status: adbStatus(f.status), source: "AeroDataBox" };
+    statusText: f.status, status: adbStatus(f.status), callsign: f.callSign || undefined, source: "AeroDataBox" };
 }
 
 // ---------- live positions: adsb.lol (fallback adsb.fi) ----------
@@ -371,8 +371,8 @@ setTimeout(collect, 3000); setInterval(collect, 30 * 60e3);
 // ---------- routes ----------
 const api = express.Router();
 const wrap = fn => (req, res) => fn(req, res).catch(e => res.status(e.needsKey ? 501 : e.status || 502).json({ error: String(e.message || e), needsKey: !!e.needsKey }));
-api.get("/health", (q, r) => r.json({ ok: true, keys: { aerodatabox: !!cfg.aerodataboxKey }, magAirports: Object.keys(MAG_SITES), officialAirports: Object.keys(OFFICIAL) }));
-api.get("/settings", (q, r) => r.json({ aerodatabox: cfg.aerodataboxKey ? "set (" + cfg.aerodataboxKey.slice(0, 4) + "…)" : "", protected: !!cfg.adminToken }));
+api.get("/health", (q, r) => r.json({ ok: true, ...adbStats(), keys: { aerodatabox: !!cfg.aerodataboxKey }, magAirports: Object.keys(MAG_SITES), officialAirports: Object.keys(OFFICIAL) }));
+api.get("/settings", (q, r) => r.json({ aerodatabox: cfg.aerodataboxKey ? "set" : "", protected: !!cfg.adminToken }));
 api.post("/settings", (req, res) => {
   if (cfg.adminToken && req.body.adminToken !== cfg.adminToken) return res.status(403).json({ error: "admin token required" });
   for (const k of ["aerodataboxKey", "llmKey", "llmBase", "llmModel"]) if (typeof req.body[k] === "string") cfg[k] = req.body[k].trim();
@@ -449,17 +449,43 @@ let rr = 0; setInterval(async () => { const hot = [...new Set([...TOP_LIVE, ...O
   for (const c of hot) { try { await observe(c); } catch {} await new Promise(r => setTimeout(r, 1200)); } }, 60e3);
 setInterval(async () => { const cold = Object.values(UKI).flat().filter(c => AP[c] && !OFFICIAL[c] && !TOP_LIVE.includes(c)); if (!cold.length) return; const c = cold[rr++ % cold.length]; try { await observe(c); } catch {} }, 12e3);
 
+// ---------- AeroDataBox budget (RapidAPI Basic: 400 units/month hard limit) ----------
+// Only the FIDS board for UK/Irish airports with no official feed may spend units; we stop at ADB_BUDGET (default 350).
+const ADB_BUDGET = +process.env.ADB_BUDGET || 350, ADB_UNITS = +process.env.ADB_UNITS_PER_CALL || 2; // FIDS is a Tier-2 endpoint = 2 units/call
+const adbMonth = () => new Date().toISOString().slice(0, 7);
+let ADBU = { month: adbMonth(), units: 0, calls: 0, last: null, blocked: null }; const ADBC = {}; const ADB_INF = {};
+const kvGet = async k => { if (!KV_URL) return null; try { const r = await getJSON(KV_URL.replace(/\/$/, "") + "/get/" + k, { headers: { authorization: "Bearer " + KV_TOK } }); return r.result ? JSON.parse(r.result) : null; } catch { return null; } };
+const kvSet = (k, v) => { if (!KV_URL) return; fetch(KV_URL.replace(/\/$/, "") + "/set/" + k, { method: "POST", headers: { authorization: "Bearer " + KV_TOK }, body: JSON.stringify(v) }).catch(() => {}); };
+let adbReadyP = null; const adbReadyF = () => adbReadyP || (adbReadyP = (async () => { const u = await kvGet("skyline_adb_usage"); if (u && u.month === adbMonth()) ADBU = { ...ADBU, ...u }; })());
+const adbLeft = () => { if (ADBU.month !== adbMonth()) ADBU = { month: adbMonth(), units: 0, calls: 0, last: null, blocked: null }; return ADB_BUDGET - ADBU.units; };
+const ADB_GAP = () => Object.values(UKI).flat().filter(c => AP[c] && !OFFICIAL[c]);
+const ADB_TTL = 20 * 60e3;
+// One call per airport covers both directions for a 12h window (max FIDS span) around now: 4h back, 8h ahead, local time.
+async function adbFids(iata) { await adbReadyF(); const key = "skyline_adb_" + iata; let c = ADBC[iata] || (ADBC[iata] = await kvGet(key)); const fresh = c && Date.now() - c.at < ADB_TTL;
+  if (fresh || !cfg.aerodataboxKey) return c ? { ...c, stale: !fresh } : null;
+  if (adbLeft() < ADB_UNITS) { ADBU.blocked = new Date().toISOString(); return c ? { ...c, stale: true, budget: true } : { budget: true }; }
+  if (ADB_INF[iata]) return ADB_INF[iata];
+  return ADB_INF[iata] = (async () => { const tz = AP[iata]?.tz || "Europe/London"; const lt = ms => new Date(ms).toLocaleString("sv-SE", { timeZone: tz }).replace(" ", "T").slice(0, 16);
+    const p = `/flights/airports/iata/${iata}/${lt(Date.now() - 4 * 3600e3)}/${lt(Date.now() + 8 * 3600e3 - 60e3)}?direction=Both&withLeg=true&withCancelled=true&withCodeshared=false&withCargo=false&withPrivate=false&withLocation=false`;
+    ADBU.units += ADB_UNITS; ADBU.calls++; ADBU.last = new Date().toISOString(); kvSet("skyline_adb_usage", ADBU); // count before the call so failures still count
+    try { const r = await getJSON(ADB + p, { headers: { "x-rapidapi-key": cfg.aerodataboxKey, "x-rapidapi-host": "aerodatabox.p.rapidapi.com" } });
+      c = { at: Date.now(), dep: (r.departures || []).map(normAdb), arr: (r.arrivals || []).map(normAdb) }; ADBC[iata] = c; kvSet(key, c); return c; }
+    catch (e) { if (/429|quota|limit/i.test(e.message)) { ADBU.units = Math.max(ADBU.units, ADB_BUDGET); kvSet("skyline_adb_usage", ADBU); } return c ? { ...c, stale: true, error: e.message } : { error: e.message }; }
+    finally { delete ADB_INF[iata]; } })(); }
+const adbStats = () => { adbLeft(); return { adbConfigured: !!cfg.aerodataboxKey, adbMonth: ADBU.month, adbUnitsUsed: ADBU.units, adbCalls: ADBU.calls, adbBudget: ADB_BUDGET, adbUnitsPerCall: ADB_UNITS, adbBudgetReached: ADBU.units + ADB_UNITS > ADB_BUDGET, adbLastCall: ADBU.last, adbAirports: ADB_GAP() }; };
 async function board(iata, dir, ymd) {
   if (OFFICIAL[iata]) { try { return { flights: await officialBoard(iata, dir, ymd), source: OFFICIAL[iata].label, sourceKind: "official", provider: OFFICIAL[iata].provider, site: OFFICIAL[iata].site }; } catch (e) { console.warn("official feed failed", iata, e.message); } }
-  const liveOnly = async () => ({ flights: ymd === todayLondon() ? await liveBoard(iata, dir) : [], source: "Live traffic only (ADS-B) — add AeroDataBox key for schedules", sourceKind: "live", provider: "Live ADS-B (adsb.lol / adsb.fi)", liveOnly: true });
-  if (!cfg.aerodataboxKey) return liveOnly();
-  const d = londonDay(ymd); const out = [];
-  try { for (const [a, b] of [[0, 12], [12, 24]]) {
-    const f = new Date(+new Date(d.start) + a * 3600e3).toISOString().slice(0, 16), t = new Date(+new Date(d.start) + b * 3600e3 - 60e3).toISOString().slice(0, 16);
-    const r = await adb(`/flights/airports/iata/${iata}/${f}/${t}?direction=${dir === "dep" ? "Departure" : "Arrival"}&withCodeshared=false&withCancelled=true&withLeg=true`, ymd < todayLondon() ? 21600 : 120);
-    out.push(...(r[dir === "dep" ? "departures" : "arrivals"] || []).map(normAdb));
-  } } catch { return liveOnly(); }
-  return { flights: out, source: "AeroDataBox", sourceKind: "aerodatabox", provider: "AeroDataBox (your key)" };
+  const today = ymd === todayLondon(); const obs = today ? await liveBoard(iata, dir) : [];
+  const liveOnly = note => ({ flights: obs, source: "Live traffic only (ADS-B)", sourceKind: "live", provider: "Live ADS-B (adsb.lol / adsb.fi)", liveOnly: true, note });
+  if (!today || OFFICIAL[iata] || !ADB_GAP().includes(iata) || !cfg.aerodataboxKey) return liveOnly();
+  const c = await adbFids(iata);
+  if (!c || !c[dir]) return liveOnly(c?.budget ? "AeroDataBox monthly budget used up — showing observed ADS-B traffic only until next month." : c?.error ? "AeroDataBox unavailable right now — showing observed ADS-B traffic." : undefined);
+  const key = f => (f.number || "").replace(/\s/g, ""); const have = new Set(); for (const f of c[dir]) { have.add(key(f)); if (f.callsign) have.add(f.callsign); }
+  // Observed rows only add value when the schedule doesn't already list that flight.
+  const extra = obs.filter(o => !have.has(key(o)) && !(o.callsign && have.has(o.callsign)));
+  const flights = c[dir].map(f => { const o = obs.find(o => key(o) === key(f) || (o.callsign && o.callsign === f.callsign)); return o ? { ...f, observed: o.observed, observedAt: o.observedAt, live: o.live } : f; }).concat(extra);
+  return { flights, source: "AeroDataBox", sourceKind: "aerodatabox", provider: "AeroDataBox", attribution: "Flight data by AeroDataBox via RapidAPI", stale: !!c.stale, fetchedAt: new Date(c.at).toISOString(),
+    note: c.budget ? "AeroDataBox monthly budget used up — schedule shown is the last cached copy; live rows are observed ADS-B." : c.stale ? "Showing the last cached AeroDataBox schedule (could not refresh)." : undefined };
 }
 api.get("/board/:iata", wrap(async (req, res) => { const iata = req.params.iata.toUpperCase(); const dir = req.query.dir === "arr" ? "arr" : "dep";
   const b = await board(iata, dir, String(req.query.date || todayLondon())); const a = AP[iata];

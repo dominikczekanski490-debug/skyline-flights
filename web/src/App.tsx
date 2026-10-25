@@ -338,7 +338,8 @@ function Board({ iata, x, push, term0 }: any) {
     {d?.error && <div className="note warn">{d.needsKey ? `Free real-time boards are available for MAN, STN, EMA, FRA, SYD and 45 Norwegian (Avinor) airports. For ${iata}, add a free AeroDataBox key in Settings.` : d.error}</div>}
     {d?.liveOnly && <div className="note live-note"><b>Live traffic only</b> — derived from real ADS-B positions near {iata} (adsb.lol / adsb.fi) with adsbdb routes. No free official schedule feed exists for this airport, so no times or delays are shown (nothing is guessed). Optional: an AeroDataBox key in Settings adds schedules here.{date !== today() && " Live traffic is only available for today."}</div>}
     {d?.liveOnly && d.flights?.length === 0 && date === today() && <div className="empty"><b>Quiet right now</b><div className="muted sm">No aircraft seen near {iata} in the last 3h; this airport has no free timetable feed.</div><button className="chip mt8" onClick={() => push({ t: "airports", mode: "uk" })}>Airports with official boards</button></div>}
-    {d?.flights && <div className="faint sm px">Source: {d.source} • AI badges are predictions</div>}
+    {d?.note && <div className="note warn">{d.note}</div>}
+    {d?.flights && <div className="faint sm px">Source: {d.source}{d.attribution ? <> • <a href="https://aerodatabox.com" target="_blank" rel="noreferrer">{d.attribution}</a></> : null} • AI badges are predictions</div>}
     <div className="board">{list.map((f: any, i: number) => <div key={f.id + i} id={i === nowIdx ? "brow-now" : undefined}><BoardRow f={f} dir={dir} onClick={() => push({ t: "flight", f: { ...f, date } })} /></div>)}</div></>}</>;
 }
 

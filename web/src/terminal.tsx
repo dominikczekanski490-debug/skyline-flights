@@ -144,7 +144,7 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen }:
     {msg ? <div className="tb-msg">{msg}</div> : <div className="tb-panels">{Array.from({ length: panels }, (_, k) => panel(show.slice(k * per, k * per + per), k))}</div>}
     {tt.clock !== "top" && <div className={"tb-bclock " + tt.clock}>{clock}</div>}
     <div className="tb-foot"><span>{paused ? "Paused - tap to resume" : `Page ${pg + 1} of ${Math.max(1, Math.ceil(rows.length / (per * panels)))}`}</span>
-      {live && <span className="tb-livetag">LIVE TRAFFIC (ADS-B) · no official schedule feed · times not shown</span>}<span>{upd ? "Updated " + new Date(upd).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz }) : ""}{d?.source ? " · " + d.source : ""}</span>
+      {live && <span className="tb-livetag">LIVE TRAFFIC (ADS-B) · no official schedule feed · times not shown</span>}<span>{upd ? "Updated " + new Date(upd).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz }) : ""}{d?.source ? " · " + d.source : ""}{d?.attribution ? " · " + d.attribution : ""}{d?.note ? " · " + d.note : ""}</span>
       <span className="tb-ctl" onClick={e => e.stopPropagation()}>
         <select value={dir} onChange={e => { setDir(e.target.value); setPage(0); }}><option value="dep">Departures</option><option value="arr">Arrivals</option></select>
         {th === "mag" && dir === "dep" && <select value={side} onChange={e => { setSide(e.target.value); localStorage.setItem("sk.tb.side", e.target.value); }}><option>Airside</option><option>Landside</option></select>}
