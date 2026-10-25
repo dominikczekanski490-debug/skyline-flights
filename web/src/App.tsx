@@ -14,16 +14,16 @@ export default function App() {
   const [flights, setFlights] = useState<Flight[]>(load);
   const [ov, setOv] = useState<Ov[]>([]);
   const [live, setLive] = useState<Record<string, any>>({});
-  const [mapStyle, setMapStyle] = useState(localStorage.getItem("sk.map") || "hybrid");
+  const [mapStyle, setMapStyle] = useState(localStorage.getItem("sk.map2") || "dark");
   const [radar, setRadar] = useState(false); const [locate, setLocate] = useState(0);
   useEffect(() => { const m = location.hash.match(/board=([A-Za-z]{3})/); if (m) setOv([{ t: "board", iata: m[1].toUpperCase() }]); const a = location.hash.match(/airports=(\w+)/); if (a) setOv([{ t: "airports", mode: a[1] }]); }, []);
   const [why, setWhy] = useState<any>(null); (window as any).__why = (f: any) => { navigator.vibrate?.(8); setWhy(f); };
-  const [theme, setTheme] = useState(localStorage.getItem("sk.theme") || "auto");
+  const [theme, setTheme] = useState(localStorage.getItem("sk.theme") || "dark");
   useEffect(() => save(flights), [flights]);
   useEffect(() => { navigator.storage?.persist?.(); if (new URLSearchParams(location.search).get("tab") === "friends") { setTab("friends"); history.replaceState(null, "", "/"); } }, []);
   useEffect(() => { const t = setTimeout(() => syncPush(flights).catch(() => {}), 1500); return () => clearTimeout(t); }, [flights.filter(f => !f.friend).map(f => f.id).join()]);
   useEffect(() => { localStorage.setItem("sk.theme", theme); document.documentElement.dataset.theme = theme; }, [theme]);
-  useEffect(() => { localStorage.setItem("sk.map", mapStyle); }, [mapStyle]);
+  useEffect(() => { localStorage.setItem("sk.map2", mapStyle); }, [mapStyle]);
   // import a friend's shared flight from URL
   useEffect(() => { const p = new URLSearchParams(location.search).get("share"); if (p) { try { const f = JSON.parse(decodeURIComponent(escape(atob(p)))); f.friend = f.friend || "Friend"; setFlights(l => l.some(x => x.id === f.id && x.friend) ? l : [...l, { ...f, id: f.id }]); setTab("friends"); history.replaceState(null, "", "/"); } catch {} } }, []);
   const push = (o: Ov) => setOv(s => [...s, o]); const pop = () => setOv(s => s.slice(0, -1));
@@ -39,6 +39,7 @@ export default function App() {
   const mapFlights = focus ? [focus] : tab === "passport" ? flights.filter(f => !f.friend) : tab === "friends" ? flights.filter(f => f.friend) : active.filter(f => !f.friend);
   return <div className="app"><WarmBanner />{why && <WhySheet f={why} close={() => setWhy(null)} />}
     <MapView flights={mapFlights} live={live} style={mapStyle} radar={radar} focus={focus} locate={locate} onPlane={id => { const f = flights.find(x => x.id === id); f && push({ t: "flight", f }); }} />
+    <div className="maptint" /><div className="aurora" />
     <div className="mapbtns"><button onClick={() => setMapStyle(MAP_STYLES[(MAP_STYLES.indexOf(mapStyle) + 1) % MAP_STYLES.length])}>{I.layers}</button><button className={radar ? "on" : ""} onClick={() => setRadar(!radar)}>{I.cloud}</button><button onClick={() => setLocate(Date.now())}>{I.locate}</button></div>
     <Sheet snaps={[0.3, 0.55, 0.94]} initial={1} z={5}>
       {tab === "mine" && <MyFlights list={active.filter(f => !f.friend)} open={f => push({ t: "flight", f })} push={push} />}
@@ -46,7 +47,7 @@ export default function App() {
       {tab === "passport" && <Passport flights={flights.filter(f => !f.friend)} setFlights={setFlights} open={f => push({ t: "flight", f })} push={push} />}
       <div style={{ height: 120 }} />
     </Sheet>
-    {!ov.length && <nav className="tabbar"><div className="pill">
+    {!ov.length && <nav className="tabbar"><div className="pill"><i className="tabind" style={{ transform: `translateX(${["mine","friends","passport"].indexOf(tab) * 100}%)` }} />
       {([["mine", "My Flights", I.plane], ["friends", "Friends", I.friends], ["passport", "Passport", I.passport]] as const).map(([k, l, ic]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{ic}<span>{l}</span></button>)}
     </div><button className="searchbtn" onClick={() => push({ t: "search" })}>{I.search}</button></nav>}
     {ov.map((o, i) => <Overlay key={i + o.t} o={o} z={20 + i} close={pop} push={push} flights={flights} setFlights={setFlights} upd={upd} live={live} theme={theme} setTheme={setTheme} tab={tab} />)}
@@ -60,22 +61,27 @@ function FlightCard({ f, onClick, pred }: { f: Flight; onClick: () => void; pred
   const g = withEstArr(f); const dd = delay(f.dep); const [p, setP] = useState<any>(null);
   useEffect(() => { if (pred && !f.example) api(`/predict/${f.number}?date=${f.date}`).then(setP).catch(() => {}); }, [f.id]);
   const until = best(f.dep) ? (+new Date(best(f.dep)!) - Date.now()) / 60000 : null;
-  return <div className="card fcard" onClick={onClick}>
-    <div className="row between"><div className="row g10"><Logo a={f.airline} s={28} /><div><div className="muted sm">{f.number} • {fmtD(f.date, { weekday: "short", day: "numeric", month: "short" })}{f.friend && ` • ${f.friend}`}</div><b>{f.origin?.city || f.origin?.iata} to {f.destination?.city || f.destination?.iata}</b></div></div>
-      {p && !p.cancelled && <span className="aibadge press" onClick={e => { e.stopPropagation(); (window as any).__why?.(f); }} style={{ color: lateColor(p.predictedDelay) }}>AI {p.predictedDelay >= 5 ? `+${p.predictedDelay}m` : "on time"} ⓘ</span>}</div>
-    {p?.top && !p.cancelled && <div className="toprsn">{p.top.icon} {p.summary}</div>}
-    <div className="row between mt8"><div><div className="big" style={{ color: lateColor(dd) }}>{fmtT(best(f.dep), f.origin?.tz)}</div><small className="muted">{f.origin?.iata} {until != null && until > 0 ? `• departs in ${dur(until)}` : f.statusText ? "• " + f.statusText : ""}</small></div>
-      <div className="line" /><div className="right"><div className="big">{fmtT(best(g.arr), f.destination?.tz)}</div><small className="muted">{f.destination?.iata}{(g.arr as any).estimatedOnly && " • est."}</small></div></div>
+  const dm = estDurMin(f.origin, f.destination) || 0; const st = best(f.dep) ? (Date.now() - +new Date(best(f.dep)!)) / 60000 : -1;
+  const prog = f.status === "landed" ? 100 : st <= 0 ? 0 : Math.min(100, (st / Math.max(dm, 1)) * 100);
+  const sTxt = f.status === "landed" ? "Landed" : f.status === "cancelled" ? "Cancelled" : st > 0 ? "En route" : dd != null && dd >= 15 ? `Delayed +${dd}m` : "Scheduled";
+  const sCls = f.status === "cancelled" || (dd != null && dd >= 15) ? "bad" : st > 0 ? "air" : "ok";
+  return <div className="card fcard rise press" onClick={onClick}>
+    <div className="row between"><div className="row g12"><div className="logowrap"><Logo a={f.airline} s={40} /></div><div><div className="fnum">{f.number}<span> • {fmtD(f.date, { weekday: "short", day: "numeric", month: "short" })}{f.friend && ` • ${f.friend}`}</span></div><div className="froute">{f.origin?.city || f.origin?.iata} → {f.destination?.city || f.destination?.iata}</div></div></div>
+      <span className={"spill " + sCls}><i />{sTxt}</span></div>
+    <div className="fbig"><div><div className="iata">{f.origin?.iata}</div><div className="ftime" style={{ color: lateColor(dd) }}>{fmtT(best(f.dep), f.origin?.tz)}</div></div>
+      <div className="ftrack"><div className="fdur">{dm ? dur(dm) : ""}</div><div className="fline"><span style={{ width: `${prog}%` }} /><i style={{ left: `${prog}%` }}>{I.glyph}</i></div><div className="fdur">{until != null && until > 0 ? `departs in ${dur(until)}` : f.statusText || ""}</div></div>
+      <div className="right"><div className="iata">{f.destination?.iata}</div><div className="ftime">{fmtT(best(g.arr), f.destination?.tz)}{(g.arr as any).estimatedOnly && <sup>est</sup>}</div></div></div>
+    {p && !p.cancelled && <div className="aiwrap"><span className="aichip press" onClick={e => { e.stopPropagation(); (window as any).__why?.(f); }}><b style={{ color: lateColor(p.predictedDelay) }}>AI {p.predictedDelay >= 5 ? `+${p.predictedDelay}m` : "on time"}</b></span>{p?.top && <span className="toprsn">{p.summary}</span>}</div>}
   </div>;
 }
 
 function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => void; push: (o: Ov) => void }) {
   return <>
     <Head title="My Flights" right={<><RoundBtn onClick={() => push({ t: "airports" })}>{I.share}</RoundBtn><Avatar onClick={() => push({ t: "settings" })} /></>} />
+    <div className="qa">{([[I.alert, "Disruptions", "Live delay scores", () => push({ t: "airports", mode: "disruptions" }), "r"], [I.globe, "Airports", "Status worldwide", () => push({ t: "airports" }), "b"], [I.takeoff, "MAN board", "Departures now", () => push({ t: "board", iata: "MAN" }), "g"], [I.sliders, "Settings", "Keys & theme", () => push({ t: "settings" }), "v"]] as const).map(([ic, t, s, fn, c]) => <button key={t} className={"qtile press q" + c} onClick={fn}><span className="qic">{ic}</span><b>{t}</b><small>{s}</small></button>)}</div>
     {!list.length ? <div className="empty"><b>Let's Fly Somewhere</b><span>Tap <span className="mini">{I.search}</span> Search to add your next flight</span>
       <div className="row g8 mt16 wrap center"><button className="chip" onClick={() => push({ t: "board", iata: "MAN" })}>Manchester board</button><button className="chip" onClick={() => push({ t: "airports" })}>Airport delays</button></div></div>
       : list.sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1).map(f => <FlightCard key={f.id} f={f} onClick={() => open(f)} pred />)}
-    <div className="row g8 wrap px mt16"><button className="chip" onClick={() => push({ t: "airports", mode: "disruptions" })}>⚠️ Disruptions</button><button className="chip" onClick={() => push({ t: "airports" })}>🌍 Airports status</button><button className="chip" onClick={() => push({ t: "board", iata: "MAN" })}>🛫 MAN departures</button><button className="chip" onClick={() => push({ t: "settings" })}>⚙️ Settings & keys</button></div>
   </>;
 }
 
@@ -114,7 +120,7 @@ function Passport({ flights, setFlights, open, push }: { flights: Flight[]; setF
     <div className="pcard aircraft"><div className="h3">Most flown aircraft</div><b className="h1 thin">{s.top?.[0] || "—"}</b><small>{s.top?.[1] || 0} flights</small><div className="acimg">{I.plane}</div></div>
     <PassportExtras L={L} yr={yr} />
     <div className="row g8 px wrap mt8"><button className="chip" onClick={() => push({ t: "addpast" })}>＋ Add past flight</button><label className="chip">⇪ Import CSV / .ics<input hidden type="file" accept=".csv,.ics" onChange={imp} /></label>
-      <button className="chip" onClick={() => download("skyline.ics", ics(L))}>📅 Export .ics</button>{!flights.length && <button className="chip" onClick={() => setFlights(EXAMPLE)}>Load example data</button>}</div>
+      <button className="chip" onClick={() => download("skyline.ics", ics(L))}>{I.cal} Export .ics</button>{!flights.length && <button className="chip" onClick={() => setFlights(EXAMPLE)}>Load example data</button>}</div>
     <div className="sorts">{["Date", "From", "To", "Airline", "Aircraft"].map(k => <button key={k} className={sort === k ? "on" : ""} onClick={() => setSort(k)}>{k}{sort === k && " ↓"}</button>)}</div>
     {Object.entries(groups).map(([g, l]) => <div key={g}><div className="ghead"><b>{g}</b><span>{l.length} FLIGHTS</span></div>
       {l.map(f => <div key={f.id} className="lrow" onClick={() => open(f)}><Logo a={f.airline} /><div className="grow"><div className="row between muted sm"><span>{f.number} <span className="faint">{f.origin?.iata} → {f.diverted ? <s>{f.destination?.iata}</s> : f.destination?.iata}</span>{f.example && <em className="ex"> example</em>}</span><span>{fmtD(f.date)}</span></div>
@@ -231,7 +237,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <TimeBlock dir="dep" a={f.origin} t={f.dep} d={dd} badge={<Badge icon={<span>↗</span>} v={f.dep.gate} k={f.dep.terminal && `Terminal ${f.dep.terminal}`} />} />
     {f.diverted && <div className="divert">⑂ DIVERTED TO {f.diverted.iata}<span>Search for Recovery Flight ›</span></div>}
     <div className="sep"><span>◷ {dur(estDurMin(f.origin, f.destination))} • {dist(f.origin, f.destination).toLocaleString()} mi</span></div>
-    <TimeBlock dir="arr" a={f.diverted || f.destination} t={g.arr} d={da} est={(g.arr as any).estimatedOnly} badge={<Badge icon={<span>🧳</span>} v={f.arr.baggage || f.arr.gate} k={f.arr.terminal && `Terminal ${f.arr.terminal}`} />} />
+    <TimeBlock dir="arr" a={f.diverted || f.destination} t={g.arr} d={da} est={(g.arr as any).estimatedOnly} badge={<Badge icon={I.bag} v={f.arr.baggage || f.arr.gate} k={f.arr.terminal && `Terminal ${f.arr.terminal}`} />} />
     <div className="muted sm px">Source: {f.source || (f.manual ? "entered manually" : "—")}</div>
     <Prediction f={f} />
     <LeaveCard f={f} />
@@ -258,7 +264,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
       {h.slice(0, 3).map((x: Flight) => <div key={x.id} className="row between mt8"><b>{fmtD(x.date)}</b><span className="muted">{x.number}{x.aircraft?.reg && ` • ${x.aircraft.reg}`}</span></div>)}</div>
     <div className="card"><h3>Updates</h3><div className="muted sm">{(f.updates || []).length} updates for this flight</div>{(f.updates || []).slice().reverse().map((u: any) => <div key={u.at} className="upd"><i />{u.text}<small>{new Date(u.at).toLocaleString("en-GB")}</small></div>)}</div>
     <div className="card"><h3>Notes</h3><textarea placeholder="Tap to Edit" defaultValue={f.notes} onBlur={e => tracked ? upd({ ...f, notes: e.target.value }) : null} /></div>
-    <div className="card cal"><b>📅 Calendar Sync</b><div className="muted sm">Add this flight to your calendar (.ics works with Apple/Google Calendar)</div><button className="secondary mt8" onClick={() => download(`${f.number}.ics`, ics([f]))}>Add to Calendar</button></div>
+    <div className="card cal"><b className="row g8">{I.cal} Calendar Sync</b><div className="muted sm">Add this flight to your calendar (.ics works with Apple/Google Calendar)</div><button className="secondary mt8" onClick={() => download(`${f.number}.ics`, ics([f]))}>Add to Calendar</button></div>
     <a className="report" href={`mailto:?subject=Skyline data issue ${f.number} ${f.date}`}>ⓘ Report Data Issue</a>
     <div style={{ height: 100 }} />
     <div className="fbar"><div className="pill small"><button onClick={() => navigator.share ? navigator.share({ title: `${f.number} ${f.origin?.iata}→${f.destination?.iata}`, url: shareUrl() }) : (navigator.clipboard.writeText(shareUrl()), alert("Share link copied"))}>{I.share}</button>
@@ -296,7 +302,7 @@ function Board({ iata, x, push }: any) {
   return <><div className="head"><div><div className="row g6">{[iata, ap?.icao, new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: ap?.tz || "Europe/London" }) + " " + (ap?.tz === "Europe/London" ? "GMT" : "local")].map(t => <span key={t} className="tag">{t}</span>)}</div><h1 className="h1s">{ap?.city || iata}</h1><div className="muted sm">{ap?.name?.toUpperCase()}, {ap?.country?.toUpperCase()}</div></div>{x}</div>
     <div className="chips"><button className="chip blue" onClick={() => navigator.share?.({ url: location.href, title: `${iata} board` })}>{I.share} Share</button>
       <select className="chip" value={date} onChange={e => setDate(e.target.value)}>{[-1, 0, 1, 2].map(o => { const v = new Date(Date.now() + o * 864e5).toLocaleDateString("en-CA", { timeZone: "Europe/London" }); return <option key={v} value={v}>{["Yesterday", "Today", "Tomorrow", fmtD(v)][o + 1]}</option>; })}</select>
-      <select className="chip" value={dir} onChange={e => setDir(e.target.value)}><option value="dep">✈ To (Departures)</option><option value="arr">✈ From (Arrivals)</option></select>
+      <select className="chip" value={dir} onChange={e => setDir(e.target.value)}><option value="dep">Departures</option><option value="arr">Arrivals</option></select>
       <select className="chip" value={airline} onChange={e => setAirline(e.target.value)}><option value="">Airline: All</option>{airlines.sort().map(a => <option key={a}>{a}</option>)}</select></div>
     <div className="px"><input className="field" placeholder="Filter city or flight" value={q} onChange={e => setQ(e.target.value)} /></div>
     {!d && <div>{[0,1,2,3,4,5,6].map(i => <div key={i} className="sk-row"><div className="skel" style={{ width: 52 }} /><div className="grow"><div className="skel" style={{ width: (60 + (i * 37) % 30) + "%" }} /><div className="skel" style={{ width: "35%", height: 10, marginTop: 8 }} /></div><div className="skel" style={{ width: 54 }} /></div>)}</div>}
@@ -318,7 +324,7 @@ const dsev = (v: number | null | undefined) => v == null ? -1 : v >= 3.5 ? 2 : v
 function Disruptions({ x, push, seg }: any) {
   const [d, setD] = useState<any>(null);
   useEffect(() => { const go = () => api("/disruptions").then(setD).catch(() => setD({ airports: [], noData: [] })); go(); const t = setInterval(go, 600e3); return () => clearInterval(t); }, []);
-  const sc = (v: any, ic: string) => <div className={"dscore s" + dsev(v?.score)}><span className="faint">{ic}</span><b>{v?.score != null ? v.score.toFixed(1) : "–"}</b><i /></div>;
+  const sc = (v: any, ic: ReactNode) => <div className={"dscore s" + dsev(v?.score)}><span className="faint">{ic}</span><b>{v?.score != null ? v.score.toFixed(1) : "–"}</b><i /></div>;
   const A = (d?.airports || []).slice(0, 10);
   return <><Head title="Airports" right={<>{x}</>} />{seg}
     <div className="px row g8"><h3 className="m0">Airport disruptions</h3><span className="live">LIVE</span></div>
@@ -327,7 +333,7 @@ function Disruptions({ x, push, seg }: any) {
     <div className="card dcard">{A.map((a: any) => <div key={a.airport.iata} className="drow" onClick={() => push({ t: "board", iata: a.airport.iata })}>
       <div className="grow"><div className="row g8"><b>{a.airport.city || a.airport.name}</b><span className="tag">{a.airport.iata}</span></div>
         {a.wx && <div className="row g10 sm muted mt8"><span>{wxIcon(a.wx.code)} {Math.round(a.wx.temp)}°C</span><span>{a.wx.windKts <= 3 ? "Variable " : <span className="warr" style={{ transform: `rotate(${(a.wx.windDir + 180) % 360}deg)` }}>↑</span>} {a.wx.windKts} kts</span></div>}</div>
-      {sc(a.arr, "🛬")}{sc(a.dep, "🛫")}</div>)}
+      {sc(a.arr, I.land)}{sc(a.dep, I.takeoff)}</div>)}
       {d && !A.length && <div className="faint sm">No airports with enough live data right now.</div>}</div>
     <div className="card"><div className="lg"><span className="sdot2 s0" />0.0–1.9<span className="muted">Good traffic flow</span></div><div className="lg"><span className="sdot2 s1" />2.0–3.4<span className="muted">Minor problems with some delays or few cancellations</span></div><div className="lg"><span className="sdot2 s2" />3.5–5.0<span className="muted">Major problems with long delays and several cancelled flights</span></div></div>
     {d?.liveOnly?.length ? <div className="card mt16"><div className="row between"><b>Live traffic elsewhere</b><span className="srcb live">ADS-B</span></div><div className="faint sm">Real aircraft moving at {d.liveOnly.length} more hubs right now. No delay score without schedules (add AeroDataBox key).</div>

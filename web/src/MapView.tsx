@@ -11,8 +11,8 @@ const STYLES: Record<string, any> = {
     lbl: { type: "raster", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"], tileSize: 256 },
     rd: { type: "raster", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"], tileSize: 256 } },
     layers: [{ id: "sat", type: "raster", source: "sat" }, { id: "rd", type: "raster", source: "rd", paint: { "raster-opacity": 0.55 } }, { id: "lbl", type: "raster", source: "lbl" }] },
-  dark: { version: 8, sources: { c: { type: "raster", tiles: ["https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png"], tileSize: 256, attribution: "© OpenStreetMap © CARTO" } }, layers: [{ id: "c", type: "raster", source: "c" }] },
-  light: { version: 8, sources: { c: { type: "raster", tiles: ["https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png"], tileSize: 256, attribution: "© OpenStreetMap © CARTO" } }, layers: [{ id: "c", type: "raster", source: "c" }] },
+  dark: { version: 8, sources: { sat: { type: "raster", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"], tileSize: 256, attribution: "Imagery © Esri, Maxar" }, lbl: { type: "raster", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"], tileSize: 256 } }, layers: [{ id: "sat", type: "raster", source: "sat", paint: { "raster-saturation": -0.75, "raster-brightness-max": 0.42, "raster-contrast": 0.15, "raster-hue-rotate": 200 } }, { id: "lbl", type: "raster", source: "lbl", paint: { "raster-opacity": 0.55 } }] },
+  light: { version: 8, sources: { c: { type: "raster", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"], tileSize: 256, attribution: "© Esri" } }, layers: [{ id: "c", type: "raster", source: "c" }] },
 };
 export const MAP_STYLES = Object.keys(STYLES);
 
@@ -34,13 +34,13 @@ export default function MapView({ flights, live, style, radar, focus, locate, on
     const feats = flights.filter(f => f.origin?.lon && f.destination?.lon).map(f => ({ type: "Feature", properties: { id: f.id, focus: focus?.id === f.id ? 1 : 0 }, geometry: { type: "LineString", coordinates: arc([f.origin!.lon!, f.origin!.lat!], [f.destination!.lon!, f.destination!.lat!]) } }));
     const data: any = { type: "FeatureCollection", features: feats };
     if (m.getSource("routes")) (m.getSource("routes") as any).setData(data);
-    else { m.addSource("routes", { type: "geojson", data }); m.addLayer({ id: "routes", type: "line", source: "routes", paint: { "line-color": ["case", ["==", ["get", "focus"], 1], "#4da3ff", "#ffffff"], "line-width": ["case", ["==", ["get", "focus"], 1], 3, 2], "line-opacity": 0.85, "line-dasharray": [2, 1.2] } }); }
+    else { m.addSource("routes", { type: "geojson", data }); m.addLayer({ id: "routes-glow", type: "line", source: "routes", paint: { "line-color": "#6aa8ff", "line-width": 10, "line-blur": 8, "line-opacity": 0.55 } }); m.addLayer({ id: "routes", type: "line", source: "routes", paint: { "line-color": ["case", ["==", ["get", "focus"], 1], "#8fc2ff", "#c9dcff"], "line-width": ["case", ["==", ["get", "focus"], 1], 3, 2], "line-opacity": 0.85, "line-dasharray": [2, 1.2] } }); }
     if (radar) fetch("https://api.rainviewer.com/public/weather-maps.json").then(r => r.json()).then(j => { const p = j.radar.past.at(-1); if (!m.getSource("radar")) { m.addSource("radar", { type: "raster", tiles: [`${j.host}${p.path}/256/{z}/{x}/{y}/2/1_1.png`], tileSize: 256, attribution: "Radar © RainViewer" }); m.addLayer({ id: "radar", type: "raster", source: "radar", paint: { "raster-opacity": 0.7 } }); } }).catch(() => {});
     else if (m.getLayer("radar")) { m.removeLayer("radar"); m.removeSource("radar"); }
     marks.current.forEach(x => x.remove()); marks.current = [];
     const aps = new Map<string, any>(); flights.forEach(f => [f.origin, f.destination].forEach(a => a?.lon && aps.set(a.iata, a)));
     aps.forEach(a => { const d = document.createElement("div"); d.className = "apmark"; d.innerHTML = `<span class="dot"></span><b>${a.city || a.name}</b><i>${a.iata}</i>`; marks.current.push(new maplibregl.Marker({ element: d, anchor: "left", offset: [-7, 0] }).setLngLat([a.lon, a.lat]).addTo(m)); });
-    Object.entries(live).forEach(([id, p]) => { if (!p?.lat) return; const d = document.createElement("div"); d.innerHTML = planeSvg(p.track || 0, focus?.id === id ? "#4da3ff" : "#fff"); d.onclick = () => onPlane?.(id);
+    Object.entries(live).forEach(([id, p]) => { if (!p?.lat) return; const d = document.createElement("div"); d.className = "liveplane"; d.innerHTML = planeSvg(p.track || 0, focus?.id === id ? "#4da3ff" : "#fff"); d.onclick = () => onPlane?.(id);
       marks.current.push(new maplibregl.Marker({ element: d }).setLngLat([p.lon, p.lat]).addTo(m)); });
   };
   useEffect(() => { const m = map.current!; draw(); m.on("styledata", draw); return () => { m.off("styledata", draw); }; });
