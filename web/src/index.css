@@ -93,3 +93,26 @@ textarea{width:100%;min-height:90px;border:0;border-top:1px solid var(--line);ma
 .toprsn{font-size:12px;color:var(--muted);margin-top:4px}
 .skel{border-radius:14px;background:linear-gradient(90deg,rgba(127,127,127,.1) 25%,rgba(127,127,127,.22) 50%,rgba(127,127,127,.1) 75%);background-size:200% 100%;animation:shim 1.2s infinite}
 @keyframes shim{to{background-position:-200% 0}}
+/* premium forecast */
+.pcard{position:relative;color:var(--text);margin:12px 0;padding:18px 16px 16px;border-radius:24px;overflow:hidden;background:radial-gradient(120% 70% at 85% 0%,color-mix(in srgb,var(--pc,#0a84ff) 18%,transparent),transparent 60%),linear-gradient(180deg,color-mix(in srgb,var(--bg) 96%,#7c8cff 4%),var(--bg));border:1px solid color-mix(in srgb,var(--text) 8%,transparent);box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 10px 30px -12px rgba(0,0,0,.25),0 2px 6px rgba(0,0,0,.06)}
+.phead{display:flex;justify-content:space-between;align-items:center}
+.ptitle{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:linear-gradient(90deg,#7c8cff,#bf5af2);-webkit-background-clip:text;background-clip:text;color:transparent}
+.pconf{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 10px;border-radius:999px;background:color-mix(in srgb,var(--text) 7%,transparent);backdrop-filter:blur(12px)}
+.pconf i{width:7px;height:7px;border-radius:50%;background:#8e8e93}.pconf.high i{background:#30d158;box-shadow:0 0 8px #30d158}.pconf.medium i{background:#ff9f0a;box-shadow:0 0 8px #ff9f0a}
+.phero{display:flex;align-items:center;gap:6px;margin-top:8px}.pg{width:150px;flex:none}
+.pfig{flex:1}.pnum{font-size:46px;font-weight:800;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums}.pnum small{font-size:16px;font-weight:600;margin-left:3px;letter-spacing:0;opacity:.8}
+.prng{margin-top:6px;font-size:13px;color:var(--muted)}
+.psum2{margin:12px 0 4px;font-size:16px;font-weight:600;line-height:1.38;letter-spacing:-.01em}
+.pglass{margin-top:14px;padding:12px 14px;border-radius:18px;background:color-mix(in srgb,var(--text) 4%,transparent);border:1px solid color-mix(in srgb,var(--text) 6%,transparent);backdrop-filter:blur(18px)}
+.plab{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.pbar{display:grid;grid-template-columns:1fr 42% 40px;align-items:center;gap:10px;font-size:13px;padding:5px 0}.pbar em{font-style:normal;color:var(--muted);font-size:11px}
+.pbar>div{height:8px;border-radius:99px;background:color-mix(in srgb,var(--text) 8%,transparent);overflow:hidden}.pbar i{display:block;height:100%;border-radius:99px}.pbar b{text-align:right;font-variant-numeric:tabular-nums}
+.pfac{margin-top:16px}.pfrow{display:flex;gap:12px;padding:12px 0;border-top:1px solid color-mix(in srgb,var(--text) 7%,transparent)}
+.pfic{width:38px;height:38px;flex:none;border-radius:12px;display:grid;place-items:center;font-size:19px}
+.pft{font-size:15px;letter-spacing:-.01em}.pfimp{font-weight:800;font-variant-numeric:tabular-nums;font-size:15px}
+.pftx{font-size:13px;color:var(--muted);line-height:1.4;margin-top:2px}.mt6{margin-top:6px;align-items:center}
+.pchip{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:999px;text-transform:uppercase}
+.pimp{flex:1;height:4px;border-radius:99px;background:color-mix(in srgb,var(--text) 7%,transparent);overflow:hidden}.pimp i{display:block;height:100%;border-radius:99px}
+.pnote{margin-top:6px;font-size:12px;color:var(--muted)}
+.pexp{margin-top:12px;padding:12px 14px;border-radius:16px;font-size:13.5px;line-height:1.45;background:color-mix(in srgb,#7c8cff 8%,transparent)}.pby{margin-top:6px;font-size:11px;color:var(--muted)}
+.whysheet .pfac{margin-top:8px}

@@ -168,32 +168,42 @@ function WhySheet({ f, close }: any) {
     <motion.div className="whysheet" initial={{ y: 400 }} animate={{ y: 0 }} transition={{ type: "spring", damping: 28, stiffness: 320 }} drag="y" dragConstraints={{ top: 0, bottom: 0 }} dragElastic={{ top: 0.05, bottom: 0.6 }} onDragEnd={(_, i) => { if (i.offset.y > 120) close(); }}>
       <div className="grabber" /><div className="row between"><h3>✦ Why {f.number} might be late</h3><span className="faint sm">Estimate</span></div>
       {!p ? <div className="skel" style={{ height: 120 }} /> : p.error ? <div className="note warn">{p.error}</div> : <>
-        <div className="psum">{p.summary}</div><Factors list={p.factors || []} /><div className="faint sm mt8">ⓘ {p.confidenceNote} Prediction from real inputs only — not observed data.</div></>}
+        <div className="psum2">{p.summary}</div><Factors list={p.factors || []} /><div className="faint sm mt8">ⓘ {p.confidenceNote} Prediction from real inputs only — not observed data.</div></>}
     </motion.div></>;
 }
 function Factors({ list }: { list: any[] }) {
-  const col: any = { high: "var(--red)", med: "var(--orange)", low: "var(--muted)", good: "var(--green)" };
-  return <div className="factors"><div className="flab">WHY — ranked by impact</div>{list.map((x: any, i: number) => <div key={i} className="factor" style={{ ["--sev" as any]: col[x.sev] }}>
-    <div className="fic">{x.icon}</div><div className="grow"><b>{x.title}</b><div className="muted sm">{x.text}</div></div>
-    <div className="fimp" style={{ color: col[x.sev] }}>{x.impact > 0 ? `+${x.impact}m` : x.impact < 0 ? `${x.impact}m` : "±0"}</div></div>)}</div>;
+  const col: any = { high: "#ff453a", med: "#ff9f0a", low: "#8e8e93", good: "#30d158" }; const lab: any = { high: "Major", med: "Moderate", low: "Minor", good: "Helps" };
+  const mx = Math.max(10, ...list.map(x => Math.abs(x.impact)));
+  return <div className="pfac"><div className="plab">Why</div>{list.map((x: any, i: number) => <motion.div key={i} className="pfrow" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 * i }}>
+    <div className="pfic" style={{ background: col[x.sev] + "22" }}>{x.icon}</div>
+    <div className="grow"><div className="row between g8"><b className="pft">{x.title}</b><span className="pfimp" style={{ color: col[x.sev] }}>{x.impact > 0 ? `+${x.impact}m` : x.impact < 0 ? `${x.impact}m` : "±0"}</span></div>
+      <div className="pftx">{x.text}</div>
+      <div className="row g8 mt6"><span className="pchip" style={{ color: col[x.sev], background: col[x.sev] + "1f" }}>{lab[x.sev]}</span><div className="pimp"><motion.i initial={{ width: 0 }} animate={{ width: `${Math.abs(x.impact) / mx * 100}%` }} transition={{ duration: 0.8, delay: 0.1 + 0.05 * i }} style={{ background: col[x.sev] }} /></div></div></div>
+  </motion.div>)}</div>;
 }
+function Gauge({ d }: { d: number }) {
+  const t = Math.max(0, Math.min(1, (Math.max(-10, d) + 10) / 100)); const L = Math.PI * 80;
+  return <svg viewBox="0 0 200 116" className="pg"><defs><linearGradient id="pgg" x1="0" x2="1"><stop offset="0" stopColor="#30d158" /><stop offset=".5" stopColor="#ff9f0a" /><stop offset="1" stopColor="#ff453a" /></linearGradient><filter id="pgl"><feGaussianBlur stdDeviation="4" /></filter></defs>
+    <path d="M20 100a80 80 0 0 1 160 0" stroke="var(--line)" strokeWidth="12" fill="none" strokeLinecap="round" />
+    <motion.path d="M20 100a80 80 0 0 1 160 0" stroke="url(#pgg)" strokeWidth="12" fill="none" strokeLinecap="round" filter="url(#pgl)" opacity=".45" strokeDasharray={L} initial={{ strokeDashoffset: L }} animate={{ strokeDashoffset: L * (1 - t) }} transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }} />
+    <motion.path d="M20 100a80 80 0 0 1 160 0" stroke="url(#pgg)" strokeWidth="12" fill="none" strokeLinecap="round" strokeDasharray={L} initial={{ strokeDashoffset: L }} animate={{ strokeDashoffset: L * (1 - t) }} transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }} /></svg>;
+}
+function CountUp({ v }: { v: number }) { const [n, setN] = useState(0); useEffect(() => { let r = 0; const s = performance.now(); const f = (t: number) => { const k = Math.min(1, (t - s) / 900); setN(Math.round(v * (1 - Math.pow(1 - k, 3)))); if (k < 1) r = requestAnimationFrame(f); }; r = requestAnimationFrame(f); return () => cancelAnimationFrame(r); }, [v]); return <>{n}</>; }
 function Prediction({ f }: { f: Flight }) {
   const [p, setP] = useState<any>(null); const [err, setErr] = useState("");
   useEffect(() => { if (!f.example) api(`/predict/${f.number}?date=${f.date}`).then(setP).catch(e => setErr(e.message)); }, [f.id, f.statusText]);
   if (f.example) return null;
-  if (!p) return <div className="card"><h3>✦ AI Delay Prediction</h3><div className="muted sm">{err || "Computing…"}</div></div>;
-  const d = p.predictedDelay ?? 0; const ang = Math.max(-90, Math.min(90, -90 + (Math.min(90, Math.max(-10, d)) + 10) / 100 * 180));
-  const bars = [["On time (<15m)", p.probs.onTime, "var(--green)"], ["15m+ late", p.probs.late15, "var(--orange)"], ["45m+ late", p.probs.late45, "var(--red)"], ["Cancelled", p.probs.cancel, "#8b1a1a"], ["Diverted", p.probs.divert, "#5a1010"]];
-  return <div className="card ai"><div className="row between"><h3>✦ AI Delay Prediction</h3><span className={"conf " + p.confidence}>{p.confidence} confidence</span></div>
-    <div className="muted sm">Estimate from a statistical model — not observed data</div>
-    <div className="row g16 mt8"><svg viewBox="0 0 120 70" width="130"><path d="M10 64a50 50 0 0 1 100 0" stroke="url(#gg)" strokeWidth="10" fill="none" strokeLinecap="round" /><defs><linearGradient id="gg"><stop offset="0" stopColor="#34c759" /><stop offset=".5" stopColor="#ff9f0a" /><stop offset="1" stopColor="#ff3b30" /></linearGradient></defs>
-      <line x1="60" y1="64" x2="60" y2="22" stroke="var(--text)" strokeWidth="3" strokeLinecap="round" transform={`rotate(${ang} 60 64)`} /><circle cx="60" cy="64" r="5" fill="var(--text)" /></svg>
-      <div><div className="big" style={{ color: lateColor(d) }}>{p.cancelled ? "Cancelled" : d >= 5 ? `+${d}m` : "On time"}</div><div className="muted sm">{p.range && `likely ${p.range[0]}m to +${p.range[1]}m`}</div></div></div>
-    {bars.map(([l, v, c]: any) => <div key={l} className="bar"><span>{l}</span><div><i style={{ width: `${v}%`, background: c }} /></div><b>{v}%</b></div>)}
-    {p.summary && <div className="psum">{p.summary}</div>}
+  if (!p) return <div className="pcard"><div className="phead"><span className="ptitle">✦ Delay Forecast</span></div>{err ? <div className="muted sm">{err}</div> : <><div className="skel" style={{ height: 110, marginTop: 12 }} /><div className="skel" style={{ height: 60, marginTop: 10 }} /></>}</div>;
+  const d = p.predictedDelay ?? 0; const c = p.cancelled ? "#ff453a" : d >= 45 ? "#ff453a" : d >= 15 ? "#ff9f0a" : "#30d158";
+  const bars = [["On time", "under 15 min", p.probs.onTime, "#30d158"], ["15+ min late", "", p.probs.late15, "#ff9f0a"], ["45+ min late", "", p.probs.late45, "#ff453a"], ["Cancelled", "", p.probs.cancel, "#bf5af2"], ["Diverted", "", p.probs.divert, "#64d2ff"]];
+  return <div className="pcard" style={{ ["--pc" as any]: c }}>
+    <div className="phead"><span className="ptitle">✦ Delay Forecast</span><span className={"pconf " + p.confidence}><i />{p.confidence[0].toUpperCase() + p.confidence.slice(1)} confidence</span></div>
+    <div className="phero"><Gauge d={d} /><div className="pfig"><div className="pnum" style={{ color: c }}>{p.cancelled ? "Cancelled" : d >= 5 ? <>+<CountUp v={d} /><small>min</small></> : "On time"}</div>{p.range && !p.cancelled && <div className="prng">Likely {p.range[0] < 0 ? p.range[0] : "+" + p.range[0]} to +{p.range[1]} min</div>}</div></div>
+    {p.summary && <div className="psum2">{p.summary}</div>}
+    <div className="pglass"><div className="plab">Chances</div>{bars.map(([l, sub, v, col]: any, i) => <div key={l} className="pbar"><span>{l}{sub && <em> {sub}</em>}</span><div><motion.i initial={{ width: 0 }} animate={{ width: `${Math.max(v, v > 0 ? 1.5 : 0)}%` }} transition={{ duration: 0.9, delay: 0.08 * i, ease: [0.22, 1, 0.36, 1] }} style={{ background: `linear-gradient(90deg, ${col}aa, ${col})` }} /></div><b>{v}%</b></div>)}</div>
     <Factors list={p.factors || []} />
-    {p.confidenceNote && <div className="faint sm mt8">ⓘ {p.confidenceNote}</div>}
-    <div className="explain">{p.explanation?.text}<div className="faint sm">{p.explanation?.by === "llm" ? "Written by your LLM from the model's features" : "Template explanation (add an LLM key in Settings for AI-written text)"}</div></div></div>;
+    {p.confidenceNote && <div className="pnote">ⓘ {p.confidenceNote}</div>}
+    <div className="pexp">{p.explanation?.text}<div className="pby">{p.explanation?.by === "llm" ? "Written by your LLM from the model's real inputs" : "Template summary · add an LLM key in Settings for AI-written text"} · Estimate, not observed data</div></div></div>;
 }
 
 function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
