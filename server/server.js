@@ -103,6 +103,80 @@ async function magBoard(apt, dir, ymd) {
   });
 }
 
+
+// ---------- More official airport feeds (free, no key) ----------
+// Avinor (Norway, 45 airports): documented open XML feed https://asrv.avinor.no/XmlFeed/v1.0
+// Frankfurt (FRA): JSON endpoint used by frankfurt-airport.com's own public departures/arrivals board
+// Sydney (SYD): JSON endpoint used by sydneyairport.com.au's own public flight board
+const AVINOR = "OSL BGO TRD SVG TOS BOO AES KRS EVE HAU MOL KSU ALF BDU BJF BNN BVG FDE FRO HAA HFT HOV HVG KKN LKL LKN MEH MJF MQN OSY RET RRS RVK SDN SKN SOG SOJ SSJ SVJ VAW VDS VRY LYR ANX TRF".split(" ");
+const getText = async (url, opt = {}) => { const r = await fetch(url, { ...opt, headers: { "user-agent": UA, ...(opt.headers || {}) }, signal: AbortSignal.timeout(20000) }); if (!r.ok) { const e = new Error(`${r.status} ${url.split("?")[0]}`); e.status = r.status; throw e; } return r.text(); };
+const mkFlight = (apt, dir, otherIata, otherName, num, alCode, alName, t, statusText, status, source, extra = {}) => {
+  const here = AP[apt], there = AP[otherIata] || { iata: otherIata, name: otherName, city: otherName };
+  const side = { scheduled: t.sched, estimated: t.est, actual: t.act, gate: t.gate || undefined, terminal: t.term || undefined, ...(dir === "arr" ? { baggage: t.belt || undefined } : {}) };
+  const id = `${num}-${(t.sched || "").slice(0, 10)}`;
+  return { id, date: id.slice(-10), number: num, airline: { ...airlineOut(alCode), name: airlineOut(alCode).name || alName }, origin: airportOut(dir === "dep" ? here : there) || there, destination: airportOut(dir === "dep" ? there : here) || there,
+    dep: dir === "dep" ? side : {}, arr: dir === "arr" ? side : {}, statusText, status, source, ...extra };
+};
+const inDay = (iso, ymd) => { if (!iso) return false; const d = londonDay(ymd); return iso >= d.start && iso <= d.end; };
+async function avinorBoard(apt, dir, ymd) {
+  return cached(`avinor:${apt}:${dir}:${ymd}`, ymd < todayLondon() ? 6 * 3600 : 120, async () => {
+    const d = londonDay(ymd), now = Date.now(); const from = Math.max(0, Math.ceil((now - new Date(d.start)) / 3600e3)), to = Math.max(0, Math.ceil((new Date(d.end) - now) / 3600e3));
+    if (from > 7 * 24 + 1 || to > 7 * 24 + 1) return [];
+    const x = await getText(`https://asrv.avinor.no/XmlFeed/v1.0?airport=${apt}&direction=${dir === "dep" ? "D" : "A"}&TimeFrom=${Math.min(from, 168)}&TimeTo=${Math.min(to, 168)}`);
+    const tag = (s, n) => (s.match(new RegExp(`<${n}>([^<]*)</${n}>`)) || [])[1];
+    return [...x.matchAll(/<flight [^>]*>([\s\S]*?)<\/flight>/g)].map(m => { const s = m[1]; const st = s.match(/<status code="(\w)"(?: time="([^"]+)")?/) || [];
+      const sched = tag(s, "schedule_time"), code = st[1], stt = st[2] ? new Date(st[2]).toISOString() : undefined, num = (tag(s, "flight_id") || "").replace(/\s+/g, "");
+      const status = { A: "landed", D: "departed", C: "cancelled", E: stt && sched && new Date(stt) - new Date(sched) >= 15 * 60e3 ? "delayed" : "scheduled", N: "scheduled" }[code] || "scheduled";
+      const statusText = { A: "Arrived", D: "Departed", C: "Cancelled", E: "New time", N: "New info" }[code] || "Scheduled";
+      return mkFlight(apt, dir, tag(s, "airport"), tag(s, "airport"), num, tag(s, "airline"), null,
+        { sched: sched && new Date(sched).toISOString(), est: code === "E" ? stt : undefined, act: code === "A" || code === "D" ? stt : undefined, gate: tag(s, "gate"), belt: tag(s, "belt") }, statusText, status, "Avinor official flight data (avinor.no)"); })
+      .filter(f => inDay(f.dep.scheduled || f.arr.scheduled, ymd));
+  });
+}
+const FRA_API = "https://www.frankfurt-airport.com/en/_jcr_content.flights.json/filter";
+const fraStatus = s => { s = (s || "").toLowerCase(); if (s.includes("cancel")) return "cancelled"; if (s.includes("divert")) return "diverted"; if (s.includes("landed") || s.includes("arrived") || s.includes("baggage")) return "landed";
+  if (s.includes("departed") || s.includes("off block") || s.includes("airborne")) return "departed"; if (s.includes("boarding") || s.includes("final call")) return "boarding"; if (s.includes("gate")) return "gate"; return "scheduled"; };
+async function fraBoard(apt, dir, ymd) {
+  return cached(`fra:${dir}:${ymd}`, ymd < todayLondon() ? 6 * 3600 : 180, async () => {
+    const d = londonDay(ymd), seen = new Map(); const page = p => getJSON(`${FRA_API}?perpage=50&lang=en-GB&page=${p}&flighttype=${dir === "dep" ? "departures" : "arrivals"}`, { headers: { referer: "https://www.frankfurt-airport.com/" } });
+    const add = r => { for (const x of r.data || []) if (x.typ === "P" && x.ac !== "TRS") seen.set(x.id, x); const ts = (r.data || []).map(x => new Date(x.sched).toISOString()).sort(); return { min: ts[0], max: ts[ts.length - 1], r }; };
+    const first = add(await page(1)); let p = 0, lo = first;
+    while (lo.min > d.start && p > Math.max(first.r.minpage ?? -60, -60)) { lo = add(await page(p)); p--; }
+    let q = 2, hi = first; while (hi.max && hi.max < d.end && q <= Math.min(first.r.maxpage ?? 40, 40)) { hi = add(await page(q)); q++; }
+    return [...seen.values()].map(x => { const sched = new Date(x.sched).toISOString(), est = x.esti ? new Date(x.esti).toISOString() : undefined, st = fraStatus(x.status);
+      return mkFlight(apt, dir, x.iata, x.apname, (x.fnr || "").replace(/\s+/g, ""), x.al, x.alname,
+        { sched, est: st === "departed" || st === "landed" ? undefined : est, act: st === "departed" || st === "landed" ? est : undefined, gate: x.gate, term: x.terminal, belt: x.band },
+        x.status || "Scheduled", st === "scheduled" && est && new Date(est) - new Date(sched) >= 15 * 60e3 ? "delayed" : st, "Frankfurt Airport official flight info (frankfurt-airport.com)", { aircraft: { reg: x.reg, type: x.ac } }); })
+      .filter(f => inDay(f.dep.scheduled || f.arr.scheduled, ymd));
+  });
+}
+const tzOff = (tz, d) => new Date(d.toLocaleString("en-US", { timeZone: tz })) - new Date(d.toLocaleString("en-US", { timeZone: "UTC" }));
+const localToUtc = (tz, date, time) => { if (!date || !time || date === "-" || time === "-") return undefined; const g = new Date(`${date}T${time}:00Z`); return new Date(+g - tzOff(tz, g)).toISOString(); };
+let CITY = null; const cityIata = name => { if (!name) return null; if (!CITY) { CITY = {}; for (const a of Object.values(AP)) { const k = (a.city || "").toLowerCase(); (CITY[k] = CITY[k] || []).push(a.iata); } } const c = CITY[name.toLowerCase().trim()]; if (!c) return null; if (c.length === 1) return c[0]; const hubs = new Set(Object.values(STATUS_AIRPORTS).flat()); const h = c.filter(x => hubs.has(x)); return h.length === 1 ? h[0] : null; };
+async function sydBoard(apt, dir, ymd) {
+  return cached(`syd:${dir}:${ymd}`, ymd < todayLondon() ? 6 * 3600 : 180, async () => {
+    const d = londonDay(ymd); const days = [...new Set([d.start, d.end].map(t => new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Sydney" }).format(new Date(t))))];
+    const out = [], seenSyd = new Set();
+    for (const day of days) for (const tt of ["international", "domestic"]) {
+      const r = await getJSON(`https://www.sydneyairport.com.au/_a/flights/?query=&flightType=${dir === "dep" ? "departure" : "arrival"}&terminalType=${tt}&date=${day}&sortColumn=scheduled_time&ascending=true&showAll=true`, { headers: { referer: "https://www.sydneyairport.com.au/" } });
+      for (const x of r.flightData || []) { const s = (x.status || "").toLowerCase(), sched = localToUtc("Australia/Sydney", x.scheduledDate, x.scheduledTime), est = localToUtc("Australia/Sydney", x.estimatedDate, x.estimatedTime);
+        const st = s.includes("cancel") ? "cancelled" : s.includes("divert") ? "diverted" : s.includes("arrived") || s.includes("landed") ? "landed" : s.includes("departed") ? "departed" : s.includes("boarding") || s.includes("final") ? "boarding" : s.includes("gate") ? "gate" : s.includes("delay") ? "delayed" : "scheduled";
+        const place = (x.destinations || [])[0], num = (x.flightNumbers || [])[0] || "";
+        let e2 = est; if (e2 && sched && s.includes("on time") && Math.abs(new Date(e2) - new Date(sched)) > 60 * 60e3) e2 = undefined; // feed contradicts itself: keep the airport's status, drop the odd time
+        const done = (st === "departed" || st === "landed") && e2 && new Date(e2) <= Date.now() + 5 * 60e3;
+        if (seenSyd.has(x.id)) continue; seenSyd.add(x.id);
+        out.push(mkFlight(apt, dir, cityIata(place), place, num.replace(/\s+/g, ""), x.airlineCode, (x.airline || "").trim(),
+          { sched, est: done ? undefined : e2, act: done ? e2 : undefined, term: x.terminalNumber }, x.status, st, "Sydney Airport official flight info (sydneyairport.com.au)", { codeshares: (x.flightNumbers || []).slice(1) })); } }
+    return out.filter(f => inDay(f.dep.scheduled || f.arr.scheduled, ymd));
+  });
+}
+const OFFICIAL = {};
+for (const c of Object.keys(MAG_SITES)) OFFICIAL[c] = { fn: magBoard, label: `${c} Airport official flight info`, provider: "Official airport feed", site: MAG_SITES[c].replace("https://www.", "") };
+for (const c of AVINOR) OFFICIAL[c] = { fn: avinorBoard, label: "Avinor official flight data", provider: "Official airport feed (Avinor)", site: "avinor.no" };
+OFFICIAL.FRA = { fn: fraBoard, label: "Frankfurt Airport official flight info", provider: "Official airport feed", site: "frankfurt-airport.com" };
+OFFICIAL.SYD = { fn: sydBoard, label: "Sydney Airport official flight info", provider: "Official airport feed", site: "sydneyairport.com.au" };
+const officialBoard = (apt, dir, ymd) => OFFICIAL[apt].fn(apt, dir, ymd);
+
 // ---------- AeroDataBox (optional key, RapidAPI) ----------
 const ADB = "https://aerodatabox.p.rapidapi.com";
 const adb = (p, ttl = 300) => { if (!cfg.aerodataboxKey) { const e = new Error("no key"); e.needsKey = true; throw e; }
@@ -153,7 +227,7 @@ setTimeout(collect, 3000); setInterval(collect, 30 * 60e3);
 // ---------- routes ----------
 const api = express.Router();
 const wrap = fn => (req, res) => fn(req, res).catch(e => res.status(e.needsKey ? 501 : e.status || 502).json({ error: String(e.message || e), needsKey: !!e.needsKey }));
-api.get("/health", (q, r) => r.json({ ok: true, keys: { aerodatabox: !!cfg.aerodataboxKey }, magAirports: Object.keys(MAG_SITES) }));
+api.get("/health", (q, r) => r.json({ ok: true, keys: { aerodatabox: !!cfg.aerodataboxKey }, magAirports: Object.keys(MAG_SITES), officialAirports: Object.keys(OFFICIAL) }));
 api.get("/settings", (q, r) => r.json({ aerodatabox: cfg.aerodataboxKey ? "set (" + cfg.aerodataboxKey.slice(0, 4) + "…)" : "", protected: !!cfg.adminToken }));
 api.post("/settings", (req, res) => {
   if (cfg.adminToken && req.body.adminToken !== cfg.adminToken) return res.status(403).json({ error: "admin token required" });
@@ -164,7 +238,7 @@ api.post("/settings", (req, res) => {
 api.get("/airports/search", (req, res) => { const q = String(req.query.q || "").toLowerCase(); if (!q) return res.json([]);
   const out = []; for (const a of Object.values(AP)) { const s = `${a.iata} ${a.icao} ${a.name} ${a.city}`.toLowerCase(); if (a.iata.toLowerCase() === q) out.unshift(a); else if (s.includes(q)) out.push(a); if (out.length > 40) break; }
   res.json(out.slice(0, 15).map(airportOut)); });
-api.get("/airport/:iata", (req, res) => { const a = AP[req.params.iata.toUpperCase()]; a ? res.json({ ...airportOut(a), boardSource: MAG_SITES[a.iata] ? "official" : cfg.aerodataboxKey ? "aerodatabox" : "live" }) : res.status(404).json({ error: "unknown airport" }); });
+api.get("/airport/:iata", (req, res) => { const a = AP[req.params.iata.toUpperCase()]; a ? res.json({ ...airportOut(a), sourceLabel: OFFICIAL[a.iata]?.label, boardSource: OFFICIAL[a.iata] ? "official" : cfg.aerodataboxKey ? "aerodatabox" : "live" }) : res.status(404).json({ error: "unknown airport" }); });
 api.get("/airline/:code", (req, res) => res.json(airlineOut(req.params.code.toUpperCase())));
 
 
@@ -192,8 +266,8 @@ async function liveCounts(iata) { const a = AP[iata]; const { ac } = await nearA
   return { ground: c.filter(x => x.phase === "ground").length, departing: c.filter(x => x.phase === "departed").length, arriving: c.filter(x => x.phase === "approaching").length, airborneNearby: ac.filter(x => x.alt_baro !== "ground").length }; }
 
 async function board(iata, dir, ymd) {
-  if (MAG_SITES[iata]) return { flights: await magBoard(iata, dir, ymd), source: `${iata} Airport official flight info` };
-  const liveOnly = async () => ({ flights: ymd === todayLondon() ? await liveBoard(iata, dir) : [], source: "Live traffic only (ADS-B) — add AeroDataBox key for schedules", liveOnly: true });
+  if (OFFICIAL[iata]) { try { return { flights: await officialBoard(iata, dir, ymd), source: OFFICIAL[iata].label, sourceKind: "official", provider: OFFICIAL[iata].provider, site: OFFICIAL[iata].site }; } catch (e) { console.warn("official feed failed", iata, e.message); } }
+  const liveOnly = async () => ({ flights: ymd === todayLondon() ? await liveBoard(iata, dir) : [], source: "Live traffic only (ADS-B) — add AeroDataBox key for schedules", sourceKind: "live", provider: "Live ADS-B (adsb.lol / adsb.fi)", liveOnly: true });
   if (!cfg.aerodataboxKey) return liveOnly();
   const d = londonDay(ymd); const out = [];
   try { for (const [a, b] of [[0, 12], [12, 24]]) {
@@ -201,7 +275,7 @@ async function board(iata, dir, ymd) {
     const r = await adb(`/flights/airports/iata/${iata}/${f}/${t}?direction=${dir === "dep" ? "Departure" : "Arrival"}&withCodeshared=false&withCancelled=true&withLeg=true`, ymd < todayLondon() ? 21600 : 120);
     out.push(...(r[dir === "dep" ? "departures" : "arrivals"] || []).map(normAdb));
   } } catch { return liveOnly(); }
-  return { flights: out, source: "AeroDataBox" };
+  return { flights: out, source: "AeroDataBox", sourceKind: "aerodatabox", provider: "AeroDataBox (your key)" };
 }
 api.get("/board/:iata", wrap(async (req, res) => { const iata = req.params.iata.toUpperCase(); const dir = req.query.dir === "arr" ? "arr" : "dep";
   const b = await board(iata, dir, String(req.query.date || todayLondon())); const a = AP[iata];
@@ -217,9 +291,9 @@ async function findFlight(number, ymd) {
   const cs = toCallsign(number);
   let route = null; if (cs) { try { route = await cached("adsbdb:" + cs, 86400, async () => (await getJSON(`https://api.adsbdb.com/v0/callsign/${cs}`)).response?.flightroute); } catch {} }
   if (!result.flight) {
-    const cands = new Set(Object.keys(MAG_SITES).filter(a => !route || route.origin?.iata_code === a || route.destination?.iata_code === a));
+    const cands = new Set(route ? [route.origin?.iata_code, route.destination?.iata_code].filter(a => OFFICIAL[a]) : Object.keys(MAG_SITES));
     let dep, arr;
-    for (const apt of cands) for (const dir of ["dep", "arr"]) { try { const f = (await magBoard(apt, dir, ymd)).find(x => x.number === number); if (f) dir === "dep" ? (dep = f) : (arr = f); } catch {} }
+    for (const apt of cands) for (const dir of ["dep", "arr"]) { try { const f = (await officialBoard(apt, dir, ymd)).find(x => x.number === number); if (f) dir === "dep" ? (dep = f) : (arr = f); } catch {} }
     const f = dep || arr;
     if (f) { result.flight = { ...f, dep: { ...f.dep, ...(arr && dep ? {} : {}) }, arr: arr ? arr.arr : f.arr, status: arr && ["landed"].includes(arr.status) ? "landed" : f.status }; result.sources.push(f.source); }
   }
@@ -235,8 +309,8 @@ async function findFlight(number, ymd) {
 api.get("/flight/:number", wrap(async (req, res) => res.json(await findFlight(req.params.number, String(req.query.date || todayLondon())))));
 api.get("/route", wrap(async (req, res) => { const from = String(req.query.from || "").toUpperCase(), to = String(req.query.to || "").toUpperCase(), ymd = String(req.query.date || todayLondon());
   let list = [], source = "";
-  if (MAG_SITES[from]) { list = (await magBoard(from, "dep", ymd)).filter(f => !to || f.destination?.iata === to); source = "official"; }
-  else if (MAG_SITES[to]) { list = (await magBoard(to, "arr", ymd)).filter(f => !from || f.origin?.iata === from); source = "official"; }
+  if (OFFICIAL[from]) { list = (await officialBoard(from, "dep", ymd)).filter(f => !to || f.destination?.iata === to); source = "official"; }
+  else if (OFFICIAL[to]) { list = (await officialBoard(to, "arr", ymd)).filter(f => !from || f.origin?.iata === from); source = "official"; }
   else { const b = await board(from, "dep", ymd); list = b.flights.filter(f => !to || f.destination?.iata === to); source = b.source; }
   res.json({ flights: list, source }); }));
 api.get("/live/:callsign", wrap(async (req, res) => res.json(await liveByCallsign(req.params.callsign.toUpperCase()))));
@@ -315,7 +389,7 @@ function predictCore(f, ctx) {
     probs: { onTime: Math.round((1 - p15) * live * 100), late15: Math.round(p15 * live * 100), late45: Math.round(p45 * live * 100), cancel: Math.round(pc * 10) / 10, divert: Math.round(pd * 10) / 10 },
     confidence: conf, confidenceNote: confNote, signals, factors: factors.slice(0, 8), summary, top: factors[0] ? { icon: factors[0].icon, title: factors[0].title } : null, reasons: factors.slice(0, 6).map(x => x.title), model: "skyline-weighted-v2", label: "Prediction (estimate) — not observed data" };
 }
-async function boardStats(iata) { if (!MAG_SITES[iata]) return null; try { return statsFrom(await magBoard(iata, "dep", todayLondon())); } catch { return null; } }
+async function boardStats(iata) { if (!OFFICIAL[iata]) return null; try { return statsFrom(await officialBoard(iata, "dep", todayLondon())); } catch { return null; } }
 async function predictFull(number, ymd) {
   const r = await findFlight(number, ymd); const f = r.flight; if (!f) { const e = new Error("flight not found"); e.status = 404; throw e; }
   const sd = f.dep?.scheduled; const ea = f.arr?.scheduled || (sd && new Date(+new Date(sd) + 3 * 3600e3).toISOString());
@@ -351,7 +425,7 @@ api.get("/status", wrap(async (req, res) => {
   const region = String(req.query.region || "All"); const codes = (region === "All" ? Object.values(STATUS_AIRPORTS).flat() : STATUS_AIRPORTS[region] || []).filter(c => AP[c]);
   const out = await Promise.all(codes.map(async c => { const a = airportOut(AP[c]); const reg = Object.keys(STATUS_AIRPORTS).find(k => STATUS_AIRPORTS[k].includes(c));
     try {
-      if (MAG_SITES[c]) { const ymd = todayLondon(); const [d, r] = await Promise.all([magBoard(c, "dep", ymd), magBoard(c, "arr", ymd)]); return { airport: a, region: reg, dep: statsFrom(d), arr: statsFrom(r), source: "official" }; }
+      if (OFFICIAL[c]) { const ymd = todayLondon(); const [d, r] = await Promise.all([officialBoard(c, "dep", ymd), officialBoard(c, "arr", ymd)]); return { airport: a, region: reg, dep: statsFrom(d), arr: statsFrom(r), source: "official" }; }
       if (cfg.aerodataboxKey) { const x = await adb(`/airports/iata/${c}/delays`, 1800); const s = v => v && { onTime: null, avgDelay: Math.round((v.medianDelay ? parseMed(v.medianDelay) : 0)), cancelled: v.numTotal ? Math.round((v.numCancelled || 0) / v.numTotal * 100) : 0, n: v.numTotal, index: v.delayIndex };
         return { airport: a, region: reg, dep: s(x.departuresDelayInformation), arr: s(x.arrivalsDelayInformation), source: "AeroDataBox" }; }
       return { airport: a, region: reg, unavailable: true, live: LIVEC[c] || null, source: "Live traffic only" };
@@ -377,7 +451,7 @@ api.get("/disruptions", wrap(async (req, res) => {
   const out = await cached("disruptions:" + !!cfg.aerodataboxKey + ":" + Object.keys(LIVEC).length, 600, async () => { const codes = Object.values(STATUS_AIRPORTS).flat().filter(c => AP[c]);
     const rows = await Promise.all(codes.map(async c => { const ap = AP[c]; if (!ap) return null; const a = airportOut(ap); let wx = null; try { wx = await wxNow(ap); } catch {}
       try {
-        if (MAG_SITES[c]) { const ymd = todayLondon(); const [d, r] = await Promise.all([magBoard(c, "dep", ymd), magBoard(c, "arr", ymd)]); return { airport: a, wx, dep: disruptFrom(d), arr: disruptFrom(r), source: "Official airport board" }; }
+        if (OFFICIAL[c]) { const ymd = todayLondon(); const [d, r] = await Promise.all([officialBoard(c, "dep", ymd), officialBoard(c, "arr", ymd)]); return { airport: a, wx, dep: disruptFrom(d), arr: disruptFrom(r), source: "Official airport board" }; }
         if (cfg.aerodataboxKey) { const x = await adb(`/airports/iata/${c}/delays`, 1800); const s = v => { if (!v?.numTotal) return { score: null }; const canc = (v.numCancelled || 0) / v.numTotal, avg = v.medianDelay ? parseMed(v.medianDelay) : 0, l30 = Math.min(1, (v.numQualifiedDelayed || 0) / v.numTotal);
             return { n: v.numTotal, score: Math.round(50 * (0.45 * Math.min(canc / 0.2, 1) + 0.35 * Math.min(avg / 60, 1) + 0.2 * Math.min(l30 / 0.5, 1))) / 10, cancelledPct: Math.round(canc * 100), avgDelay: avg }; };
           return { airport: a, wx, dep: s(x.departuresDelayInformation), arr: s(x.arrivalsDelayInformation), source: "AeroDataBox" }; }
