@@ -76,3 +76,20 @@ textarea{width:100%;min-height:90px;border:0;border-top:1px solid var(--line);ma
 .dscore.s0 i,.sdot2.s0{background:var(--green)}.dscore.s1 i,.sdot2.s1{background:var(--yellow)}.dscore.s2 i,.sdot2.s2{background:var(--red)}.dscore.s2 b{color:var(--red)}
 .lg{display:grid;grid-template-columns:14px 64px 1fr;gap:8px;align-items:start;font-size:14px;padding:6px 0;font-weight:600}.lg .muted{font-weight:400}.sdot2{width:12px;height:12px;border-radius:50%;margin-top:3px}
 .dscore i{box-shadow:none!important;width:11px;height:11px}
+.livedot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(48,209,88,.6);animation:lp 1.6s infinite;margin-right:4px}
+@keyframes lp{70%{box-shadow:0 0 0 8px rgba(48,209,88,0)}100%{box-shadow:0 0 0 0 rgba(48,209,88,0)}}
+.live-note{border-left:3px solid var(--blue)}
+.srcb{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.06em;padding:2px 7px;border-radius:6px;margin-bottom:6px;background:rgba(10,132,255,.15);color:var(--blue)}
+.srcb.off{background:rgba(48,209,88,.15);color:var(--green)}
+.empty{text-align:center;padding:36px 20px}.empty .emo{font-size:38px;margin-bottom:8px}
+.press{transition:transform .12s ease}.press:active{transform:scale(.97)}
+.psum{margin-top:12px;font-weight:650;font-size:15px;line-height:1.35}
+.factors{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.flab{font-size:11px;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.factor{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:14px;background:var(--card2,rgba(127,127,127,.08));border-left:3px solid var(--sev)}
+.fic{font-size:20px;line-height:1.2}.fimp{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.whysheet{position:fixed;left:0;right:0;bottom:0;z-index:1001;padding:16px 16px calc(16px + env(safe-area-inset-bottom));border-radius:22px 22px 0 0;background:var(--bg);backdrop-filter:blur(24px) saturate(1.6);-webkit-backdrop-filter:blur(24px) saturate(1.6);box-shadow:0 -10px 40px rgba(0,0,0,.35);max-height:70vh;overflow:auto}
+.whyback{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.35)}
+.toprsn{font-size:12px;color:var(--muted);margin-top:4px}
+.skel{border-radius:14px;background:linear-gradient(90deg,rgba(127,127,127,.1) 25%,rgba(127,127,127,.22) 50%,rgba(127,127,127,.1) 75%);background-size:200% 100%;animation:shim 1.2s infinite}
+@keyframes shim{to{background-position:-200% 0}}

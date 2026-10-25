@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { motion } from "framer-motion";
 import MapView, { MAP_STYLES } from "./MapView";
 import { Sheet, RoundBtn, I, Badge } from "./ui";
 import { api, today, dist, fmtT, fmtD, best, delay, dur, lateLabel, lateColor, withEstArr, load, save, logo, ics, download, wxText, wxIcon, tzOffset, estDurMin, type Flight, type Ap } from "./lib";
@@ -14,6 +15,8 @@ export default function App() {
   const [live, setLive] = useState<Record<string, any>>({});
   const [mapStyle, setMapStyle] = useState(localStorage.getItem("sk.map") || "hybrid");
   const [radar, setRadar] = useState(false); const [locate, setLocate] = useState(0);
+  useEffect(() => { const m = location.hash.match(/board=([A-Za-z]{3})/); if (m) setOv([{ t: "board", iata: m[1].toUpperCase() }]); const a = location.hash.match(/airports=(\w+)/); if (a) setOv([{ t: "airports", mode: a[1] }]); }, []);
+  const [why, setWhy] = useState<any>(null); (window as any).__why = (f: any) => { navigator.vibrate?.(8); setWhy(f); };
   const [theme, setTheme] = useState(localStorage.getItem("sk.theme") || "auto");
   useEffect(() => save(flights), [flights]);
   useEffect(() => { localStorage.setItem("sk.theme", theme); document.documentElement.dataset.theme = theme; }, [theme]);
@@ -31,7 +34,7 @@ export default function App() {
       upd(n); } } catch {} } }; tick(); const t = setInterval(tick, 90e3); return () => clearInterval(t); }, [active.map(f => f.id).join()]);
   const top = ov.at(-1); const focus = top?.t === "flight" ? top.f : null;
   const mapFlights = focus ? [focus] : tab === "passport" ? flights.filter(f => !f.friend) : tab === "friends" ? flights.filter(f => f.friend) : active.filter(f => !f.friend);
-  return <div className="app">
+  return <div className="app">{why && <WhySheet f={why} close={() => setWhy(null)} />}
     <MapView flights={mapFlights} live={live} style={mapStyle} radar={radar} focus={focus} locate={locate} onPlane={id => { const f = flights.find(x => x.id === id); f && push({ t: "flight", f }); }} />
     <div className="mapbtns"><button onClick={() => setMapStyle(MAP_STYLES[(MAP_STYLES.indexOf(mapStyle) + 1) % MAP_STYLES.length])}>{I.layers}</button><button className={radar ? "on" : ""} onClick={() => setRadar(!radar)}>{I.cloud}</button><button onClick={() => setLocate(Date.now())}>{I.locate}</button></div>
     <Sheet snaps={[0.3, 0.55, 0.94]} initial={1} z={5}>
@@ -56,7 +59,8 @@ function FlightCard({ f, onClick, pred }: { f: Flight; onClick: () => void; pred
   const until = best(f.dep) ? (+new Date(best(f.dep)!) - Date.now()) / 60000 : null;
   return <div className="card fcard" onClick={onClick}>
     <div className="row between"><div className="row g10"><Logo a={f.airline} s={28} /><div><div className="muted sm">{f.number} • {fmtD(f.date, { weekday: "short", day: "numeric", month: "short" })}{f.friend && ` • ${f.friend}`}</div><b>{f.origin?.city || f.origin?.iata} to {f.destination?.city || f.destination?.iata}</b></div></div>
-      {p && !p.cancelled && <span className="aibadge" style={{ color: lateColor(p.predictedDelay) }}>AI {p.predictedDelay >= 5 ? `+${p.predictedDelay}m` : "on time"}</span>}</div>
+      {p && !p.cancelled && <span className="aibadge press" onClick={e => { e.stopPropagation(); (window as any).__why?.(f); }} style={{ color: lateColor(p.predictedDelay) }}>AI {p.predictedDelay >= 5 ? `+${p.predictedDelay}m` : "on time"} ⓘ</span>}</div>
+    {p?.top && !p.cancelled && <div className="toprsn">{p.top.icon} {p.summary}</div>}
     <div className="row between mt8"><div><div className="big" style={{ color: lateColor(dd) }}>{fmtT(best(f.dep), f.origin?.tz)}</div><small className="muted">{f.origin?.iata} {until != null && until > 0 ? `• departs in ${dur(until)}` : f.statusText ? "• " + f.statusText : ""}</small></div>
       <div className="line" /><div className="right"><div className="big">{fmtT(best(g.arr), f.destination?.tz)}</div><small className="muted">{f.destination?.iata}{(g.arr as any).estimatedOnly && " • est."}</small></div></div>
   </div>;
@@ -158,6 +162,21 @@ function SearchView({ x, push, setFlights, close }: any) {
 }
 
 function Stat({ label, v }: { label: string; v: ReactNode }) { return <div><label>{label}</label><b>{v}</b></div>; }
+function WhySheet({ f, close }: any) {
+  const [p, setP] = useState<any>(null); useEffect(() => { api(`/predict/${f.number}?date=${f.date || today()}`).then(setP).catch(e => setP({ error: e.message })); }, [f.number]);
+  return <><motion.div className="whyback" initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={close} />
+    <motion.div className="whysheet" initial={{ y: 400 }} animate={{ y: 0 }} transition={{ type: "spring", damping: 28, stiffness: 320 }} drag="y" dragConstraints={{ top: 0, bottom: 0 }} dragElastic={{ top: 0.05, bottom: 0.6 }} onDragEnd={(_, i) => { if (i.offset.y > 120) close(); }}>
+      <div className="grabber" /><div className="row between"><h3>✦ Why {f.number} might be late</h3><span className="faint sm">Estimate</span></div>
+      {!p ? <div className="skel" style={{ height: 120 }} /> : p.error ? <div className="note warn">{p.error}</div> : <>
+        <div className="psum">{p.summary}</div><Factors list={p.factors || []} /><div className="faint sm mt8">ⓘ {p.confidenceNote} Prediction from real inputs only — not observed data.</div></>}
+    </motion.div></>;
+}
+function Factors({ list }: { list: any[] }) {
+  const col: any = { high: "var(--red)", med: "var(--orange)", low: "var(--muted)", good: "var(--green)" };
+  return <div className="factors"><div className="flab">WHY — ranked by impact</div>{list.map((x: any, i: number) => <div key={i} className="factor" style={{ ["--sev" as any]: col[x.sev] }}>
+    <div className="fic">{x.icon}</div><div className="grow"><b>{x.title}</b><div className="muted sm">{x.text}</div></div>
+    <div className="fimp" style={{ color: col[x.sev] }}>{x.impact > 0 ? `+${x.impact}m` : x.impact < 0 ? `${x.impact}m` : "±0"}</div></div>)}</div>;
+}
 function Prediction({ f }: { f: Flight }) {
   const [p, setP] = useState<any>(null); const [err, setErr] = useState("");
   useEffect(() => { if (!f.example) api(`/predict/${f.number}?date=${f.date}`).then(setP).catch(e => setErr(e.message)); }, [f.id, f.statusText]);
@@ -171,7 +190,9 @@ function Prediction({ f }: { f: Flight }) {
       <line x1="60" y1="64" x2="60" y2="22" stroke="var(--text)" strokeWidth="3" strokeLinecap="round" transform={`rotate(${ang} 60 64)`} /><circle cx="60" cy="64" r="5" fill="var(--text)" /></svg>
       <div><div className="big" style={{ color: lateColor(d) }}>{p.cancelled ? "Cancelled" : d >= 5 ? `+${d}m` : "On time"}</div><div className="muted sm">{p.range && `likely ${p.range[0]}m to +${p.range[1]}m`}</div></div></div>
     {bars.map(([l, v, c]: any) => <div key={l} className="bar"><span>{l}</span><div><i style={{ width: `${v}%`, background: c }} /></div><b>{v}%</b></div>)}
-    <ul className="reasons">{p.reasons.map((r: string) => <li key={r}>{r}</li>)}</ul>
+    {p.summary && <div className="psum">{p.summary}</div>}
+    <Factors list={p.factors || []} />
+    {p.confidenceNote && <div className="faint sm mt8">ⓘ {p.confidenceNote}</div>}
     <div className="explain">{p.explanation?.text}<div className="faint sm">{p.explanation?.by === "llm" ? "Written by your LLM from the model's features" : "Template explanation (add an LLM key in Settings for AI-written text)"}</div></div></div>;
 }
 
@@ -240,8 +261,11 @@ function TimeBlock({ dir, a, t, d, badge, est }: any) {
 function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => void }) {
   const t = dir === "dep" ? f.dep : f.arr; const a = dir === "dep" ? f.destination : f.origin; const d = delay(t); const tz = (dir === "dep" ? f.origin : f.destination)?.tz;
   const st = f.status === "cancelled" ? ["Cancelled", "var(--red)"] : f.status === "landed" ? ["Landed " + (t.actual ? fmtT(t.actual, tz) : ""), "var(--green)"] : f.status === "departed" ? ["Departed " + lateLabel(d), lateColor(d)] : [lateLabel(d) || f.statusText || "Scheduled", lateColor(d)];
-  return <div className="brow" onClick={onClick}><div className="bt">{d != null && Math.abs(d) >= 5 ? <><s>{fmtT(t.scheduled, tz)}</s><b style={{ color: lateColor(d) }}>{fmtT(t.actual || t.estimated, tz)}</b></> : <b>{fmtT(t.scheduled, tz)}</b>}</div>
-    <div className="grow"><b>{a?.city || a?.name || a?.iata}</b><div className="sm" style={{ color: st[1] }}>● {st[0]}{f.pred && f.pred.d >= 10 && f.status !== "cancelled" && <span className="aibadge sm"> AI +{f.pred.d}m</span>}</div></div>
+  if (f.liveOnly) return <div className="brow press" onClick={onClick}><div className="bt"><span className="livedot" /><span className="faint sm">LIVE</span></div>
+    <div className="grow"><b>{a?.city || a?.name || a?.iata || "Route unknown"}</b><div className="sm" style={{ color: f.status === "approaching" || f.status === "departed" ? "var(--blue)" : "var(--green)" }}>● {f.statusText}</div></div>
+    <div className="right"><b>{f.number}</b><div className="faint sm">{f.aircraft?.type || ""} {f.live?.alt && f.live.alt !== "ground" ? `${Math.round(f.live.alt / 100) * 100}ft` : ""}</div></div></div>;
+  return <div className="brow press" onClick={onClick}><div className="bt">{d != null && Math.abs(d) >= 5 ? <><s>{fmtT(t.scheduled, tz)}</s><b style={{ color: lateColor(d) }}>{fmtT(t.actual || t.estimated, tz)}</b></> : <b>{fmtT(t.scheduled, tz)}</b>}</div>
+    <div className="grow"><b>{a?.city || a?.name || a?.iata}</b><div className="sm" style={{ color: st[1] }}>● {st[0]}{f.pred && f.pred.d >= 10 && f.status !== "cancelled" && <span className="aibadge sm" onClick={e => { e.stopPropagation(); (window as any).__why?.(f); }}> AI +{f.pred.d}m{f.pred.top ? ` · ${f.pred.top.icon}` : ""}</span>}</div></div>
     <div className="right"><b>{f.number.replace(/^([A-Z0-9]{2})/, "$1 ")}</b><div className="faint sm">{t.gate || ""}</div></div></div>;
 }
 function Board({ iata, x, push }: any) {
@@ -249,7 +273,7 @@ function Board({ iata, x, push }: any) {
   useEffect(() => { setD(null); api(`/board/${iata}?dir=${dir}&date=${date}`).then(setD).catch(e => setD({ error: e.message, needsKey: e.needsKey })); }, [iata, dir, date]);
   const ap = d?.airport; const [, tick] = useState(0); useEffect(() => { const t = setInterval(() => tick(n => n + 1), 30e3); return () => clearInterval(t); }, []);
   const list = (d?.flights || []).filter((f: any) => (!airline || f.airline?.iata === airline) && (!q || JSON.stringify([f.number, f.destination?.city, f.origin?.city]).toLowerCase().includes(q.toLowerCase())))
-    .sort((a: any, b: any) => ((dir === "dep" ? a.dep : a.arr).scheduled < (dir === "dep" ? b.dep : b.arr).scheduled ? -1 : 1));
+    .sort((a: any, b: any) => a.liveOnly ? 0 : ((dir === "dep" ? a.dep : a.arr).scheduled < (dir === "dep" ? b.dep : b.arr).scheduled ? -1 : 1));
   const nowIdx = list.findIndex((f: any) => +new Date((dir === "dep" ? f.dep : f.arr).scheduled) > Date.now() - 30 * 60e3);
   useEffect(() => { if (nowIdx > 0 && date === today()) setTimeout(() => document.getElementById("brow-now")?.scrollIntoView({ block: "start" }), 50); }, [d]);
   const airlines = [...new Set((d?.flights || []).map((f: any) => f.airline?.iata))].filter(Boolean) as string[];
@@ -261,6 +285,8 @@ function Board({ iata, x, push }: any) {
     <div className="px"><input className="field" placeholder="Filter city or flight" value={q} onChange={e => setQ(e.target.value)} /></div>
     {!d && <div className="note">Loading live board…</div>}
     {d?.error && <div className="note warn">{d.needsKey ? `Free real-time boards are available for MAN, STN and EMA. For ${iata}, add a free AeroDataBox key in Settings.` : d.error}</div>}
+    {d?.liveOnly && <div className="note live-note"><b>Live traffic only</b> — derived from real ADS-B positions near {iata} (adsb.lol / adsb.fi) with adsbdb routes. Times & delays need schedules: add a free AeroDataBox key in Settings.{date !== today() && " Live traffic is only available for today."}</div>}
+    {d?.liveOnly && d.flights?.length === 0 && date === today() && <div className="empty"><div className="emo">📡</div><b>No aircraft moving right now</b><div className="muted sm">Nothing on the ground or climbing/descending within 30 nm in the last minute.</div></div>}
     {d?.flights && <div className="faint sm px">Source: {d.source} • AI badges are predictions</div>}
     <div className="board">{list.map((f: any, i: number) => <div key={f.id + i} id={i === nowIdx ? "brow-now" : undefined}><BoardRow f={f} dir={dir} onClick={() => push({ t: "flight", f: { ...f, date } })} /></div>)}</div></>;
 }
@@ -287,8 +313,10 @@ function Disruptions({ x, push, seg }: any) {
       {sc(a.arr, "🛬")}{sc(a.dep, "🛫")}</div>)}
       {d && !A.length && <div className="faint sm">No airports with enough live data right now.</div>}</div>
     <div className="card"><div className="lg"><span className="sdot2 s0" />0.0–1.9<span className="muted">Good traffic flow</span></div><div className="lg"><span className="sdot2 s1" />2.0–3.4<span className="muted">Minor problems with some delays or few cancellations</span></div><div className="lg"><span className="sdot2 s2" />3.5–5.0<span className="muted">Major problems with long delays and several cancelled flights</span></div></div>
+    {d?.liveOnly?.length ? <div className="card mt16"><div className="row between"><b>Live traffic elsewhere</b><span className="srcb live">ADS-B</span></div><div className="faint sm">Real aircraft moving at {d.liveOnly.length} more hubs right now. No delay score without schedules (add AeroDataBox key).</div>
+      {d.liveOnly.slice().sort((a: any, b: any) => (b.live.departing + b.live.arriving) - (a.live.departing + a.live.arriving)).slice(0, 15).map((r: any) => <div key={r.airport.iata} className="row between drow press" onClick={() => push({ t: "board", iata: r.airport.iata })}><div><b>{r.airport.city}</b> <span className="tag">{r.airport.iata}</span></div><div className="sm muted">↗ {r.live.departing} ↘ {r.live.arriving} • ⏸ {r.live.ground}</div></div>)}</div> : null}
     <div className="note">Skyline Disruption Index — our own score, not Flightradar24's. Arrivals and departures are scored separately from the last 4 hours of real flights: 5 × (45% cancellations, capped at 20% cancelled + 35% average delay, capped at 60m + 20% share over 30m late, capped at 50%). Weather: Open-Meteo. Refreshes every 10 min.
-      {d?.noData?.length ? <> No live board data for: {d.noData.join(", ")}{!d.keys?.aerodatabox && " — add a free AeroDataBox key in Settings to score them"}.</> : null}</div></>;
+      {d?.noData?.length ? <> No delay data (live ADS-B traffic only) for {d.noData.length} airports: {d.noData.join(", ")}{!d.keys?.aerodatabox && " — add a free AeroDataBox key in Settings to score them"}.</> : null}</div></>;
 }
 function AirportStatus({ x, push, flights, seg }: any) {
   const [region, setRegion] = useState("All"); const [d, setD] = useState<any>(null); const [fav, setFav] = useState<string[]>(() => JSON.parse(localStorage.getItem("sk.fav") || "[]"));
@@ -300,10 +328,10 @@ function AirportStatus({ x, push, flights, seg }: any) {
   const row = (a: any) => { const s = sev(a); return <div key={a.airport.iata} className="arow" onClick={() => push({ t: "board", iata: a.airport.iata })}><div className={"sdot s" + s}><i /><span>{a.airport.iata}</span></div>
     <div className="grow"><div className="row between"><b>{a.airport.name.replace(/ (International )?Airport$/, "")}</b><button className="star" onClick={e => { e.stopPropagation(); setFav(v => v.includes(a.airport.iata) ? v.filter(y => y !== a.airport.iata) : [...v, a.airport.iata]); }}>{I.star(fav.includes(a.airport.iata))}</button></div>
       {issues(a) && <div className={"sm " + (s === 2 ? "red" : "orange")}>{issues(a)}</div>}
-      {a.unavailable ? <div className="faint sm">Live stats need an AeroDataBox key</div> : <div className="grid3 st"><div><label>ON TIME</label><div>↗ {a.dep?.onTime ?? "–"}%</div><div>↘ {a.arr?.onTime ?? "–"}%</div></div><div><label>AVG. DELAY</label><div>{a.dep?.avgDelay ?? "–"}m</div><div>{a.arr?.avgDelay ?? "–"}m</div></div><div><label>CANCELED</label><div>{a.dep?.cancelled ?? 0}%</div><div>{a.arr?.cancelled ?? 0}%</div></div></div>}</div></div>; };
+      {a.unavailable ? (a.live ? <div><span className="srcb live">LIVE TRAFFIC</span><div className="grid3 st"><div><label>ON GROUND</label><div>{a.live.ground}</div></div><div><label>CLIMBING OUT</label><div>↗ {a.live.departing}</div></div><div><label>APPROACHING</label><div>↘ {a.live.arriving}</div></div></div><div className="faint sm">Real ADS-B counts • delays need an AeroDataBox key</div></div> : <div className="faint sm">Live traffic loading… • delay stats need an AeroDataBox key</div>) : <div className="grid3 st"><div><label>ON TIME</label><div>↗ {a.dep?.onTime ?? "–"}%</div><div>↘ {a.arr?.onTime ?? "–"}%</div></div><div><label>AVG. DELAY</label><div>{a.dep?.avgDelay ?? "–"}m</div><div>{a.arr?.avgDelay ?? "–"}m</div></div><div><label>CANCELED</label><div>{a.dep?.cancelled ?? 0}%</div><div>{a.arr?.cancelled ?? 0}%</div></div></div>}</div></div>; };
   const A = d?.airports || []; const favs = A.filter((a: any) => fav.includes(a.airport.iata) || mine.has(a.airport.iata));
   return <><Head title="Airports" right={<><RoundBtn onClick={() => navigator.share?.({ title: "Airport delays", url: location.href })}>{I.share}</RoundBtn>{x}</>} />{seg}
-    <div className="chips"><span className="chip plain">Now ⌄</span>{["All", "Europe", "North America", "Asia", "Oceania", "Africa"].map(r => <button key={r} className={"chip" + (region === r ? " on" : " plain")} onClick={() => setRegion(r)}>{r}</button>)}</div>
+    <div className="chips"><span className="chip plain">Now ⌄</span>{["All", "Europe", "North America", "Asia", "Oceania", "Africa", "South America"].map(r => <button key={r} className={"chip" + (region === r ? " on" : " plain")} onClick={() => setRegion(r)}>{r}</button>)}</div>
     <div className="px"><b>For You</b><div className="muted sm">Favorites and airports from your active flights</div>{!favs.length && <div className="faint">No Favorites – Tap ★ in an airport to favorite</div>}</div>{favs.map(row)}
     {!d && <div className="note">Loading…</div>}
     {[[2, "Major Issues"], [1, "Minor Issues"], [0, "Normal Operations"], [-1, "No free live data"]].map(([s, l]) => { const L = A.filter((a: any) => sev(a) === s); return L.length ? <div key={l}><h4 className="px">{l}</h4>{L.map(row)}</div> : null; })}

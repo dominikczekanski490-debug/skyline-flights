@@ -164,24 +164,50 @@ api.post("/settings", (req, res) => {
 api.get("/airports/search", (req, res) => { const q = String(req.query.q || "").toLowerCase(); if (!q) return res.json([]);
   const out = []; for (const a of Object.values(AP)) { const s = `${a.iata} ${a.icao} ${a.name} ${a.city}`.toLowerCase(); if (a.iata.toLowerCase() === q) out.unshift(a); else if (s.includes(q)) out.push(a); if (out.length > 40) break; }
   res.json(out.slice(0, 15).map(airportOut)); });
-api.get("/airport/:iata", (req, res) => { const a = AP[req.params.iata.toUpperCase()]; a ? res.json({ ...airportOut(a), boardSource: MAG_SITES[a.iata] ? "official" : cfg.aerodataboxKey ? "aerodatabox" : "none" }) : res.status(404).json({ error: "unknown airport" }); });
+api.get("/airport/:iata", (req, res) => { const a = AP[req.params.iata.toUpperCase()]; a ? res.json({ ...airportOut(a), boardSource: MAG_SITES[a.iata] ? "official" : cfg.aerodataboxKey ? "aerodatabox" : "live" }) : res.status(404).json({ error: "unknown airport" }); });
 api.get("/airline/:code", (req, res) => res.json(airlineOut(req.params.code.toUpperCase())));
+
+
+// ---- Worldwide live-traffic board (real ADS-B, no schedules) ----
+let adsbQ = Promise.resolve(); const adsbGate = fn => { const r = adsbQ.then(fn, fn); adsbQ = r.catch(() => {}).then(() => new Promise(z => setTimeout(z, 350))); return r; };
+const nearAir = (a, nm = 30) => cached(`near:${a.iata}:${nm}`, 60, () => adsbGate(async () => { for (const u of [`https://api.adsb.lol/v2/point/${a.lat}/${a.lon}/${nm}`, `https://opendata.adsb.fi/api/v2/lat/${a.lat}/lon/${a.lon}/dist/${nm}`]) { try { const r = await getJSON(u); if (r.ac || r.aircraft) return { ac: r.ac || r.aircraft, src: u.includes("lol") ? "adsb.lol" : "adsb.fi" }; } catch {} } throw new Error("no ADS-B source"); }));
+const routeCs = cs => cached("adsbdb:" + cs, 86400, async () => { try { return (await getJSON(`https://api.adsbdb.com/v0/callsign/${cs}`)).response?.flightroute || null; } catch { return null; } });
+const kmTo = (a, lat, lon) => { const R = 6371, r = x => x * Math.PI / 180, dl = r(lat - a.lat), dn = r(lon - a.lon); return 2 * R * Math.asin(Math.sqrt(Math.sin(dl / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(lat)) * Math.sin(dn / 2) ** 2)); };
+function classify(a, x) { const cs = (x.flight || "").trim(); if (!cs || x.lat == null) return null; const gnd = x.alt_baro === "ground" || (x.gs != null && x.gs < 40 && (x.alt_baro ?? 99999) < 1500 + (a.alt || 0));
+  const alt = typeof x.alt_baro === "number" ? x.alt_baro : 0, vs = x.baro_rate ?? x.geom_rate ?? 0, km = kmTo(a, x.lat, x.lon);
+  if (gnd) return km < 6 ? { cs, phase: "ground", km } : null;
+  if (alt < 14000 && vs > 300) return { cs, phase: "departed", km }; if (alt < 14000 && vs < -300) return { cs, phase: "approaching", km }; return null; }
+async function liveBoard(iata, dir) { const a = AP[iata]; if (!a) throw new Error("unknown airport");
+  return cached(`liveboard:${iata}:${dir}`, 90, async () => { const { ac, src } = await nearAir(a); const out = [];
+    const cl = ac.map(x => [x, classify(a, x)]).filter(([, c]) => c).slice(0, 60);
+    for (const [x, c] of cl) { const rt = await routeCs(c.cs); const o = rt?.origin?.iata_code, d = rt?.destination?.iata_code;
+      let side = rt ? (o === iata ? "dep" : d === iata ? "arr" : null) : (c.phase === "departed" ? "dep" : c.phase === "approaching" ? "arr" : null);
+      if (rt && !side) continue; if (!side && c.phase === "ground") continue; if (side !== dir) continue;
+      const num = rt?.airline?.iata && rt.callsign_iata ? rt.callsign_iata : c.cs;
+      out.push({ id: `${num}-live`, number: num, callsign: c.cs, airline: airlineOut(rt?.airline?.iata || num.slice(0, 2)), origin: o ? airportOut(AP[o]) || { iata: o } : null, destination: d ? airportOut(AP[d]) || { iata: d } : null, dep: {}, arr: {},
+        status: c.phase === "ground" ? (dir === "dep" ? "on ground" : "landed") : c.phase === "departed" ? "departed" : "approaching", statusText: { ground: dir === "dep" ? "On ground — taxiing / at stand" : "Landed — on ground", departed: "Just departed (climbing)", approaching: `Approaching — ${Math.round(c.km)} km out` }[c.phase],
+        aircraft: { reg: x.r, type: x.t }, live: { lat: x.lat, lon: x.lon, alt: x.alt_baro, gs: x.gs, track: x.track, hex: x.hex, src }, liveOnly: true, source: src + (rt ? " + adsbdb route" : "") }); }
+    return out; }); }
+async function liveCounts(iata) { const a = AP[iata]; const { ac } = await nearAir(a); const c = ac.map(x => classify(a, x)).filter(Boolean);
+  return { ground: c.filter(x => x.phase === "ground").length, departing: c.filter(x => x.phase === "departed").length, arriving: c.filter(x => x.phase === "approaching").length, airborneNearby: ac.filter(x => x.alt_baro !== "ground").length }; }
 
 async function board(iata, dir, ymd) {
   if (MAG_SITES[iata]) return { flights: await magBoard(iata, dir, ymd), source: `${iata} Airport official flight info` };
+  const liveOnly = async () => ({ flights: ymd === todayLondon() ? await liveBoard(iata, dir) : [], source: "Live traffic only (ADS-B) — add AeroDataBox key for schedules", liveOnly: true });
+  if (!cfg.aerodataboxKey) return liveOnly();
   const d = londonDay(ymd); const out = [];
-  for (const [a, b] of [[0, 12], [12, 24]]) {
+  try { for (const [a, b] of [[0, 12], [12, 24]]) {
     const f = new Date(+new Date(d.start) + a * 3600e3).toISOString().slice(0, 16), t = new Date(+new Date(d.start) + b * 3600e3 - 60e3).toISOString().slice(0, 16);
     const r = await adb(`/flights/airports/iata/${iata}/${f}/${t}?direction=${dir === "dep" ? "Departure" : "Arrival"}&withCodeshared=false&withCancelled=true&withLeg=true`, ymd < todayLondon() ? 21600 : 120);
     out.push(...(r[dir === "dep" ? "departures" : "arrivals"] || []).map(normAdb));
-  }
+  } } catch { return liveOnly(); }
   return { flights: out, source: "AeroDataBox" };
 }
 api.get("/board/:iata", wrap(async (req, res) => { const iata = req.params.iata.toUpperCase(); const dir = req.query.dir === "arr" ? "arr" : "dep";
   const b = await board(iata, dir, String(req.query.date || todayLondon())); const a = AP[iata];
   const [wx, st] = await Promise.all([a ? wxCached(a.lat, a.lon).catch(() => null) : null, dir === "dep" ? boardStats(iata) : null]);
   for (const f of b.flights) { if (["landed", "departed", "cancelled"].includes(f.status)) continue; const t = dir === "dep" ? f.dep.scheduled : f.arr.scheduled;
-    const p = predictCore(f, dir === "dep" ? { wxDep: wxAt(wx, t), aptStats: st } : { wxArr: wxAt(wx, t) }); f.pred = { d: p.predictedDelay, on: p.probs.onTime, c: p.confidence }; }
+    const p = predictCore(f, dir === "dep" ? { wxDep: wxAt(wx, t), aptStats: st } : { wxArr: wxAt(wx, t) }); f.pred = { d: p.predictedDelay, on: p.probs.onTime, c: p.confidence, top: p.top, summary: p.summary, factors: p.factors.slice(0, 4) }; }
   res.json({ airport: airportOut(a), dir, ...b }); }));
 
 async function findFlight(number, ymd) {
@@ -239,38 +265,52 @@ const wxCached = (lat, lon) => cached(`wxp:${(+lat).toFixed(1)}:${(+lon).toFixed
 function wxAt(wx, iso) { if (!wx?.hourly || !iso) return null; const h = iso.slice(0, 13) + ":00"; const i = wx.hourly.time.indexOf(h); if (i < 0) return null;
   return { gust: wx.hourly.wind_gusts_10m[i], wind: wx.hourly.wind_speed_10m[i], vis: wx.hourly.visibility[i], precip: wx.hourly.precipitation[i], code: wx.hourly.weather_code[i] }; }
 const Phi = z => 1 / (1 + Math.exp(-1.702 * z)); // logistic approx of normal CDF
-function wxPenalty(w, where, R) { if (!w) return 0; let p = 0;
-  if (w.code >= 95) { p += 25; R.push(`Thunderstorms forecast at ${where}`); }
-  else if ([71, 73, 75, 77, 85, 86].includes(w.code)) { p += 18; R.push(`Snow forecast at ${where}`); }
-  if (w.gust >= 65) { p += 15; R.push(`Strong gusts ${Math.round(w.gust)} km/h at ${where}`); } else if (w.gust >= 45) { p += 6; R.push(`Gusty winds ${Math.round(w.gust)} km/h at ${where}`); }
-  if (w.vis != null && w.vis < 1000) { p += 12; R.push(`Low visibility (${Math.round(w.vis)} m) at ${where}`); } else if (w.vis != null && w.vis < 3000) { p += 4; R.push(`Reduced visibility at ${where}`); }
-  if (w.precip >= 4) { p += 4; R.push(`Heavy rain at ${where}`); }
-  return p; }
+function wxFactors(w, where) { const out = []; if (!w) return out; const add = (p, icon, title, text) => out.push({ p, icon, title, text });
+  if (w.code >= 95) add(25, "⛈️", `Thunderstorms at ${where}`, `Forecast storms (WMO code ${w.code}) often cause ground stops and rerouting.`);
+  else if ([71, 73, 75, 77, 85, 86].includes(w.code)) add(18, "❄️", `Snow at ${where}`, "Snow means de-icing queues and reduced runway capacity.");
+  if (w.gust >= 65) add(15, "💨", `Strong gusts at ${where}`, `Gusts of ${Math.round(w.gust)} km/h reduce landing rates and can force go-arounds.`);
+  else if (w.gust >= 45) add(6, "💨", `Gusty wind at ${where}`, `Gusts of ${Math.round(w.gust)} km/h can slow arrival spacing.`);
+  if (w.vis != null && w.vis < 1000) add(12, "🌫️", `Fog / low visibility at ${where}`, `Visibility ${Math.round(w.vis)} m triggers low-visibility procedures with wider spacing.`);
+  else if (w.vis != null && w.vis < 3000) add(4, "🌫️", `Reduced visibility at ${where}`, `Visibility around ${Math.round(w.vis / 100) / 10} km.`);
+  if (w.precip >= 4) add(4, "🌧️", `Heavy rain at ${where}`, `${w.precip} mm/h forecast — slower ground handling.`);
+  return out; }
+function wxPenalty(w, where, R) { return wxFactors(w, where).reduce((a, x) => (R.push(x.title), a + x.p), 0); }
 function predictCore(f, ctx) {
-  const R = [], signals = []; let mu = 6, w0 = 1; // prior: typical European short-haul mean delay ~6 min
+  const F = [], signals = []; let mu = 6, w0 = 1; // prior: typical short-haul mean delay ~6 min
+  const step = (fn, icon, title, text, kind) => { const before = mu; fn(); const impact = Math.round(mu - before); F.push({ icon, title, text, impact, kind }); };
   const hist = Object.values(HIST[f.number] || {}).filter(x => x.d != null);
-  if (hist.length >= 3) { const m = hist.reduce((a, x) => a + Math.max(-10, Math.min(180, x.d)), 0) / hist.length; const w = Math.min(hist.length, 20) / 6;
-    mu = (mu * w0 + m * w) / (w0 + w); w0 += w; signals.push("history"); R.push(`${f.number} averaged ${Math.round(m)}m vs schedule over ${hist.length} recorded flights`); }
-  const st = ctx.aptStats; if (st?.avgDelay != null && st.n >= 5) { const w = 1.2; mu = (mu * w0 + st.avgDelay * w) / (w0 + w); w0 += w; signals.push("airport");
-    if (st.avgDelay >= 20) R.push(`${f.origin?.iata} departures currently running ~${st.avgDelay}m late (${st.onTime}% on time, last 4h)`); else R.push(`${f.origin?.iata} operating normally (${st.onTime}% on time, last 4h)`); }
+  if (hist.length >= 3) { const m = hist.reduce((a, x) => a + Math.max(-10, Math.min(180, x.d)), 0) / hist.length; const w = Math.min(hist.length, 20) / 6; signals.push("history");
+    step(() => { mu = (mu * w0 + m * w) / (w0 + w); w0 += w; }, "📊", `Route history: ${m >= 0 ? "+" : ""}${Math.round(m)}m average`, `${f.number} averaged ${Math.round(m)} min vs schedule across ${hist.length} flights Skyline has recorded (up to 60 days).`, "history"); }
+  const st = ctx.aptStats; if (st?.avgDelay != null && st.n >= 5) { const w = 1.2; signals.push("airport");
+    step(() => { mu = (mu * w0 + st.avgDelay * w) / (w0 + w); w0 += w; }, st.avgDelay >= 20 ? "🚦" : "🛫", st.avgDelay >= 20 ? `${f.origin?.iata} congested right now` : `${f.origin?.iata} running normally`, `Departures over the last 4 h: average ${st.avgDelay} min late, ${st.onTime}% on time, ${st.cancelled || 0}% cancelled (${st.n} flights, live board).`, "airport"); }
   const sd = f.dep?.scheduled; const loc = sd ? new Date(new Date(sd).toLocaleString("en-US", { timeZone: f.origin?.tz || "Europe/London" })) : null;
   if (loc) { const h = loc.getHours(), d = loc.getDay();
-    if (h >= 17) { mu += 5; R.push("Evening departure — delays tend to accumulate through the day"); } else if (h < 8) { mu -= 3; R.push("Early-morning departure — usually first rotation of the day"); }
-    if (d === 5 || d === 0) { mu += 2; } }
-  let wxp = wxPenalty(ctx.wxDep, f.origin?.iata || "departure", R) + wxPenalty(ctx.wxArr, f.destination?.iata || "arrival", R) * 0.7; if (ctx.wxDep || ctx.wxArr) signals.push("weather"); mu += wxp;
+    if (h >= 17) step(() => { mu += 5; }, "🌆", "Evening departure bank", `Departs ${String(h).padStart(2, "0")}:00 local — knock-on delays build up through the day.`, "time");
+    else if (h < 8) step(() => { mu -= 3; }, "🌅", "First wave of the day", "Early departures usually use aircraft that night-stopped, so less knock-on delay.", "time");
+    if (d === 5 || d === 0) step(() => { mu += 2; }, "📅", d === 5 ? "Friday peak" : "Sunday peak", "Busier leisure days carry slightly more delay.", "time");
+    if (h >= 22 || h < 1) F.push({ icon: "🌙", title: "Near night curfew window", text: "Many airports restrict late movements — big delays risk cancellation rather than late departure.", impact: 0, kind: "curfew" }); }
+  let wxp = 0; for (const [w, where, k] of [[ctx.wxDep, f.origin?.iata || "departure", 1], [ctx.wxArr, f.destination?.iata || "arrival", 0.7]]) for (const x of wxFactors(w, where)) { wxp += x.p * k; step(() => { mu += x.p * k; }, x.icon, x.title, x.text + (k < 1 ? " (arrival-side, weighted 70%)" : ""), "weather"); }
+  if (ctx.wxDep || ctx.wxArr) signals.push("weather");
+  if (wxp === 0 && (ctx.wxDep || ctx.wxArr)) F.push({ icon: "☀️", title: "Weather looks fine", text: "No storms, strong gusts, fog or snow forecast at departure/arrival time (Open-Meteo).", impact: 0, kind: "weather" });
   if (ctx.inbound) { const ib = ctx.inbound; const slack = (new Date(sd) - new Date(ib.eta)) / 60000 - 40; signals.push("inbound");
-    if (slack < 0) { mu = Math.max(mu, -slack + 3); R.push(`Inbound aircraft (${ib.number}) expected ${Math.round(-slack)}m after minimum turnaround`); } else R.push(`Inbound aircraft (${ib.number}) on track with ${Math.round(slack)}m buffer`); }
-  // official estimated/actual time from the airport/airline is a strong real signal
-  const off = f.dep?.actual || f.dep?.estimated; if (off && sd) { const d = (new Date(off) - new Date(sd)) / 60000; signals.push("official"); mu = d + Math.max(0, mu - d) * 0.25; R.unshift(`Airport currently shows ${d >= 5 ? Math.round(d) + "m late" : "on time"} departure`); }
-  if (["cancelled"].includes(f.status)) return { cancelled: true, predictedDelay: null, probs: { onTime: 0, late15: 0, late45: 0, cancel: 100, divert: 0 }, confidence: "high", reasons: ["Flight is shown as cancelled by the airport"] };
+    if (slack < 0) step(() => { mu = Math.max(mu, -slack + 3); }, "🔁", `Inbound ${ib.number} running late`, `The aircraft operating this flight is due in ${Math.round(-slack)} min after the ~40 min minimum turnaround allows.`, "inbound");
+    else F.push({ icon: "🔁", title: `Inbound ${ib.number} on time`, text: `Aircraft due with ${Math.round(slack)} min spare beyond a ~40 min turnaround.`, impact: 0, kind: "inbound" }); }
+  const off = f.dep?.actual || f.dep?.estimated; if (off && sd) { const d = (new Date(off) - new Date(sd)) / 60000; signals.push("official");
+    step(() => { mu = d + Math.max(0, mu - d) * 0.25; }, "🏢", d >= 5 ? `Airport already shows +${Math.round(d)}m` : "Airport shows on time", `The ${f.dep?.actual ? "actual" : "estimated"} departure time published by the airline/airport is the strongest signal; other factors only add a little on top.`, "official"); }
+  if (["cancelled"].includes(f.status)) return { cancelled: true, predictedDelay: null, probs: { onTime: 0, late15: 0, late45: 0, cancel: 100, divert: 0 }, confidence: "high", reasons: ["Flight is shown as cancelled by the airport"], factors: [{ icon: "⛔", title: "Cancelled", text: "Shown as cancelled by the airport.", impact: 0, sev: "high" }], summary: "Shown as cancelled by the airport." };
   const sigma = signals.includes("official") ? 8 : 14 + Math.max(0, mu) * 0.4;
   const pc = Math.min(40, 1 + (st?.cancelled || 0) * 0.6 + (wxp >= 20 ? 6 : wxp >= 10 ? 2 : 0)), pd = Math.min(10, 0.3 + (wxp >= 20 ? 2 : 0));
   const live = (100 - pc - pd) / 100; const p15 = 1 - Phi((15 - mu) / sigma), p45 = 1 - Phi((45 - mu) / sigma);
   const conf = signals.includes("official") ? "high" : signals.length >= 3 ? "medium" : "low";
-  if (!R.length) R.push("No unusual signals — based on typical delay for this kind of flight");
-  return { predictedDelay: Math.round(Math.max(-10, mu)), range: [Math.round(Math.max(-15, mu - sigma)), Math.round(mu + sigma * 1.3)],
+  const factors = F.map(x => ({ ...x, sev: x.impact >= 15 ? "high" : x.impact >= 5 ? "med" : x.impact <= -2 ? "good" : "low" })).sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
+  if (!factors.length) factors.push({ icon: "✈️", title: "No unusual signals", text: "Based on the typical delay for a flight like this (~6 min prior).", impact: 0, sev: "low", kind: "prior" });
+  const pdl = Math.round(Math.max(-10, mu)), lo = Math.max(0, Math.round(mu - sigma * 0.5)), hi = Math.round(mu + sigma * 0.7);
+  const drivers = factors.filter(x => x.impact > 0).slice(0, 2).map(x => /^[A-Z]{3}\b/.test(x.title) ? x.title : x.title[0].toLowerCase() + x.title.slice(1));
+  const summary = pdl >= 10 ? `Likely ${lo}–${hi}m late${drivers.length ? " mainly because of " + drivers.join(" and ") : ""}.` : pdl >= 5 ? `Possibly a few minutes late${drivers.length ? " — " + drivers[0] : ""}.` : `Likely on time${factors.find(x => x.impact < 0) ? " — " + factors.find(x => x.impact < 0).title : ""}.`;
+  const confNote = { high: "High confidence — the airport is already publishing a revised time.", medium: `Medium confidence — ${signals.length} independent real signals (${signals.join(", ")}).`, low: `Low confidence — only ${signals.length ? signals.join(", ") : "the base rate"} available${cfg.aerodataboxKey ? "" : "; an AeroDataBox key adds inbound-aircraft data"}.` }[conf];
+  return { predictedDelay: pdl, range: [Math.round(Math.max(-15, mu - sigma)), Math.round(mu + sigma * 1.3)],
     probs: { onTime: Math.round((1 - p15) * live * 100), late15: Math.round(p15 * live * 100), late45: Math.round(p45 * live * 100), cancel: Math.round(pc * 10) / 10, divert: Math.round(pd * 10) / 10 },
-    confidence: conf, signals, reasons: R.slice(0, 6), model: "skyline-weighted-v1", label: "Prediction (estimate) — not observed data" };
+    confidence: conf, confidenceNote: confNote, signals, factors: factors.slice(0, 8), summary, top: factors[0] ? { icon: factors[0].icon, title: factors[0].title } : null, reasons: factors.slice(0, 6).map(x => x.title), model: "skyline-weighted-v2", label: "Prediction (estimate) — not observed data" };
 }
 async function boardStats(iata) { if (!MAG_SITES[iata]) return null; try { return statsFrom(await magBoard(iata, "dep", todayLondon())); } catch { return null; } }
 async function predictFull(number, ymd) {
@@ -285,7 +325,7 @@ async function predictFull(number, ymd) {
   return { number: f.number, date: ymd, ...p };
 }
 async function explain(f, p) {
-  const tpl = p.cancelled ? `${f.number} is shown as cancelled.` : `Skyline estimates ${f.number} ${f.origin?.iata}→${f.destination?.iata} will be ${p.predictedDelay >= 5 ? "about " + p.predictedDelay + " minutes late" : "roughly on time"} (likely range ${p.range[0]} to ${p.range[1]} min), with a ${p.probs.onTime}% chance of arriving within 15 minutes of schedule. Main factors: ${p.reasons.slice(0, 2).join("; ").toLowerCase()}. Confidence is ${p.confidence}.`;
+  const tpl = p.cancelled ? `${f.number} is shown as cancelled.` : `Skyline estimates ${f.number} ${f.origin?.iata}→${f.destination?.iata} will be ${p.predictedDelay >= 5 ? "about " + p.predictedDelay + " minutes late" : "roughly on time"} (likely range ${p.range[0]} to ${p.range[1]} min), with a ${p.probs.onTime}% chance of arriving within 15 minutes of schedule. ${p.summary || ""} Confidence is ${p.confidence}.`;
   if (!cfg.llmKey) return { text: tpl, by: "template" };
   return cached(`llm:${f.id}:${p.predictedDelay}:${p.reasons.join("|")}`, 1800, async () => {
     const r = await getJSON((cfg.llmBase || "https://api.x.ai/v1").replace(/\/$/, "") + "/chat/completions", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + cfg.llmKey },
@@ -296,20 +336,21 @@ async function explain(f, p) {
 api.get("/predict/:number", wrap(async (req, res) => res.json(await predictFull(req.params.number, String(req.query.date || todayLondon())))));
 
 // airport status overview
-const STATUS_AIRPORTS = { Europe: ["MAN", "LHR", "LGW", "STN", "EMA", "DUB", "AMS", "CDG", "FRA", "MAD", "BCN", "FCO", "IST", "ATH", "PMI", "AGP", "LIS", "MUC", "ZRH", "CPH"], "North America": ["JFK", "LAX", "ORD", "ATL", "DFW", "DEN", "SFO", "YYZ", "MIA", "SEA"], Asia: ["DXB", "DOH", "SIN", "HND", "HKG", "ICN", "BKK", "DEL", "JED", "PEK"], Oceania: ["SYD", "MEL", "AKL"], Africa: ["JNB", "CAI", "ADD", "CMN"] };
+const STATUS_AIRPORTS = { Europe: ["MAN", "LHR", "LGW", "STN", "EMA", "BHX", "EDI", "GLA", "BRS", "DUB", "AMS", "CDG", "ORY", "FRA", "MUC", "BER", "DUS", "HAM", "MAD", "BCN", "PMI", "AGP", "ALC", "LIS", "OPO", "FCO", "MXP", "VCE", "ZRH", "GVA", "VIE", "BRU", "CPH", "OSL", "ARN", "HEL", "WAW", "PRG", "BUD", "ATH", "IST", "SAW", "LPA", "TFS"], "North America": ["JFK", "EWR", "LGA", "BOS", "IAD", "ATL", "MCO", "MIA", "ORD", "DFW", "IAH", "DEN", "PHX", "LAS", "LAX", "SFO", "SEA", "YYZ", "YVR", "YUL", "MEX", "CUN"], Asia: ["DXB", "AUH", "DOH", "RUH", "JED", "TLV", "DEL", "BOM", "SIN", "KUL", "BKK", "CGK", "MNL", "HKG", "TPE", "ICN", "HND", "NRT", "KIX", "PEK", "PVG", "CAN"], Oceania: ["SYD", "MEL", "BNE", "PER", "AKL"], Africa: ["JNB", "CPT", "CAI", "ADD", "NBO", "CMN", "LOS"], "South America": ["GRU", "GIG", "EZE", "SCL", "BOG", "LIM"] };
+const LIVEC = {}; (async function refreshLive() { for (const c of Object.values(STATUS_AIRPORTS).flat()) { if (!AP[c]) continue; try { LIVEC[c] = { ...(await liveCounts(c)), at: new Date().toISOString() }; } catch {} } setTimeout(refreshLive, 600e3); })();
 function statsFrom(list, now = Date.now()) {
   const recent = list.filter(f => { const t = new Date((f.dep.scheduled || f.arr.scheduled)); return t <= now && t > now - 4 * 3600e3; });
   const ds = recent.map(delayMin).filter(d => d != null && !Number.isNaN(d)); const canc = recent.filter(f => f.status === "cancelled").length;
   return { n: recent.length, onTime: ds.length ? Math.round(ds.filter(d => d < 15).length / ds.length * 100) : null, avgDelay: ds.length ? Math.max(0, Math.round(ds.reduce((a, c) => a + Math.max(0, c), 0) / ds.length)) : null, cancelled: recent.length ? Math.round(canc / recent.length * 100) : 0 };
 }
 api.get("/status", wrap(async (req, res) => {
-  const region = String(req.query.region || "All"); const codes = region === "All" ? Object.values(STATUS_AIRPORTS).flat() : STATUS_AIRPORTS[region] || [];
+  const region = String(req.query.region || "All"); const codes = (region === "All" ? Object.values(STATUS_AIRPORTS).flat() : STATUS_AIRPORTS[region] || []).filter(c => AP[c]);
   const out = await Promise.all(codes.map(async c => { const a = airportOut(AP[c]); const reg = Object.keys(STATUS_AIRPORTS).find(k => STATUS_AIRPORTS[k].includes(c));
     try {
       if (MAG_SITES[c]) { const ymd = todayLondon(); const [d, r] = await Promise.all([magBoard(c, "dep", ymd), magBoard(c, "arr", ymd)]); return { airport: a, region: reg, dep: statsFrom(d), arr: statsFrom(r), source: "official" }; }
       if (cfg.aerodataboxKey) { const x = await adb(`/airports/iata/${c}/delays`, 1800); const s = v => v && { onTime: null, avgDelay: Math.round((v.medianDelay ? parseMed(v.medianDelay) : 0)), cancelled: v.numTotal ? Math.round((v.numCancelled || 0) / v.numTotal * 100) : 0, n: v.numTotal, index: v.delayIndex };
         return { airport: a, region: reg, dep: s(x.departuresDelayInformation), arr: s(x.arrivalsDelayInformation), source: "AeroDataBox" }; }
-      return { airport: a, region: reg, unavailable: true };
+      return { airport: a, region: reg, unavailable: true, live: LIVEC[c] || null, source: "Live traffic only" };
     } catch (e) { return { airport: a, region: reg, unavailable: true, error: e.message }; } }));
   res.json({ airports: out, keys: { aerodatabox: !!cfg.aerodataboxKey } }); }));
 const parseMed = s => { const m = String(s).match(/(\d+):(\d+):(\d+)/); return m ? +m[1] * 60 + +m[2] : 0; };
@@ -329,7 +370,7 @@ function disruptFrom(list, now = Date.now()) {
 const wxNow = a => cached(`wxnow:${a.iata}`, 600, async () => { const j = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${a.lat}&longitude=${a.lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,weather_code,is_day&wind_speed_unit=kn`); const c = j.current || {};
   return { temp: c.temperature_2m, windKts: c.wind_speed_10m != null ? Math.round(c.wind_speed_10m) : null, windDir: c.wind_direction_10m, code: c.weather_code, isDay: c.is_day }; });
 api.get("/disruptions", wrap(async (req, res) => {
-  const out = await cached("disruptions:" + !!cfg.aerodataboxKey, 600, async () => { const codes = Object.values(STATUS_AIRPORTS).flat();
+  const out = await cached("disruptions:" + !!cfg.aerodataboxKey + ":" + Object.keys(LIVEC).length, 600, async () => { const codes = Object.values(STATUS_AIRPORTS).flat().filter(c => AP[c]);
     const rows = await Promise.all(codes.map(async c => { const ap = AP[c]; if (!ap) return null; const a = airportOut(ap); let wx = null; try { wx = await wxNow(ap); } catch {}
       try {
         if (MAG_SITES[c]) { const ymd = todayLondon(); const [d, r] = await Promise.all([magBoard(c, "dep", ymd), magBoard(c, "arr", ymd)]); return { airport: a, wx, dep: disruptFrom(d), arr: disruptFrom(r), source: "Official airport board" }; }
@@ -337,9 +378,9 @@ api.get("/disruptions", wrap(async (req, res) => {
             return { n: v.numTotal, score: Math.round(50 * (0.45 * Math.min(canc / 0.2, 1) + 0.35 * Math.min(avg / 60, 1) + 0.2 * Math.min(l30 / 0.5, 1))) / 10, cancelledPct: Math.round(canc * 100), avgDelay: avg }; };
           return { airport: a, wx, dep: s(x.departuresDelayInformation), arr: s(x.arrivalsDelayInformation), source: "AeroDataBox" }; }
       } catch {}
-      return { airport: a, wx, dep: { score: null }, arr: { score: null }, noData: true }; }));
+      return { airport: a, wx, dep: { score: null }, arr: { score: null }, noData: true, live: LIVEC[c] || null, source: "Live traffic only" }; }));
     const R = rows.filter(Boolean), worst = r => Math.max(r.dep.score ?? -1, r.arr.score ?? -1);
-    return { updated: new Date().toISOString(), airports: R.filter(r => worst(r) >= 0).sort((a, b) => worst(b) - worst(a)), noData: R.filter(r => worst(r) < 0).map(r => r.airport.iata),
+    return { updated: new Date().toISOString(), airports: R.filter(r => worst(r) >= 0).sort((a, b) => worst(b) - worst(a)), noData: R.filter(r => worst(r) < 0).map(r => r.airport.iata), liveOnly: R.filter(r => worst(r) < 0 && r.live),
       formula: "Skyline Disruption Index (not Flightradar24): 5 × (0.45·min(cancelled/20%,1) + 0.35·min(avg delay/60m,1) + 0.20·min(share >30m late/50%,1)), last 4h, min 5 flights" }; });
   res.json({ ...out, keys: { aerodatabox: !!cfg.aerodataboxKey } }); }));
 
