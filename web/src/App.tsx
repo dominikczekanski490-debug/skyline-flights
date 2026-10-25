@@ -4,7 +4,7 @@ import MapView, { MAP_STYLES } from "./MapView";
 import { Sheet, RoundBtn, I, Badge } from "./ui";
 import { api, today, dist, fmtT, fmtD, best, delay, dur, lateLabel, lateColor, withEstArr, load, save, logo, ics, download, wxText, wxIcon, tzOffset, estDurMin, type Flight, type Ap } from "./lib";
 import { EXAMPLE } from "./example";
-import { FactorViz, WarmBanner, syncPush, testPush, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras } from "./extras";
+import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras } from "./extras";
 
 type Ov = { t: "flight"; f: Flight } | { t: "board"; iata: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" };
 const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <img className="alogo" style={{ width: s, height: s }} src={logo(a?.iata)} onError={e => (e.currentTarget.style.visibility = "hidden")} alt="" />;
@@ -21,7 +21,7 @@ export default function App() {
   const [theme, setTheme] = useState(localStorage.getItem("sk.theme") || "dark");
   useEffect(() => save(flights), [flights]);
   useEffect(() => { navigator.storage?.persist?.(); if (new URLSearchParams(location.search).get("tab") === "friends") { setTab("friends"); history.replaceState(null, "", "/"); } }, []);
-  useEffect(() => { const t = setTimeout(() => syncPush(flights).catch(() => {}), 1500); return () => clearTimeout(t); }, [flights.filter(f => !f.friend).map(f => f.id).join()]);
+  useEffect(() => { const f = () => document.visibilityState === "visible" && syncPush(flights.filter(x => !x.friend)).catch(e => console.warn("push resync", e)); const t = setTimeout(f, 1500); document.addEventListener("visibilitychange", f); return () => { clearTimeout(t); document.removeEventListener("visibilitychange", f); }; }, [flights.filter(f => !f.friend).map(f => f.id).join()]);
   useEffect(() => { localStorage.setItem("sk.theme", theme); document.documentElement.dataset.theme = theme; }, [theme]);
   useEffect(() => { localStorage.setItem("sk.map2", mapStyle); }, [mapStyle]);
   // import a friend's shared flight from URL
@@ -368,6 +368,19 @@ function AddPast({ x, done }: any) {
     <div className="note">CSV import columns: flight,date,from,to (e.g. LS1709,2026-09-20,MAN,ATH). .ics import reads flight numbers and IATA pairs from event titles.</div></div></>;
 }
 
+function PushControls() {
+  const [st, setSt] = useState(pushState()); const [msg, setMsg] = useState<{ t: string; err?: boolean } | null>(null); const [busy, setBusy] = useState(false); const [dbg, setDbg] = useState<any>(null);
+  const flights = () => { try { return JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend); } catch { return []; } };
+  const run = (p: Promise<string>) => { setBusy(true); setMsg(null); p.then(t => setMsg({ t })).catch(e => setMsg({ t: e.message || String(e), err: true })).finally(() => { setBusy(false); setSt(pushState()); }); };
+  const label: any = { subscribed: "✅ On", off: "Off", denied: "⛔ Blocked", "not-installed": "📲 Add to Home Screen first", unsupported: "Not supported", error: "Error" };
+  return <><div className="sm mt8">Status: <b>{label[st.state]}</b>{st.state !== "subscribed" && st.state !== "off" ? <div className="muted sm">{st.msg}</div> : null}</div>
+    <div className="row g8 mt8 wrap"><button className="primary" disabled={busy} onClick={() => run(syncPush(flights(), true).then(m => "Notifications " + m))}>{st.state === "subscribed" ? "Re-register alerts" : "Turn on alerts"}</button>
+      <button className="secondary" disabled={busy || st.state !== "subscribed"} onClick={() => run(testPush())}>Send test</button>
+      <button className="chip" onClick={() => pushStatus().then(setDbg).catch(e => setDbg({ error: e.message }))}>Diagnostics</button></div>
+    {msg && <div className="sm mt8" style={{ color: msg.err ? "var(--red, #ff5a5f)" : undefined }}>{msg.t}</div>}
+    {dbg && <pre className="sm muted mt8" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 200, overflow: "auto" }}>{JSON.stringify(dbg.you ? { you: dbg.you, vapid: dbg.vapidSource, subs: dbg.subscriptions, log: dbg.log?.slice(0, 5) } : dbg, null, 1)}</pre>}</>;
+}
+
 function Settings({ x, theme, setTheme }: any) {
   const [s, setS] = useState<any>({}); const [k, setK] = useState(""); const [lk, setLk] = useState(""); const [lb, setLb] = useState(""); const [lm, setLm] = useState(""); const [tok, setTok] = useState(""); const [msg, setMsg] = useState("");
   const load = () => api("/settings").then(r => { setS(r); setLb(r.llmBase); setLm(r.llmModel); }); useEffect(() => { load(); }, []);
@@ -375,7 +388,7 @@ function Settings({ x, theme, setTheme }: any) {
   return <><Head title="Settings" right={x} /><div className="px col g8">
     <div className="card m0"><h3>Appearance</h3><div className="segs m0">{["auto", "light", "dark"].map(t => <button key={t} className={theme === t ? "on" : ""} onClick={() => setTheme(t)}>{t}</button>)}</div></div>
     <div className="card m0"><h3>Push notifications</h3><div className="muted sm">Gate & terminal changes, delays, cancellations, belt numbers — even when Skyline is closed. The server checks your tracked flights every 4 minutes. iPhone: open Skyline from its Home Screen icon (iOS 16.4+).</div>
-      <div className="row g8 mt8 wrap"><button className="primary" onClick={() => syncPush(x.props?.flights || JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]"), true).then(m => setMsg("Notifications: " + m)).catch(e => setMsg(e.message))}>Turn on alerts</button><button className="secondary" onClick={() => testPush().then(() => setMsg("Test notification sent ✓")).catch(e => setMsg(e.message))}>Send test</button></div></div>
+      <PushControls /></div>
     <div className="card m0"><h3>Your data</h3><div className="muted sm">Your flights, friends and settings are saved on this iPhone and survive server restarts. Make a backup file to move them to another device.</div>
       <div className="row g8 mt8 wrap"><button className="secondary" onClick={() => exportBackup()}>⇩ Back up</button><label className="secondary">⇪ Restore<input hidden type="file" accept=".json,application/json" onChange={e => e.target.files?.[0] && importBackup(e.target.files[0]).catch(er => setMsg(er.message))} /></label></div>
       <input className="field mt8" placeholder="Your name (shown on flights you share)" defaultValue={localStorage.getItem("sk.name") || ""} onBlur={e => localStorage.setItem("sk.name", e.target.value.trim())} /></div>

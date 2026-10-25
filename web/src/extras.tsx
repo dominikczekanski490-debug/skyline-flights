@@ -4,19 +4,40 @@ import { api, best, delay, dist, dur, estDurMin, fmtT, fmtD, lateLabel, lateColo
 // ---------- Web Push ----------
 const b64 = (s: string) => { const p = "=".repeat((4 - s.length % 4) % 4); const r = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(r, c => c.charCodeAt(0)); };
 const watchList = (fl: Flight[]) => fl.filter(f => !f.example && !f.manual && f.date >= new Date(Date.now() - 86400e3).toISOString().slice(0, 10)).map(f => ({ number: f.number, date: f.date }));
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isStandalone = () => (navigator as any).standalone === true || matchMedia("(display-mode: standalone)").matches;
 export const pushSupported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+export type PushState = { state: "unsupported" | "not-installed" | "denied" | "off" | "subscribed" | "error"; msg: string };
+export function pushState(): PushState {
+  if (isIOS() && !isStandalone()) return { state: "not-installed", msg: "On iPhone, alerts only work in the Home Screen app: Safari → Share → Add to Home Screen, then open Skyline from that icon (iOS 16.4+)." };
+  if (!pushSupported()) return { state: "unsupported", msg: isIOS() ? "This iOS version doesn't support web push. Update to iOS 16.4 or later." : "This browser doesn't support push notifications." };
+  if (Notification.permission === "denied") return { state: "denied", msg: "Notifications are blocked. Turn them on in iOS Settings → Notifications → Skyline, then tap Turn on alerts." };
+  if (Notification.permission === "granted" && localStorage.getItem("sk.pushEndpoint")) return { state: "subscribed", msg: "On" };
+  return { state: "off", msg: "Off" };
+}
+// ask=true must be called directly from a tap: requestPermission is the first await so iOS sees the user gesture.
 export async function syncPush(fl: Flight[], ask = false): Promise<string> {
-  if (!pushSupported()) return (navigator as any).standalone === false || !matchMedia("(display-mode: standalone)").matches ? "On iPhone: Share → Add to Home Screen, then open Skyline from the Home Screen icon to enable alerts." : "This browser doesn't support push.";
-  if (Notification.permission !== "granted") { if (!ask) return "off"; if ((await Notification.requestPermission()) !== "granted") return "Notifications were not allowed. Turn them on in iOS Settings → Notifications → Skyline."; }
+  const st = pushState(); if (st.state === "not-installed" || st.state === "unsupported" || st.state === "denied") { if (ask) throw new Error(st.msg); return st.state; }
+  if (Notification.permission !== "granted") { if (!ask) return "off"; const p = await Notification.requestPermission(); if (p !== "granted") throw new Error(p === "denied" ? pushState().msg : "Permission wasn't granted. Tap Turn on alerts and choose Allow."); }
   const reg = await navigator.serviceWorker.ready; const { publicKey } = await api("/push/key");
   let sub = await reg.pushManager.getSubscription();
-  if (sub && localStorage.getItem("sk.vapid") !== publicKey) { await sub.unsubscribe().catch(() => {}); sub = null; } // server key changed → resubscribe silently
-  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(publicKey) });
+  const curKey = sub?.options?.applicationServerKey ? btoa(String.fromCharCode(...new Uint8Array(sub.options.applicationServerKey as ArrayBuffer))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "") : localStorage.getItem("sk.vapid");
+  if (sub && curKey !== publicKey) { await sub.unsubscribe().catch(() => {}); sub = null; } // server key changed → resubscribe
+  try { if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(publicKey) }); }
+  catch (e: any) { throw new Error("Subscribing failed: " + (e?.name ? e.name + " – " : "") + (e?.message || e)); }
   localStorage.setItem("sk.vapid", publicKey); localStorage.setItem("sk.pushEndpoint", sub.endpoint);
   const r = await api("/push/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), flights: watchList(fl) }) });
   return `on · watching ${r.watching} flight${r.watching === 1 ? "" : "s"}`;
 }
-export const testPush = () => api("/push/test", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: localStorage.getItem("sk.pushEndpoint") }) });
+const myFlights = () => { try { return JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend); } catch { return []; } };
+// Re-POST before testing so a server restart can't make the test fail with "not subscribed".
+export async function testPush(): Promise<string> {
+  const st = pushState(); if (st.state !== "subscribed") throw new Error(st.state === "off" ? "Alerts are off — tap Turn on alerts first." : st.msg);
+  await syncPush(myFlights());
+  const r = await api("/push/test", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: localStorage.getItem("sk.pushEndpoint") }) });
+  return `Test sent ✓ (accepted by ${r.host}, ${r.status}). It should arrive within a few seconds.`;
+}
+export const pushStatus = () => api("/push/status?endpoint=" + encodeURIComponent(localStorage.getItem("sk.pushEndpoint") || ""));
 
 // ---------- Cold-start warming pill ----------
 export function WarmBanner() {

@@ -477,18 +477,43 @@ let saveT = null; function saveState() { clearTimeout(saveT); saveT = setTimeout
   try { if (KV_URL) await fetch(KV_URL.replace(/\/$/, "") + "/set/skyline_state", { method: "POST", headers: { authorization: "Bearer " + KV_TOK }, body }); else fs.writeFileSync(STATE_FILE, body); } catch (e) { console.warn("state save failed", e.message); } }, 1500); }
 setInterval(() => { if (KV_URL) saveState(); }, 30 * 60e3); // keep delay history durable too
 import webpush from "web-push";
+import crypto from "crypto";
+// VAPID keys MUST stay stable across restarts, otherwise every iPhone subscription silently dies (DATA_DIR is /tmp on Render).
+// Priority: VAPID_PUBLIC/VAPID_PRIVATE env → keys derived deterministically from a stable server-side secret → stored/generated.
+function deriveVapid() { const seed = process.env.VAPID_SEED || process.env.SKYLINE_ADMIN || process.env.RENDER_SERVICE_ID; if (!seed) return null;
+  const priv = crypto.createHash("sha256").update("skyline-vapid-v1:" + seed).digest(); const ec = crypto.createECDH("prime256v1"); ec.setPrivateKey(priv);
+  return { publicKey: ec.getPublicKey().toString("base64url"), privateKey: priv.toString("base64url"), derived: true }; }
+const VAPID_SUBJECT = /^(mailto:[^@\s]+@[^@\s]+\.[a-z]{2,}|https:\/\/[^\s]+)$/i.test(process.env.VAPID_SUBJECT || "") ? process.env.VAPID_SUBJECT : "https://skyline-flights.onrender.com"; // Apple 403s BadJwtToken on bad/example subjects
+let vapidSource = "";
+const PUSHLOG = []; const plog = (...a) => { const line = new Date().toISOString() + " " + a.join(" "); console.log("[push]", line); PUSHLOG.unshift(line); PUSHLOG.length = Math.min(PUSHLOG.length, 40); };
 const ready = loadState().then(() => {
-  if (process.env.VAPID_PUBLIC && process.env.VAPID_PRIVATE) STATE.vapid = { publicKey: process.env.VAPID_PUBLIC, privateKey: process.env.VAPID_PRIVATE };
-  if (!STATE.vapid) { STATE.vapid = webpush.generateVAPIDKeys(); saveState(); }
-  webpush.setVapidDetails("mailto:skyline-dev@example.com", STATE.vapid.publicKey, STATE.vapid.privateKey);
+  if (process.env.VAPID_PUBLIC && process.env.VAPID_PRIVATE) { STATE.vapid = { publicKey: process.env.VAPID_PUBLIC, privateKey: process.env.VAPID_PRIVATE }; vapidSource = "env"; }
+  else { const d = deriveVapid(); if (d) { if (STATE.vapid?.publicKey !== d.publicKey) STATE.subs = {}; STATE.vapid = d; vapidSource = "derived"; } }
+  if (!STATE.vapid) { STATE.vapid = webpush.generateVAPIDKeys(); vapidSource = "generated (rotates on restart!)"; saveState(); } else if (!vapidSource) vapidSource = "stored";
+  webpush.setVapidDetails(VAPID_SUBJECT, STATE.vapid.publicKey, STATE.vapid.privateKey); plog("vapid", vapidSource, "subject", VAPID_SUBJECT);
 });
-api.get("/push/key", wrap(async (q, r) => { await ready; r.json({ publicKey: STATE.vapid.publicKey, durable: !!KV_URL }); }));
-api.post("/push/subscribe", wrap(async (req, res) => { await ready; const { sub, flights = [] } = req.body || {}; if (!sub?.endpoint) return res.status(400).json({ error: "no subscription" });
-  const id = Buffer.from(sub.endpoint).toString("base64url").slice(-40); const prev = STATE.subs[id]?.flights || [];
-  STATE.subs[id] = { sub, at: Date.now(), flights: flights.slice(0, 30).map(f => { const o = prev.find(p => p.number === f.number && p.date === f.date); return { number: String(f.number).toUpperCase(), date: f.date, snap: o?.snap || f.snap || null }; }) };
-  saveState(); res.json({ ok: true, watching: STATE.subs[id].flights.length }); }));
-api.post("/push/test", wrap(async (req, res) => { await ready; const id = Buffer.from(req.body?.endpoint || "").toString("base64url").slice(-40); const s = STATE.subs[id]; if (!s) return res.status(404).json({ error: "not subscribed" });
-  await webpush.sendNotification(s.sub, JSON.stringify({ title: "Skyline notifications are on ✓", body: `Watching ${s.flights.length} flight${s.flights.length === 1 ? "" : "s"} for gate, delay and cancellation changes.` })); res.json({ ok: true }); }));
+const subId = ep => crypto.createHash("sha256").update(String(ep || "")).digest("base64url").slice(0, 32);
+const pushHost = ep => { try { return new URL(ep).host; } catch { return "?"; } };
+async function sendPush(id, s, payload, opts = {}) {
+  try { const r = await webpush.sendNotification(s.sub, JSON.stringify(payload), { TTL: opts.TTL ?? 4 * 3600, urgency: opts.urgency || "high", topic: opts.topic });
+    s.lastOk = Date.now(); plog("sent", pushHost(s.sub.endpoint), r.statusCode); return { ok: true, status: r.statusCode };
+  } catch (e) { const status = e.statusCode || 0, body = String(e.body || e.message || e).slice(0, 300); plog("FAIL", pushHost(s.sub.endpoint), status, body);
+    if (status === 404 || status === 410) { delete STATE.subs[id]; saveState(); } if (s) s.lastErr = `${status} ${body}`; return { ok: false, status, error: body }; } }
+api.get("/push/key", wrap(async (q, r) => { await ready; r.json({ publicKey: STATE.vapid.publicKey, durable: !!KV_URL, vapid: vapidSource }); }));
+api.get("/push/status", wrap(async (req, r) => { await ready; const ep = req.query.endpoint; const s = ep ? STATE.subs[subId(ep)] : null;
+  r.json({ vapidSource, subject: VAPID_SUBJECT, publicKey: STATE.vapid.publicKey, durable: !!KV_URL, subscriptions: Object.keys(STATE.subs).length,
+    byHost: Object.values(STATE.subs).reduce((a, x) => (a[pushHost(x.sub.endpoint)] = (a[pushHost(x.sub.endpoint)] || 0) + 1, a), {}),
+    you: ep ? (s ? { subscribed: true, watching: s.flights.length, at: s.at, lastOk: s.lastOk || null, lastErr: s.lastErr || null } : { subscribed: false }) : undefined, log: PUSHLOG.slice(0, 15) }); }));
+api.post("/push/subscribe", wrap(async (req, res) => { await ready; const { sub } = req.body || {};
+  if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return res.status(400).json({ error: "Invalid subscription (missing endpoint or keys)" });
+  const id = subId(sub.endpoint); const prev = STATE.subs[id]?.flights || []; const flights = Array.isArray(req.body.flights) ? req.body.flights : prev;
+  STATE.subs[id] = { ...(STATE.subs[id] || {}), sub, at: Date.now(), flights: flights.slice(0, 30).map(f => { const o = prev.find(p => p.number === f.number && p.date === f.date); return { number: String(f.number).toUpperCase(), date: f.date, snap: o?.snap || f.snap || null }; }) };
+  if (!prev.length && !STATE.subs[id].lastOk) plog("subscribed", pushHost(sub.endpoint)); saveState(); res.json({ ok: true, watching: STATE.subs[id].flights.length }); }));
+api.post("/push/test", wrap(async (req, res) => { await ready; const id = subId(req.body?.endpoint); const s = STATE.subs[id];
+  if (!s) return res.status(404).json({ error: "Server has no subscription for this device (it may have restarted). Tap Turn on alerts again." });
+  const r = await sendPush(id, s, { title: "Skyline notifications are on ✓", body: `Watching ${s.flights.length} flight${s.flights.length === 1 ? "" : "s"} for gate, delay and cancellation changes.`, tag: "skyline-test", url: "/" }, { TTL: 600 });
+  if (r.ok) return res.json({ ok: true, status: r.status, host: pushHost(s.sub.endpoint) });
+  res.status(502).json({ error: `Push service ${pushHost(s.sub.endpoint)} rejected it: ${r.status} ${r.error}${r.status === 404 || r.status === 410 ? " (subscription expired — tap Turn on alerts again)" : ""}`, status: r.status }); }));
 const snapOf = f => ({ status: f.status, statusText: f.statusText, gate: f.dep?.gate || null, term: f.dep?.terminal || null, belt: f.arr?.baggage || null, dly: delayMin(f) });
 function diff(a, b, f) { const m = []; if (!a) return m;
   if (b.status === "cancelled" && a.status !== "cancelled") m.push("❌ Cancelled");
@@ -503,7 +528,7 @@ async function watch() { await ready; const cache = {};
   for (const [id, s] of Object.entries(STATE.subs)) { const keep = [];
     for (const w of s.flights) { if (w.date < new Date(Date.now() - 36 * 3600e3).toISOString().slice(0, 10)) continue; keep.push(w);
       try { const k = w.number + w.date; const r = cache[k] ||= await findFlight(w.number, w.date); if (!r.flight) continue; const n = snapOf(r.flight); const msg = diff(w.snap, n, r.flight); w.snap = n;
-        if (msg.length) await webpush.sendNotification(s.sub, JSON.stringify({ title: `${r.flight.number} ${r.flight.origin?.iata || ""}→${r.flight.destination?.iata || ""}`, body: msg.join(" • "), tag: k, url: "/" })).catch(e => { if (e.statusCode === 404 || e.statusCode === 410) delete STATE.subs[id]; });
+        if (msg.length) await sendPush(id, s, { title: `${r.flight.number} ${r.flight.origin?.iata || ""}→${r.flight.destination?.iata || ""}`, body: msg.join(" • "), tag: k, url: "/" }, { topic: k.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) });
       } catch {} }
     if (STATE.subs[id]) STATE.subs[id].flights = keep; }
   saveState(); }
