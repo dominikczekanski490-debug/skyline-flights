@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { AirlineTile } from "./brand";
 import { getPrefs } from "./more";
-import { api, best, delay, dist, dur, estDurMin, fmtT, fmtD, lateLabel, lateColor, logo, today, type Flight } from "./lib";
+import { api, best, delay, dist, dur, estDurMin, fmtT, fmtD, lateLabel, lateColor, today, type Flight } from "./lib";
 
 // ---------- Web Push ----------
 const b64 = (s: string) => { const p = "=".repeat((4 - s.length % 4) % 4); const r = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(r, c => c.charCodeAt(0)); };
@@ -94,7 +95,7 @@ export function SharedView({ id }: { id: string }) {
     if (!L.some((x: any) => x.number === nf.number && x.date === nf.date && x.friend)) L.push(nf); localStorage.setItem(K, JSON.stringify(L)); location.href = "/?tab=friends"; };
   return <div className="share"><div className="shbrand"><img src="/icon-192.png" /><b>Skyline</b><span>Live flight{s.by ? ` shared by ${s.by}` : ""}</span></div>
     <div className="shcard">
-      <div className="row between"><div className="row g10"><img className="alogo" src={logo(f?.airline?.iata || s.n.slice(0, 2))} style={{ width: 34, height: 34 }} onError={e => (e.currentTarget.style.visibility = "hidden")} /><div><b className="shnum">{s.n}</b><div className="muted sm">{f?.airline?.name || ""} · {fmtD(s.d, { weekday: "short", day: "numeric", month: "short" })}</div></div></div>
+      <div className="row between"><div className="row g10"><AirlineTile a={f?.airline || { iata: s.n.slice(0, 2) }} mode="colour" style={{ width: 82, height: 34 }} /><div><b className="shnum">{s.n}</b><div className="muted sm">{f?.airline?.name || ""} · {fmtD(s.d, { weekday: "short", day: "numeric", month: "short" })}</div></div></div>
         <span className="shstat" style={{ background: f?.status === "cancelled" ? "var(--red)" : lv ? "var(--blue)" : lateColor(da ?? dd) }}>{f ? f.status === "cancelled" ? "Cancelled" : lv && f.status !== "landed" ? "In the air" : f.statusText || lateLabel(da ?? dd) || "Scheduled" : err ? "Unavailable" : "Loading…"}</span></div>
       <div className="shroute"><div><b>{f?.origin?.iata || s.o}</b><small>{f?.origin?.city}</small><span>{fmtT(best(f?.dep || {}), f?.origin?.tz)}</span>{dd != null && Math.abs(dd) >= 5 && <em style={{ color: lateColor(dd) }}>{lateLabel(dd)}</em>}</div>
         <div className="shline"><i style={{ left: `${f?.status === "landed" ? 100 : lv ? 50 : 0}%` }}>✈</i></div>

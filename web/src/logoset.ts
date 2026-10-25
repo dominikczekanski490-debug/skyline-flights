@@ -1,0 +1,4 @@
+// Self-hosted wordmarks in /public/logos (fetched from pics.avs.io, trimmed + compressed). Generated list.
+export const LOGOS = new Set("2L 3K 3U 4H 4S 4U 4Y 6E 8Q A3 A9 AA AC AD AF AH AI AK AM AR AS AT AV AY AZ B6 BA BE BG BI BJ BR BT BY CA CI CM CX CZ D7 D8 DE DL DS DX DY EC EI EJU EK EN ET EW EY EZ FB FI FJ FP FR FZ G3 G9 GA GF GQ GR GS H7 HG HO HU HV HX HY I2 IB IZ J2 JD JL JP JQ JU KC KE KL KM KQ KU LA LG LH LM LO LS LX LY ME MF MH MS MT MU NH NT NZ OD OM OS OU OV OZ P4 PC PK PR PV PX QF QN QR RJ RK RO RX S7 SA SK SM SN SQ SU SV TG TK TO TP TR TS TU TW U2 U6 UA UJ UL UX V7 VA VF VJ VL VN VS VY W6 W9 WB WF WS WY X3 XC XQ XY ZB ZH ZL".split(" "));
+// Logos with solid backgrounds: never apply the white-silhouette filter.
+export const SOLID = new Set("AK BT D7 D8 EK G3 HO SK SM TR WB X3".split(" "));

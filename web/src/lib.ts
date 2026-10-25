@@ -23,7 +23,7 @@ export function withEstArr(f: Flight): Flight { // fill missing arrival with lab
 const K = "skyline.flights.v1";
 export const load = (): Flight[] => { try { return JSON.parse(localStorage.getItem(K) || "[]"); } catch { return []; } };
 export const save = (l: Flight[]) => localStorage.setItem(K, JSON.stringify(l));
-export const logo = (iata?: string) => iata ? `https://images.kiwi.com/airlines/64/${iata}.png` : "";
+export const logo = (iata?: string) => iata ? `/logos/${iata}.png` : "";
 export function ics(fl: Flight[]) {
   const z = (s: string) => s.replace(/[-:]/g, "").replace(/\.\d+/, ""); const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Skyline//EN"];
   for (const f of fl) { const s = best(f.dep) || f.date + "T09:00:00Z"; const e = best(withEstArr(f).arr) || new Date(+new Date(s) + 7200e3).toISOString();

@@ -3,14 +3,15 @@ import { useRef, useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import MapView, { MAP_STYLES } from "./MapView";
 import { Sheet, RoundBtn, I, Badge } from "./ui";
-import { api, today, dist, fmtT, fmtD, best, delay, dur, lateLabel, lateColor, withEstArr, load, save, logo, ics, download, wxIcon, tzOffset, estDurMin, type Flight, type Ap } from "./lib";
+import { api, today, dist, fmtT, fmtD, best, delay, dur, lateLabel, lateColor, withEstArr, load, save, ics, download, wxIcon, tzOffset, estDurMin, type Flight, type Ap } from "./lib";
 import { liveOf, statusOf } from "./lib";
+import { AirlineTile } from "./brand";
 import { EXAMPLE } from "./example";
 import { Timeline, Progress, WeatherCard, AirportInfo, PassportMore, PasteImport, exportIcs, UnitsCard, AlertPrefsCard } from "./more";
 import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras, DepartureDay, UpdateBanner, PushChecklist, BUILD, localNotify } from "./extras";
 
 type Ov = { t: "flight"; f: Flight } | { t: "board"; iata: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" };
-const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <img className="alogo" style={{ width: s, height: s }} src={logo(a?.iata)} onError={e => (e.currentTarget.style.visibility = "hidden")} alt="" />;
+const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <AirlineTile a={a} className="card-tile" mode="colour" style={{ width: Math.round(s * 2.4), height: s }} />;
 
 export default function App() {
   const [tab, setTab] = useState<"mine" | "friends" | "passport">("mine");
@@ -77,7 +78,7 @@ function FlightCard({ f, onClick, pred }: { f: Flight; onClick: () => void; pred
   const prog = f.status === "landed" ? 100 : lv?.progress != null ? lv.progress : ["departed", "enroute"].includes(f.status || "") && st > 0 ? Math.min(95, (st / Math.max(dm, 1)) * 100) : 0;
   const sTxt = S.label, sCls = S.cls;
   return <div className="card fcard rise press" onClick={onClick}>
-    <div className="row between"><div className="row g12"><div className="logowrap"><Logo a={f.airline} s={40} /></div><div><div className="fnum">{f.number}<span> • {fmtD(f.date, { weekday: "short", day: "numeric", month: "short" })}{f.friend && ` • ${f.friend}`}</span></div><div className="froute">{f.origin?.city || f.origin?.iata} → {f.destination?.city || f.destination?.iata}</div></div></div>
+    <div className="row between"><div className="row g12"><Logo a={f.airline} s={36} /><div><div className="fnum">{f.number}<span> • {fmtD(f.date, { weekday: "short", day: "numeric", month: "short" })}{f.friend && ` • ${f.friend}`}</span></div><div className="froute">{f.origin?.city || f.origin?.iata} → {f.destination?.city || f.destination?.iata}</div></div></div>
       <span className={"spill " + sCls}><i />{sTxt}</span></div>
     <div className="fbig"><div><div className="iata">{f.origin?.iata}</div><div className="ftime" style={{ color: lateColor(dd) }}>{fmtT(best(f.dep), f.origin?.tz)}</div></div>
       <div className="ftrack"><div className="fdur">{dm ? dur(dm) : ""}</div><div className="fline"><span style={{ width: `${prog}%` }} /><i style={{ left: `${prog}%` }}>{I.glyph}</i></div><div className="fdur">{lv && typeof lv.alt === "number" ? `${Math.round(lv.alt / 100) * 100} ft · ${Math.round(lv.gs || 0)} kt` : until != null && until > 0 && !["departed", "enroute", "landed", "cancelled"].includes(f.status || "") ? `departs in ${dur(until)}` : f.statusText || ""}</div></div>

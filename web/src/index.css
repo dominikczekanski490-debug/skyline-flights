@@ -196,7 +196,7 @@ h1,h2,h3,.froute,.big,.iata{letter-spacing:-.025em}.ftime,.big,.iata,.brow,.boar
 :root[data-theme=light] .card{box-shadow:0 8px 24px rgba(20,30,70,.08)!important}
 .fcard{padding:18px!important;margin:12px 16px!important;background:linear-gradient(160deg,rgba(91,140,255,.14),rgba(166,107,255,.06) 50%,rgba(255,255,255,.03))!important}
 :root[data-theme=light] .fcard{background:linear-gradient(160deg,#fff,#f2f5ff)!important}
-.g12{gap:12px}.logowrap{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.3)}.logowrap .alogo{border-radius:8px}
+.g12{gap:12px}.logowrap{min-width:52px;height:52px;padding:0 4px;border-radius:16px;display:grid;place-items:center;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.3)}.logowrap .alogo{border-radius:8px}
 .fnum{font-size:13px;font-weight:700;color:var(--acc);letter-spacing:.02em}.fnum span{color:var(--muted);font-weight:500}
 .froute{font-size:17px;font-weight:700;margin-top:2px}
 .spill{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap;border:1px solid currentColor}
@@ -270,7 +270,7 @@ h1,h2,h3,.froute,.big,.iata{letter-spacing:-.025em}.ftime,.big,.iata,.brow,.boar
 .tb-rows{flex:1;overflow:hidden}
 .tb-row{height:calc(100%/var(--per,10));font-size:clamp(12px,2.3vh,21px);white-space:nowrap}
 .tb-row>span{overflow:hidden;text-overflow:ellipsis}.tb-row.alt{background:var(--alt)}
-.tb-fl{display:flex;align-items:center;gap:6px}.tb-fl img,.tb-code{width:20px;height:20px;border-radius:3px;background:#fff;object-fit:contain;flex:none}
+.tb-fl{display:flex;align-items:center;gap:6px}.tb-code{width:20px;height:20px;border-radius:3px;background:#fff;object-fit:contain;flex:none}
 .tb-code{display:inline-grid;place-items:center;background:rgba(255,255,255,.18);font-size:9px}
 .tb-st.ok{color:var(--ok)}.tb-st.warn{color:var(--warn)}.tb-st.bad,.tb-st.blink.bad{color:var(--bad)}.tb-st.dim{opacity:.6}
 .tb-st.blink{color:var(--ok);animation:tbBlink 1.2s steps(1,end) infinite}.tboard.paused .tb-st.blink{animation:none}
@@ -303,7 +303,6 @@ h1,h2,h3,.froute,.big,.iata{letter-spacing:-.025em}.ftime,.big,.iata,.brow,.boar
 .tb-syd{--bg:#0c1a3a;--hd:#0c1a3a;--fg:#fff;--ok:#62e3ff;--warn:#ffcf4a;--bad:#ff6363}
 .tb-syd .tb-panel{background:#1747b8;border:4px solid #0b0f1a}.tb-syd .tb-head{background:#0d2f86;color:#fff}
 .tb-syd .tb-row{border-bottom:1px solid rgba(255,255,255,.25)}.tb-syd .c-logo{background:#fff;height:100%;display:grid;place-items:center;margin-left:-10px;padding-left:4px}
-.tb-syd .tb-fl img{width:28px;height:22px;background:none}
 /* Schiphol: pale grey screens, black text, yellow header strip, yellow status boxes */
 .tb-ams{--bg:#2a2d33;--fg:#111;--ok:#111;--warn:#111;--bad:#c00}
 .tb-ams .tb-panel{background:#e8eaee}.tb-ams .tb-ptitle{background:#ffd700;color:#0b1f66}.tb-ams .tb-ptitle b{font-size:16px}
@@ -344,7 +343,17 @@ h1,h2,h3,.froute,.big,.iata{letter-spacing:-.025em}.ftime,.big,.iata,.brow,.boar
 .tb-mag .tb-st.blink{animation:tbblink 1.4s steps(2) infinite}
 .tb-mag .c-tile{padding:0!important;align-self:stretch}
 .tb-tile{display:flex;align-items:center;gap:6px;width:100%;height:100%;padding:0 8px;font-size:15px;font-weight:800;letter-spacing:-.2px}
-.tb-tile img{width:24px;height:24px;border-radius:4px;background:#fff;object-fit:contain}.tb-tile b{overflow:hidden;text-overflow:ellipsis}
+.tb-tile.al-tile b{font-size:18px}
 .tb-mag .tb-bclock{font-size:20px;color:#fff}
 @keyframes tbblink{50%{opacity:.35}}
 .tb-sec{margin-left:10px}
+.al-tile{display:flex;align-items:center;justify-content:center;overflow:hidden;box-sizing:border-box;padding:6% 8%;aspect-ratio:3/1;border-radius:3px}
+.al-tile img{width:100%;height:100%;object-fit:contain;display:block}
+.al-tile.m-white img{filter:brightness(0) invert(1)}
+.al-tile b{color:#fff;font-weight:800;font-size:clamp(10px,1.2vw,18px);line-height:1;text-align:center;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.al-tile.sq{aspect-ratio:1/1;padding:10%}
+.tb-tile.al-tile{width:100%;height:100%;aspect-ratio:auto;border-radius:0;padding:8px 12px}
+.tb-logo.al-tile{height:1.6em;width:4.8em;flex:none;margin-right:8px;padding:2px 4px;border-radius:3px}
+.tb-syd .c-logo .tb-logo.al-tile,.c-logo .tb-logo.al-tile{width:100%;height:80%;margin:0}
+.card-tile.al-tile{aspect-ratio:auto;border-radius:8px;flex:none;padding:4px 6px;border:1px solid rgba(255,255,255,.08)}
+.al-tile.m-white img,.al-tile.m-colour img{width:100%!important;height:100%!important;background:none!important;border-radius:0}
