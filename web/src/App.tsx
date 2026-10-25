@@ -174,7 +174,7 @@ function WhySheet({ f, close }: any) {
 function Factors({ list }: { list: any[] }) {
   const col: any = { high: "#ff453a", med: "#ff9f0a", low: "#8e8e93", good: "#30d158" }; const lab: any = { high: "Major", med: "Moderate", low: "Minor", good: "Helps" };
   const mx = Math.max(10, ...list.map(x => Math.abs(x.impact)));
-  return <div className="pfac"><div className="plab">Why</div>{list.map((x: any, i: number) => <motion.div key={i} className="pfrow" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 * i }}>
+  return <div className="pfac"><div className="plab">Why this flight might be late · ranked by impact</div>{list.map((x: any, i: number) => <motion.div key={i} className="pfrow" style={{ ["--sv" as any]: col[x.sev] }} initial={{ opacity: 0, y: 14, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", damping: 22, stiffness: 260, delay: 0.08 * i }}>
     <div className="pfic" style={{ background: col[x.sev] + "22" }}>{x.icon}</div>
     <div className="grow"><div className="row between g8"><b className="pft">{x.title}</b><span className="pfimp" style={{ color: col[x.sev] }}>{x.impact > 0 ? `+${x.impact}m` : x.impact < 0 ? `${x.impact}m` : "±0"}</span></div>
       <div className="pftx">{x.text}</div>

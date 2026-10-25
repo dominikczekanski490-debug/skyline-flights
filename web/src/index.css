@@ -116,3 +116,8 @@ textarea{width:100%;min-height:90px;border:0;border-top:1px solid var(--line);ma
 .pnote{margin-top:6px;font-size:12px;color:var(--muted)}
 .pexp{margin-top:12px;padding:12px 14px;border-radius:16px;font-size:13.5px;line-height:1.45;background:color-mix(in srgb,#7c8cff 8%,transparent)}.pby{margin-top:6px;font-size:11px;color:var(--muted)}
 .whysheet .pfac{margin-top:8px}
+.pfac .plab{margin-bottom:10px}
+.pfrow{margin-bottom:10px;padding:14px;border-top:0!important;border-radius:18px;position:relative;overflow:hidden;background:linear-gradient(135deg,color-mix(in srgb,var(--sv,#8e8e93) 10%,transparent),color-mix(in srgb,var(--text) 3%,transparent) 60%);border:1px solid color-mix(in srgb,var(--sv,#8e8e93) 22%,transparent);box-shadow:0 6px 18px -10px color-mix(in srgb,var(--sv,#000) 50%,transparent);backdrop-filter:blur(16px)}
+.pfrow:before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:var(--sv)}
+.pfic{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--sv) 30%,transparent)}
+.pfrank{position:absolute;right:12px;bottom:10px;font-size:10px;font-weight:700;color:var(--muted);opacity:.6}
