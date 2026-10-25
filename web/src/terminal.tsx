@@ -115,10 +115,10 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen }:
   const cellOf = (f: any, c: Col, st: any) => { const t = dir === "dep" ? f.dep : f.arr; const ap = dir === "dep" ? f.destination : f.origin; const ltz = (dir === "dep" ? f.origin?.tz : f.destination?.tz) || tz;
     const txt = (v: string, w: number) => solari ? <Flap text={v} w={w} /> : v;
     switch (c) {
-      case "time": return f.liveOnly ? txt("LIVE", 5) : txt(fmtT(t.scheduled, ltz), 5);
+      case "time": return f.liveOnly ? txt(f.observedAt ? fmtT(f.observedAt, ltz) : "LIVE", 5) : txt(fmtT(t.scheduled, ltz), 5);
       case "est": { const e = t.actual || t.estimated; return e && e !== t.scheduled ? fmtT(e, ltz) : ""; }
       case "dest": return txt(ap?.city || ap?.name || ap?.iata || "", 15);
-      case "fl": return <span className="tb-fl">{!solari && th !== "mag" && th !== "syd" && <Logo a={f.airline} />}{txt(th === "fra" ? f.number.replace(/^([A-Z0-9]{2})/, "$1 ") : f.number, 7)}</span>;
+      case "fl": return <span className="tb-fl">{!solari && !tt.cols.includes("tile") && !tt.cols.includes("logo") && <Logo a={f.airline} />}{txt(th === "fra" ? f.number.replace(/^([A-Z0-9]{2})/, "$1 ") : f.number, 7)}</span>;
       case "tile": return <Tile a={f.airline} />;
       case "logo": return <span className="tb-fl"><Logo a={f.airline} /></span>;
       case "tag": return <span className="tb-tag" style={{ background: tagColor(f.airline?.iata) }}>{f.number}</span>;
@@ -135,7 +135,7 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen }:
       return <div key={f.id + pg + i + (solari ? st.txt : "")} className={"tb-row " + (i % 2 ? "alt" : "")} style={{ gridTemplateColumns: grid }} onClick={e => { if (!onOpen) return; e.stopPropagation(); closed.current = true; onOpen(f); }}>{tt.cols.map(c => <span key={c} className={"c-" + c}>{cellOf(f, c, st)}</span>)}{fraSt(st)}</div>; })}</div></div>;
   const W: Record<Col, string> = { tile: "minmax(100px,.8fr)", time: th === "mag" ? "84px" : "4.2em", est: "4em", dest: "minmax(5em,1.4fr)", fl: th === "mag" || th === "syd" || solari ? "6.5em" : "11em", logo: "100px", tag: "6em", gate: "3.4em", term: "3.2em", st: solari ? "minmax(19em,1.4fr)" : "minmax(11.5em,1.3fr)", icon: "22px" };
   const grid = tt.cols.map(c => W[c]).join(" ") + (th === "fra" ? " minmax(0,1fr)" : "");
-  const msg = !d ? "Loading live board…" : d.error ? d.error : live && !rows.length ? `No live ADS-B ${dir === "dep" ? "departures" : "arrivals"} near ${iata} right now.` : rows.length === 0 ? `No more ${dir === "dep" ? "departures" : "arrivals"} listed for this date.` : "";
+  const msg = !d ? "Loading live board…" : d.error ? d.error : live && !rows.length ? `Quiet right now — no ${dir === "dep" ? "departures" : "arrivals"} observed near ${iata} in the last 3h. This airport has no free timetable feed; see UK & Ireland for airports with official boards.` : rows.length === 0 ? `No more ${dir === "dep" ? "departures" : "arrivals"} listed for this date.` : "";
   return createPortal(<div ref={ref} className={"tboard " + tt.cls + (paused ? " paused" : "")} onClick={() => setPaused(p => !p)} onTouchStart={e => { ty.current = e.touches[0].clientY; }} onTouchEnd={e => { const y0 = ty.current; ty.current = null; if (y0 != null && y0 < innerHeight * 0.5 && e.changedTouches[0].clientY - y0 > 110) close(); }}>
     <div className="tb-fab" onClick={e => e.stopPropagation()}><div className="tb-seg" role="tablist"><button className={dir === "dep" ? "on" : ""} onClick={() => { setDir("dep"); setPage(0); }}>Departures</button><button className={dir === "arr" ? "on" : ""} onClick={() => { setDir("arr"); setPage(0); }}>Arrivals</button></div>
       <button className="tb-x" aria-label="Close board" onClick={close}><svg viewBox="0 0 24 24" width="22" height="22"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" /></svg></button></div><div className="tb-stage" style={{ ["--per" as any]: per, ["--rh" as any]: rowH + "px", width: vp.w / s, height: stageH, transform: `scale(${s})` }}>
