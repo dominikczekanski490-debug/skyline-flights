@@ -68,3 +68,11 @@ textarea{width:100%;min-height:90px;border:0;border-top:1px solid var(--line);ma
 .arow{display:flex;gap:16px;padding:12px 18px 12px 22px;cursor:pointer}.arow+.arow .grow{border-top:1px solid var(--line);padding-top:12px}.arow .grow b{font-size:18px;font-weight:600}.st{margin-top:6px;font-size:14px}.st label{font-size:12px;color:var(--muted);letter-spacing:.03em}.star{color:var(--faint)}
 .sdot{width:44px;display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:18px;font-size:13px;color:var(--muted)}.sdot i{width:22px;height:22px;border-radius:50%;box-shadow:0 0 0 8px rgba(0,0,0,.05),0 0 0 15px rgba(0,0,0,.03)}
 .s2 i{background:var(--red);box-shadow:0 0 0 8px rgba(214,58,47,.2),0 0 0 15px rgba(214,58,47,.08)}.s1 i{background:var(--orange);box-shadow:0 0 0 8px rgba(232,137,12,.2),0 0 0 15px rgba(232,137,12,.08)}.s0 i{background:var(--green);box-shadow:0 0 0 8px rgba(46,157,79,.2),0 0 0 15px rgba(46,157,79,.08)}.s-1 i{background:var(--faint)}
+.live{font-size:11px;font-weight:700;letter-spacing:.06em;color:#fff;background:var(--red);padding:3px 8px;border-radius:7px;display:inline-flex;align-items:center;gap:5px}.live::before{content:"";width:6px;height:6px;border-radius:50%;background:#fff;animation:pulse 1.4s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.dcard{padding:4px 0}.drow{display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer}.drow+.drow{border-top:1px solid var(--line)}.drow b{font-size:17px;font-weight:600}.drow:active{background:var(--chip)}
+.warr{display:inline-block;font-weight:700;color:var(--text)}
+.dscore{display:flex;flex-direction:column;align-items:center;gap:3px;width:46px;font-size:12px}.dscore b{font-size:17px;font-weight:650}.dscore i{width:10px;height:10px;border-radius:50%;background:var(--faint)}
+.dscore.s0 i,.sdot2.s0{background:var(--green)}.dscore.s1 i,.sdot2.s1{background:var(--yellow)}.dscore.s2 i,.sdot2.s2{background:var(--red)}.dscore.s2 b{color:var(--red)}
+.lg{display:grid;grid-template-columns:14px 64px 1fr;gap:8px;align-items:start;font-size:14px;padding:6px 0;font-weight:600}.lg .muted{font-weight:400}.sdot2{width:12px;height:12px;border-radius:50%;margin-top:3px}
+.dscore i{box-shadow:none!important;width:11px;height:11px}
