@@ -23,6 +23,8 @@ export const I = { // tiny inline icon set (original drawings)
   cal: <svg viewBox="0 0 24 24" width="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="3" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>,
   bag: <svg viewBox="0 0 24 24" width="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="7" width="14" height="13" rx="2.5" /><path d="M9 7V4.5h6V7M9 11v5M15 11v5" /></svg>,
   glyph: <svg viewBox="0 0 24 24" width="18"><path fill="currentColor" transform="rotate(90 12 12)" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z" /></svg>,
+  grid: <svg viewBox="0 0 24 24" width="22" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.6" /></svg>,
+  spark: <svg viewBox="0 0 24 24" width="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M12 3l2 6.2L20 12l-6 2.8L12 21l-2-6.2L4 12l6-2.8z" /></svg>,
   more: <svg viewBox="0 0 24 24" width="22"><circle cx="5" cy="12" r="2" fill="currentColor" /><circle cx="12" cy="12" r="2" fill="currentColor" /><circle cx="19" cy="12" r="2" fill="currentColor" /></svg>,
 };
 export function RoundBtn({ onClick, children, accent }: { onClick?: () => void; children: ReactNode; accent?: boolean }) {

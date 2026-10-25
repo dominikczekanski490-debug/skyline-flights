@@ -24,7 +24,7 @@ const csv = line => { const out = []; let cur = "", q = false; for (const ch of 
 const AP = {}, AP_ICAO = {};
 for (const l of fs.readFileSync(path.join(__dir, "data/airports.dat"), "utf8").split("\n")) {
   const c = csv(l); if (c.length < 12) continue;
-  const a = { name: c[1], city: c[2], country: c[3], iata: c[4], icao: c[5], lat: +c[6], lon: +c[7], tz: c[11] };
+  const a = { name: c[1], city: c[2], country: c[3], iata: c[4], icao: c[5], lat: +c[6], lon: +c[7], elev: +c[8] || 0, tz: c[11] };
   if (a.iata) AP[a.iata] = a; if (a.icao) AP_ICAO[a.icao] = a;
 }
 const AL = {}, AL_ICAO = {};
@@ -624,6 +624,47 @@ api.get("/learned", (req, res) => res.json(learned(String(req.query.o || "").toU
 api.get("/security/:iata", wrap(async (req, res) => { const c = req.params.iata.toUpperCase(); const f = SECURITY[c];
   if (!f) return res.json({ iata: c, available: false, note: "This airport doesn't publish live security queue times that Skyline can read." });
   try { res.json({ iata: c, available: true, ...(await cached("sec:" + c, 120, f)) }); } catch (e) { res.json({ iata: c, available: false, note: "Live queue feed unavailable right now (" + e.message + ")" }); } }));
+
+// ---------- Tools / Explore (real public sources only) ----------
+const getJ = async (u, h = {}) => { const r = await fetch(u, { headers: { "user-agent": UA, ...h }, signal: AbortSignal.timeout(15000) }); if (!r.ok) { const e = new Error(`${new URL(u).host} ${r.status}`); e.status = 502; throw e; } return r.json(); };
+const getT = async u => { const r = await fetch(u, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(30000) }); if (!r.ok) throw new Error(`${new URL(u).host} ${r.status}`); return r.text(); };
+const icaoOf = c => { c = String(c || "").toUpperCase(); return c.length === 3 ? (AP[c]?.icao || c) : c; };
+const OA = "https://davidmegginson.github.io/ourairports-data/";
+let OAD = null, OADp = null; // runways + frequencies, loaded once on demand (~5 MB)
+async function oa() { if (OAD) return OAD; if (OADp) return OADp; OADp = (async () => { const rw = {}, fq = {};
+  const parse = (t, fn) => { const L = t.split("\n"); const h = csv(L[0]); for (const l of L.slice(1)) { if (!l) continue; const c = csv(l); const o = {}; h.forEach((k, i) => o[k] = c[i]); fn(o); } };
+  parse(await getT(OA + "runways.csv"), o => { if (o.closed === "1") return; (rw[o.airport_ident] ||= []).push({ le: o.le_ident, he: o.he_ident, len: +o.length_ft || null, wid: +o.width_ft || null, surf: o.surface, lit: o.lighted === "1", leHdg: o.le_heading_degT ? +o.le_heading_degT : null, heHdg: o.he_heading_degT ? +o.he_heading_degT : null }); });
+  parse(await getT(OA + "airport-frequencies.csv"), o => (fq[o.airport_ident] ||= []).push({ type: o.type, desc: o.description, mhz: +o.frequency_mhz }));
+  OAD = { rw, fq }; return OAD; })().catch(e => { OADp = null; throw e; }); return OADp; }
+api.get("/wx/:code", wrap(async (req, res) => { const i = icaoOf(req.params.code);
+  const [m, t] = await Promise.all([cached("metar:" + i, 300, () => getJ(`https://aviationweather.gov/api/data/metar?ids=${i}&format=json&hours=3`)), cached("taf:" + i, 900, () => getJ(`https://aviationweather.gov/api/data/taf?ids=${i}&format=json`)).catch(() => [])]);
+  res.json({ icao: i, metar: m, taf: t, source: "aviationweather.gov (NOAA)" }); }));
+api.get("/apinfo/:code", wrap(async (req, res) => { const i = icaoOf(req.params.code); const a = AP_ICAO[i]; if (!a) return res.status(404).json({ error: "unknown airport" });
+  let d = null; try { d = await oa(); } catch {}
+  const near = Object.values(AP_ICAO).filter(b => b.iata && b !== a).map(b => ({ iata: b.iata, icao: b.icao, name: b.name, city: b.city, km: Math.round(hav(a, b)) })).filter(b => b.km < 150).sort((x, y) => x.km - y.km).slice(0, 8);
+  res.json({ ...airportOut(a), elev: a.elev, runways: d?.rw[i] || null, freqs: d?.fq[i] || null, nearby: near, source: "OpenFlights + OurAirports" }); }));
+const hav = (a, b) => { const r = Math.PI / 180, R = 6371; const x = Math.sin((b.lat - a.lat) * r / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin((b.lon - a.lon) * r / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); };
+api.get("/sigmets", wrap(async (req, res) => { const [i, u] = await Promise.all([cached("isig", 600, () => getJ("https://aviationweather.gov/api/data/isigmet?format=json")), cached("asig", 600, () => getJ("https://aviationweather.gov/api/data/airsigmet?format=json")).catch(() => [])]);
+  const slim = x => ({ fir: x.firName || x.firId || x.icaoId, hazard: x.hazard, qual: x.qualifier, from: x.validTimeFrom, to: x.validTimeTo, base: x.base, top: x.top, raw: x.rawSigmet || x.rawAirSigmet, coords: x.coords });
+  res.json({ intl: (i || []).map(slim), us: (u || []).map(slim), source: "aviationweather.gov" }); }));
+api.get("/winds", wrap(async (req, res) => res.json({ raw: await cached("winds", 1800, () => getT("https://aviationweather.gov/api/data/windtemp?region=all&level=high&fcst=06")), source: "aviationweather.gov FB winds (US stations)" })));
+const slimAc = a => ({ hex: a.hex, flight: (a.flight || "").trim(), reg: a.r, type: a.t, desc: a.desc, alt: a.alt_baro, gs: a.gs, track: a.track, lat: a.lat, lon: a.lon, squawk: a.squawk, emergency: a.emergency, mil: !!(a.dbFlags & 1), vs: a.baro_rate, seen: a.seen });
+let ADQ = Promise.resolve(); const adq = fn => { const p = ADQ.then(fn); ADQ = p.catch(() => {}).then(() => new Promise(r => setTimeout(r, 1100))); return p; }; // adsb.lol allows ~1 req/s
+const adsb = p => cached("adsb:" + p, 20, () => adq(() => getJ("https://api.adsb.lol/v2/" + p)).catch(() => getJ("https://api.airplanes.live/v2/" + p))).then(j => (j.ac || []).map(slimAc));
+api.get("/squawks", wrap(async (req, res) => { const out = []; for (const s of ["7500", "7600", "7700"]) out.push(...(await adsb("sqk/" + s)).map(a => ({ ...a, code: s }))); res.json({ list: out, at: Date.now(), source: "adsb.lol" }); }));
+api.get("/mil", wrap(async (req, res) => res.json({ list: (await adsb("mil")).filter(a => a.lat).slice(0, 300), source: "adsb.lol" })));
+api.get("/overhead", wrap(async (req, res) => { const lat = +req.query.lat, lon = +req.query.lon, r = Math.min(250, +req.query.r || 25); if (!isFinite(lat) || !isFinite(lon)) return res.status(400).json({ error: "lat/lon required" });
+  const l = (await adsb(`point/${lat.toFixed(3)}/${lon.toFixed(3)}/${r}`)).filter(a => a.lat).map(a => ({ ...a, nm: Math.round(hav({ lat, lon }, a) / 1.852 * 10) / 10 })).sort((a, b) => a.nm - b.nm); res.json({ list: l, source: "adsb.lol" }); }));
+api.get("/aircraft/:q", wrap(async (req, res) => { const q = req.params.q.toUpperCase().replace(/[^A-Z0-9-]/g, ""); const isHex = /^[0-9A-F]{6}$/.test(q);
+  const db = await cached("adsbdb:" + q, 86400, () => getJ("https://api.adsbdb.com/v0/aircraft/" + q).then(j => j.response?.aircraft || null).catch(() => null));
+  const live = await adsb((isHex ? "hex/" : "reg/") + q).catch(() => []);
+  res.json({ q, info: db, live: live[0] || null, source: "adsbdb.com + adsb.lol" }); }));
+api.get("/callsign/:cs", wrap(async (req, res) => { const c = req.params.cs.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  res.json({ route: await cached("cs:" + c, 3600, () => getJ("https://api.adsbdb.com/v0/callsign/" + c).then(j => j.response?.flightroute || null).catch(() => null)), source: "adsbdb.com" }); }));
+api.get("/airlines/search", (req, res) => { const q = String(req.query.q || "").toLowerCase().trim(); if (!q) return res.json([]);
+  res.json(Object.values(AL_ICAO).filter(a => (a.iata || "").toLowerCase() === q || (a.icao || "").toLowerCase() === q || (a.callsign || "").toLowerCase().includes(q) || (a.name || "").toLowerCase().includes(q)).slice(0, 30)); });
+api.get("/fx", wrap(async (req, res) => { const b = String(req.query.base || "GBP").toUpperCase().replace(/[^A-Z]/g, ""); res.json({ ...(await cached("fx:" + b, 3600, () => getJ("https://api.frankfurter.dev/v1/latest?base=" + b))), source: "Frankfurter (ECB reference rates)" }); }));
+
 app.use("/api", api);
 const dist = path.join(__dir, "../web/dist");
 app.use(express.static(dist, { setHeaders: (r, p) => { if (p.endsWith("sw.js") || p.endsWith(".html") || p.endsWith("version.json")) r.setHeader("cache-control", "no-cache"); } }));

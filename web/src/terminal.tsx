@@ -70,6 +70,9 @@ function Flap({ text, w }: { text: string; w: number }) {
 export function TerminalBoard({ iata, dir: dir0, date, onClose }: { iata: string; dir: string; date: string; onClose: () => void }) {
   const [dir, setDir] = useState(dir0); const [d, setD] = useState<any>(null); const [theme, setTheme] = useState(() => localStorage.getItem("sk.tb." + iata) || "auto");
   const [page, setPage] = useState(0); const [paused, setPaused] = useState(false); const [now, setNow] = useState(Date.now()); const [upd, setUpd] = useState<number>(0); const [side, setSide] = useState(() => localStorage.getItem("sk.tb.side") || "Airside"); const [sec, setSec] = useState<any>(null);
+  const [zoom, setZoom] = useState(() => +(localStorage.getItem("sk.tb.zoom") || 1) || 1); const [vp, setVp] = useState({ w: innerWidth, h: innerHeight });
+  useEffect(() => { const f = () => setVp({ w: innerWidth, h: innerHeight }); addEventListener("resize", f); return () => removeEventListener("resize", f); }, []);
+  const setZ = (z: number) => { z = Math.round(Math.max(0.6, Math.min(1.8, z)) * 100) / 100; setZoom(z); localStorage.setItem("sk.tb.zoom", String(z)); };
   useEffect(() => { api(`/security/${iata}`).then(setSec).catch(() => setSec(null)); }, [iata]);
   const ref = useRef<HTMLDivElement>(null); const th = theme === "auto" || !THEMES[theme] ? autoTheme(iata) : theme;
   useEffect(() => { let on = true; const go = () => api(`/board/${iata}?dir=${dir}&date=${date}`).then(r => { if (on) { setD(r); setUpd(Date.now()); } }).catch(e => on && setD((p: any) => p || { error: e.message })); go(); const t = setInterval(go, 60e3); return () => { on = false; clearInterval(t); }; }, [iata, dir, date]);
@@ -79,7 +82,10 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose }: { iata: string
   const tz = d?.airport?.tz || "Europe/London";
   const rows = useMemo(() => (d?.flights || []).filter((f: any) => !f.liveOnly).filter((f: any) => { const t = dir === "dep" ? f.dep : f.arr; const b = +new Date(t.actual || t.estimated || t.scheduled); if (b < Date.now() - 90 * 60e3 && f.status !== "landed") return false; return f.status === "cancelled" ? +new Date(t.scheduled) > Date.now() - 30 * 60e3 : (f.status !== "departed" && f.status !== "landed") || b > Date.now() - 15 * 60e3; })
     .sort((a: any, b: any) => ((dir === "dep" ? a.dep : a.arr).scheduled < (dir === "dep" ? b.dep : b.arr).scheduled ? -1 : 1)), [d, dir]);
-  const live = d?.liveOnly; const per = typeof innerHeight === "number" && innerHeight < 520 ? 8 : 12; const panels = (THEMES[th].panels || 1) > 1 && typeof innerWidth === "number" && innerWidth > innerHeight ? THEMES[th].panels! : 1; const pages = Math.max(1, Math.ceil(rows.length / (per * panels)));
+  const live = d?.liveOnly; const portrait = vp.h > vp.w; const panels = (THEMES[th].panels || 1) > 1 && !portrait ? THEMES[th].panels! : 1;
+  // "Fit width": lay the board out at a fixed design width that always has room for every column (status included), then scale it to the screen.
+  const designW = panels > 1 ? 1500 : portrait ? 720 : 1100; const s = Math.min(1, vp.w / designW) * zoom; const stageH = vp.h / s;
+  const rowH = th === "mag" ? 50 : 40; const per = Math.max(6, Math.min(30, Math.floor((stageH - (th === "mag" ? 150 : 110)) / rowH))); const pages = Math.max(1, Math.ceil(rows.length / (per * panels)));
   useEffect(() => { if (paused) return; const t = setInterval(() => setPage(p => (p + 1) % pages), 9000); return () => clearInterval(t); }, [paused, pages]);
   const pg = Math.min(page, pages - 1); void 0; const vis = rows.slice(pg * per, pg * per + per); const solari = th === "solari";
   const clock = new Date(now).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: th === "led" ? "2-digit" : undefined, timeZone: tz });
@@ -106,10 +112,10 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose }: { iata: string
     <div className="tb-head" style={{ gridTemplateColumns: grid }}>{tt.cols.map(c => <span key={c}>{(tt.heads || {})[c] ?? (c === "gate" && dir === "arr" ? "Belt" : c === "dest" && dir === "arr" ? "From" : HEAD[c])}</span>)}</div>
     <div className="tb-rows">{list.map((f: any, i: number) => { const st = status(f, dir);
       return <div key={f.id + pg + i + (solari ? st.txt : "")} className={"tb-row " + (i % 2 ? "alt" : "")} style={{ gridTemplateColumns: grid }}>{tt.cols.map(c => <span key={c} className={"c-" + c}>{cellOf(f, c, st)}</span>)}{fraSt(st)}</div>; })}</div></div>;
-  const W: Record<Col, string> = { tile: "minmax(110px,.9fr)", time: th === "mag" ? "92px" : "58px", est: "52px", dest: "minmax(0,1.5fr)", fl: "minmax(150px,1fr)", logo: "110px", tag: "84px", gate: "52px", term: "54px", st: "minmax(0,1.3fr)", icon: "26px" };
+  const W: Record<Col, string> = { tile: "minmax(100px,.8fr)", time: th === "mag" ? "84px" : "4.2em", est: "4em", dest: "minmax(5em,1.4fr)", fl: th === "mag" || th === "syd" || solari ? "6.5em" : "11em", logo: "100px", tag: "6em", gate: "3.4em", term: "3.2em", st: solari ? "minmax(19em,1.4fr)" : "minmax(11.5em,1.3fr)", icon: "22px" };
   const grid = tt.cols.map(c => W[c]).join(" ") + (th === "fra" ? " minmax(0,1fr)" : "");
   const msg = !d ? "Loading live board…" : d.error ? d.error : live ? `No official schedule feed for ${iata}. The terminal view needs scheduled times, so use the list view for live ADS-B traffic.` : rows.length === 0 ? `No more ${dir === "dep" ? "departures" : "arrivals"} listed for this date.` : "";
-  return <div ref={ref} style={{ ["--per" as any]: per }} className={"tboard " + tt.cls + (paused ? " paused" : "")} onClick={() => setPaused(p => !p)}>
+  return <div ref={ref} className={"tboard " + tt.cls + (paused ? " paused" : "")} onClick={() => setPaused(p => !p)}><div className="tb-stage" style={{ ["--per" as any]: per, ["--rh" as any]: rowH + "px", width: vp.w / s, height: stageH, transform: `scale(${s})` }}>
     {(panels === 1 || !["avinor", "ams", "led"].includes(th)) && <div className="tb-top"><div className="tb-title"><b>{tt.title(dir)[0]}</b>{tt.title(dir)[1] && <span>{tt.title(dir)[1]}</span>}</div>
       <div className="tb-ap">{d?.airport?.name || iata}{sec && <span className="tb-sec">{sec.available ? "Security " + sec.queues.filter((q: any) => q.kind === "Departures").map((q: any) => `${q.terminal} ${q.text}`).join(" · ") : "Security: no live queue data"}</span>}</div>{tt.clock === "top" && <div className="tb-clock">{clock}</div>}</div>}
     {msg ? <div className="tb-msg">{msg}</div> : <div className="tb-panels">{Array.from({ length: panels }, (_, k) => panel(show.slice(k * per, k * per + per), k))}</div>}
@@ -120,6 +126,7 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose }: { iata: string
         <select value={dir} onChange={e => { setDir(e.target.value); setPage(0); }}><option value="dep">Departures</option><option value="arr">Arrivals</option></select>
         {th === "mag" && dir === "dep" && <select value={side} onChange={e => { setSide(e.target.value); localStorage.setItem("sk.tb.side", e.target.value); }}><option>Airside</option><option>Landside</option></select>}
         <select value={theme} onChange={e => setTheme(e.target.value)}><option value="auto">Auto ({THEMES[autoTheme(iata)].name})</option>{Object.entries(THEMES).map(([k, v]) => <option key={k} value={k}>{v.name}</option>)}</select>
+        <span className="tb-zoom"><button onClick={() => setZ(zoom - 0.1)} aria-label="Zoom out">A-</button><button className={zoom === 1 ? "on" : ""} onClick={() => setZ(1)}>Fit</button><button onClick={() => setZ(zoom + 0.1)} aria-label="Zoom in">A+</button></span>
         <button onClick={onClose}>Close</button></span></div>
-  </div>;
+  </div></div>;
 }
