@@ -120,3 +120,29 @@ export async function reviewPng(L: Flight[], yr: string): Promise<Blob> {
 async function shareReview(L: Flight[], yr: string) { const b = await reviewPng(L, yr); const file = new File([b], `skyline-${yr}.png`, { type: "image/png" });
   if ((navigator as any).canShare?.({ files: [file] })) return navigator.share({ files: [file], title: "My Skyline year" }).catch(() => {});
   const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = file.name; a.click(); }
+
+// ---------- Rich visuals for "Why" reason cards (real data only) ----------
+export function FactorViz({ x, color }: { x: any; color: string }) {
+  const d = x.data; if (!d) return null;
+  if (x.kind === "airport" && d.counts) { const c = d.counts;
+    const seg = [["On time", c.onTime, "#30d158"], ["15m+ late", c.late, "#ff9f0a"], ["Cancelled", c.cancelled, "#ff453a"], ["No time yet", c.unknown, "#8e8e9366"]].filter(s => (s[1] as number) > 0) as [string, number, string][];
+    const tr = (d.trend || []) as (number | null)[]; const pts = tr.map((v, i) => v == null ? null : [i, v] as [number, number]).filter(Boolean) as [number, number][]; const mx = Math.max(15, ...pts.map(p => p[1]));
+    const path = pts.map((p, i) => `${i ? "L" : "M"}${8 + p[0] * 61},${46 - p[1] / mx * 38}`).join(" ");
+    return <div className="fviz">
+      <div className="fvk">{d.airport} DEPARTURES · LAST 4 HOURS</div>
+      <div className="segbar">{seg.map(([l, v, col]) => <i key={l} style={{ flex: v, background: col }} />)}</div>
+      <div className="seglg">{seg.map(([l, v, col]) => <span key={l}><b style={{ background: col }} />{l} <em>{v}</em></span>)}</div>
+      <div className="fchips"><span><small>Avg delay</small><b style={{ color }}>{d.avgDelay}m</b></span><span><small>On time</small><b>{d.onTime ?? "—"}%</b></span><span><small>Cancelled</small><b>{d.cancelled || 0}%</b></span><span><small>Flights</small><b>{d.n}</b></span></div>
+      {pts.length >= 2 && <div className="spark"><svg viewBox="0 0 200 54" preserveAspectRatio="none"><defs><linearGradient id="spg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={color} stopOpacity=".35" /><stop offset="1" stopColor={color} stopOpacity="0" /></linearGradient></defs>
+        <path d={`${path} L${8 + pts.at(-1)![0] * 61},50 L${8 + pts[0][0] * 61},50 Z`} fill="url(#spg)" /><path d={path} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />{pts.map(p => <circle key={p[0]} cx={8 + p[0] * 61} cy={46 - p[1] / mx * 38} r="3.5" fill={color} />)}</svg>
+        <div className="sparkl">{["-4h", "-3h", "-2h", "last h"].map((l, i) => <span key={l}>{l}{tr[i] != null ? ` · ${tr[i]}m` : ""}</span>)}</div><div className="fvk">Average departure delay by hour{pts.length >= 2 ? (pts.at(-1)![1] > pts[0][1] + 5 ? " · getting worse" : pts.at(-1)![1] < pts[0][1] - 5 ? " · improving" : " · steady") : ""}</div></div>}
+    </div>; }
+  if (x.kind === "weather" && d.gust != null) { const g = Math.min(d.gust, 100), a = Math.PI * (1 - g / 100), cx = 60, cy = 56, r = 44;
+    return <div className="fviz row g16"><svg width="120" height="66" viewBox="0 0 120 66"><path d="M16,56 A44,44 0 0 1 104,56" fill="none" stroke="var(--chip)" strokeWidth="9" strokeLinecap="round" />
+      <path d={`M16,56 A44,44 0 0 1 ${cx + r * Math.cos(a)},${cy - r * Math.sin(a)}`} fill="none" stroke={color} strokeWidth="9" strokeLinecap="round" />
+      {[45, 65].map(t => { const b = Math.PI * (1 - t / 100); return <line key={t} x1={cx + 36 * Math.cos(b)} y1={cy - 36 * Math.sin(b)} x2={cx + 52 * Math.cos(b)} y2={cy - 52 * Math.sin(b)} stroke="var(--muted)" strokeWidth="1.5" />; })}
+      <text x="60" y="52" textAnchor="middle" fontSize="20" fontWeight="700" fill="var(--text)">{d.gust}</text><text x="60" y="64" textAnchor="middle" fontSize="8.5" fill="var(--muted)">km/h gusts</text></svg>
+      <div className="fchips col"><span><small>Mean wind</small><b>{d.wind ?? "—"} km/h</b></span><span><small>Gusts</small><b style={{ color }}>{d.gust} km/h</b></span><span><small>Thresholds</small><b>45 gusty · 65 strong</b></span></div></div>; }
+  if (x.kind === "inbound" && d.number) return <div className="fviz"><div className="chainv"><div><b>{d.number}</b><small>inbound · ETA {fmtT(d.eta)}</small></div><i style={{ background: color }} /><div><b>40m</b><small>min turnaround</small></div><i /><div><b>This flight</b><small>sched {fmtT(d.dep)}</small></div></div><div className="fvk mt6">Aircraft arrives {Math.abs(d.slack)} min too late for a normal turnaround</div></div>;
+  return null;
+}

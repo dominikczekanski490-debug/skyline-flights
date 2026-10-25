@@ -4,7 +4,7 @@ import MapView, { MAP_STYLES } from "./MapView";
 import { Sheet, RoundBtn, I, Badge } from "./ui";
 import { api, today, dist, fmtT, fmtD, best, delay, dur, lateLabel, lateColor, withEstArr, load, save, logo, ics, download, wxText, wxIcon, tzOffset, estDurMin, type Flight, type Ap } from "./lib";
 import { EXAMPLE } from "./example";
-import { WarmBanner, syncPush, testPush, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras } from "./extras";
+import { FactorViz, WarmBanner, syncPush, testPush, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras } from "./extras";
 
 type Ov = { t: "flight"; f: Flight } | { t: "board"; iata: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" };
 const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <img className="alogo" style={{ width: s, height: s }} src={logo(a?.iata)} onError={e => (e.currentTarget.style.visibility = "hidden")} alt="" />;
@@ -181,8 +181,8 @@ function Factors({ list }: { list: any[] }) {
   const mx = Math.max(10, ...list.map(x => Math.abs(x.impact)));
   return <div className="pfac"><div className="plab">Why this flight might be late · ranked by impact</div>{list.map((x: any, i: number) => <motion.div key={i} className="pfrow" style={{ ["--sv" as any]: col[x.sev] }} initial={{ opacity: 0, y: 14, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", damping: 22, stiffness: 260, delay: 0.08 * i }}>
     <div className="pfic" style={{ background: col[x.sev] + "22" }}>{x.icon}</div>
-    <div className="grow"><div className="row between g8"><b className="pft">{x.title}</b><span className="pfimp" style={{ color: col[x.sev] }}>{x.impact > 0 ? `+${x.impact}m` : x.impact < 0 ? `${x.impact}m` : "±0"}</span></div>
-      <div className="pftx">{x.text}</div>
+    <div className="grow"><div className="row between g8"><b className="pft">{x.title}</b><span className={"pfimp" + (x.data ? " big" : "")} style={{ color: col[x.sev], ...(x.data ? { background: `linear-gradient(135deg, ${col[x.sev]}2e, ${col[x.sev]}12)`, boxShadow: `0 0 0 1px ${col[x.sev]}40 inset` } : {}) }}>{x.impact > 0 ? `+${x.impact}m` : x.impact < 0 ? `${x.impact}m` : "±0"}{x.data && <small>impact</small>}</span></div>
+      <div className="pftx">{x.text}</div><FactorViz x={x} color={col[x.sev]} />
       <div className="row g8 mt6"><span className="pchip" style={{ color: col[x.sev], background: col[x.sev] + "1f" }}>{lab[x.sev]}</span><div className="pimp"><motion.i initial={{ width: 0 }} animate={{ width: `${Math.abs(x.impact) / mx * 100}%` }} transition={{ duration: 0.8, delay: 0.1 + 0.05 * i }} style={{ background: col[x.sev] }} /></div></div></div>
   </motion.div>)}</div>;
 }

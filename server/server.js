@@ -277,7 +277,7 @@ function wxFactors(w, where) { const out = []; if (!w) return out; const add = (
 function wxPenalty(w, where, R) { return wxFactors(w, where).reduce((a, x) => (R.push(x.title), a + x.p), 0); }
 function predictCore(f, ctx) {
   const F = [], signals = []; let mu = 6, w0 = 1; // prior: typical short-haul mean delay ~6 min
-  const step = (fn, icon, title, text, kind) => { const before = mu; fn(); const impact = Math.round(mu - before); F.push({ icon, title, text, impact, kind }); };
+  const step = (fn, icon, title, text, kind, data) => { const before = mu; fn(); const impact = Math.round(mu - before); F.push({ icon, title, text, impact, kind, data }); };
   const hist = Object.values(HIST[f.number] || {}).filter(x => x.d != null);
   if (hist.length >= 3) { const m = hist.reduce((a, x) => a + Math.max(-10, Math.min(180, x.d)), 0) / hist.length; const w = Math.min(hist.length, 20) / 6; signals.push("history");
     step(() => { mu = (mu * w0 + m * w) / (w0 + w); w0 += w; }, "📊", `Route history: ${m >= 0 ? "+" : ""}${Math.round(m)}m average`, `${f.number} averaged ${Math.round(m)} min vs schedule across ${hist.length} flights Skyline has recorded (up to 60 days).`, "history"); }
@@ -285,18 +285,18 @@ function predictCore(f, ctx) {
     if (src) { const [kind, v] = src, w = Math.min(v.n, 40) / 15; signals.push("learned");
       step(() => { mu = (mu * w0 + v.avg * w) / (w0 + w); w0 += w; }, "🧠", kind === "route" ? `Learned: ${f.origin.iata}→${f.destination?.iata} ${v.avg >= 0 ? "+" : ""}${v.avg}m typical` : `Learned: ${f.origin.iata} departures ${v.avg >= 0 ? "+" : ""}${v.avg}m typical`, `From ${v.n} real ${kind === "route" ? "flights on this route" : "departures from " + f.origin.iata} Skyline recorded (last 60 days): average ${v.avg} min vs schedule, ${v.late15}% were 15+ min late.`, "learned"); } }
   const st = ctx.aptStats; if (st?.avgDelay != null && st.n >= 5) { const w = 1.2; signals.push("airport");
-    step(() => { mu = (mu * w0 + st.avgDelay * w) / (w0 + w); w0 += w; }, st.avgDelay >= 20 ? "🚦" : "🛫", st.avgDelay >= 20 ? `${f.origin?.iata} congested right now` : `${f.origin?.iata} running normally`, `Departures over the last 4 h: average ${st.avgDelay} min late, ${st.onTime}% on time, ${st.cancelled || 0}% cancelled (${st.n} flights, live board).`, "airport"); }
+    step(() => { mu = (mu * w0 + st.avgDelay * w) / (w0 + w); w0 += w; }, st.avgDelay >= 20 ? "🚦" : "🛫", st.avgDelay >= 20 ? `${f.origin?.iata} congested right now` : `${f.origin?.iata} running normally`, `Departures over the last 4 h: average ${st.avgDelay} min late, ${st.onTime}% on time, ${st.cancelled || 0}% cancelled (${st.n} flights, live board).`, "airport", { n: st.n, avgDelay: st.avgDelay, onTime: st.onTime, cancelled: st.cancelled, counts: st.counts, trend: st.trend, airport: f.origin?.iata }); }
   const sd = f.dep?.scheduled; const loc = sd ? new Date(new Date(sd).toLocaleString("en-US", { timeZone: f.origin?.tz || "Europe/London" })) : null;
   if (loc) { const h = loc.getHours(), d = loc.getDay();
     if (h >= 17) step(() => { mu += 5; }, "🌆", "Evening departure bank", `Departs ${String(h).padStart(2, "0")}:00 local — knock-on delays build up through the day.`, "time");
     else if (h < 8) step(() => { mu -= 3; }, "🌅", "First wave of the day", "Early departures usually use aircraft that night-stopped, so less knock-on delay.", "time");
     if (d === 5 || d === 0) step(() => { mu += 2; }, "📅", d === 5 ? "Friday peak" : "Sunday peak", "Busier leisure days carry slightly more delay.", "time");
     if (h >= 22 || h < 1) F.push({ icon: "🌙", title: "Near night curfew window", text: "Many airports restrict late movements — big delays risk cancellation rather than late departure.", impact: 0, kind: "curfew" }); }
-  let wxp = 0; for (const [w, where, k] of [[ctx.wxDep, f.origin?.iata || "departure", 1], [ctx.wxArr, f.destination?.iata || "arrival", 0.7]]) for (const x of wxFactors(w, where)) { wxp += x.p * k; step(() => { mu += x.p * k; }, x.icon, x.title, x.text + (k < 1 ? " (arrival-side, weighted 70%)" : ""), "weather"); }
+  let wxp = 0; for (const [w, where, k] of [[ctx.wxDep, f.origin?.iata || "departure", 1], [ctx.wxArr, f.destination?.iata || "arrival", 0.7]]) for (const x of wxFactors(w, where)) { wxp += x.p * k; step(() => { mu += x.p * k; }, x.icon, x.title, x.text + (k < 1 ? " (arrival-side, weighted 70%)" : ""), "weather", { gust: w.gust != null ? Math.round(w.gust) : null, wind: w.wind != null ? Math.round(w.wind) : null, vis: w.vis, precip: w.precip, code: w.code, where }); }
   if (ctx.wxDep || ctx.wxArr) signals.push("weather");
   if (wxp === 0 && (ctx.wxDep || ctx.wxArr)) F.push({ icon: "☀️", title: "Weather looks fine", text: "No storms, strong gusts, fog or snow forecast at departure/arrival time (Open-Meteo).", impact: 0, kind: "weather" });
   if (ctx.inbound) { const ib = ctx.inbound; const slack = (new Date(sd) - new Date(ib.eta)) / 60000 - 40; signals.push("inbound");
-    if (slack < 0) step(() => { mu = Math.max(mu, -slack + 3); }, "🔁", `Inbound ${ib.number} running late`, `The aircraft operating this flight is due in ${Math.round(-slack)} min after the ~40 min minimum turnaround allows.`, "inbound");
+    if (slack < 0) step(() => { mu = Math.max(mu, -slack + 3); }, "🔁", `Inbound ${ib.number} running late`, `The aircraft operating this flight is due in ${Math.round(-slack)} min after the ~40 min minimum turnaround allows.`, "inbound", { number: ib.number, eta: ib.eta, dep: sd, slack: Math.round(slack) });
     else F.push({ icon: "🔁", title: `Inbound ${ib.number} on time`, text: `Aircraft due with ${Math.round(slack)} min spare beyond a ~40 min turnaround.`, impact: 0, kind: "inbound" }); }
   const off = f.dep?.actual || f.dep?.estimated; if (off && sd) { const d = (new Date(off) - new Date(sd)) / 60000; signals.push("official");
     step(() => { mu = d + Math.max(0, mu - d) * 0.25; }, "🏢", d >= 5 ? `Airport already shows +${Math.round(d)}m` : "Airport shows on time", `The ${f.dep?.actual ? "actual" : "estimated"} departure time published by the airline/airport is the strongest signal; other factors only add a little on top.`, "official"); }
@@ -344,7 +344,8 @@ const LIVEC = {}; (async function refreshLive() { for (const c of Object.values(
 function statsFrom(list, now = Date.now()) {
   const recent = list.filter(f => { const t = new Date((f.dep.scheduled || f.arr.scheduled)); return t <= now && t > now - 4 * 3600e3; });
   const ds = recent.map(delayMin).filter(d => d != null && !Number.isNaN(d)); const canc = recent.filter(f => f.status === "cancelled").length;
-  return { n: recent.length, onTime: ds.length ? Math.round(ds.filter(d => d < 15).length / ds.length * 100) : null, avgDelay: ds.length ? Math.max(0, Math.round(ds.reduce((a, c) => a + Math.max(0, c), 0) / ds.length)) : null, cancelled: recent.length ? Math.round(canc / recent.length * 100) : 0 };
+  const dn = recent.filter(f => f.status !== "cancelled").map(delayMin).filter(d => d != null && !Number.isNaN(d)), late = dn.filter(d => d >= 15).length, trend = [3, 2, 1, 0].map(h => { const b = recent.filter(f => { const t = new Date(f.dep.scheduled || f.arr.scheduled); return t <= now - h * 3600e3 && t > now - (h + 1) * 3600e3; }).map(delayMin).filter(d => d != null && !Number.isNaN(d)); return b.length ? Math.round(b.reduce((a, c) => a + Math.max(0, c), 0) / b.length) : null; });
+  return { counts: { onTime: dn.length - late, late, cancelled: canc, unknown: Math.max(0, recent.length - dn.length - canc) }, trend, n: recent.length, onTime: ds.length ? Math.round(ds.filter(d => d < 15).length / ds.length * 100) : null, avgDelay: ds.length ? Math.max(0, Math.round(ds.reduce((a, c) => a + Math.max(0, c), 0) / ds.length)) : null, cancelled: recent.length ? Math.round(canc / recent.length * 100) : 0 };
 }
 api.get("/status", wrap(async (req, res) => {
   const region = String(req.query.region || "All"); const codes = (region === "All" ? Object.values(STATUS_AIRPORTS).flat() : STATUS_AIRPORTS[region] || []).filter(c => AP[c]);
