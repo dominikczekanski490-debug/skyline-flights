@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, fmtT, delay } from "./lib";
 import { AirlineTile, BRAND } from "./brand";
@@ -14,10 +15,19 @@ export const THEMES: Record<string, Th> = {
   ams: { name: "Schiphol", cls: "tb-ams", cols: ["time", "dest", "fl", "gate", "st"], panels: 2, clock: "top", title: d => d === "dep" ? ["Flight departures", "Vertrekken"] : ["Flight arrivals", "Aankomsten"] },
   cdg: { name: "Paris CDG", cls: "tb-cdg", cols: ["dest", "fl", "time", "term", "st"], clock: "top", title: d => d === "dep" ? ["Départs", "Departures"] : ["Arrivées", "Arrivals"], heads: { dest: "Destination", fl: "Vol Flight", time: "Heure Time", term: "Term.", st: "Remarques" } },
   solari: { name: "Split-flap", cls: "tb-solari", cols: ["fl", "dest", "time", "gate", "st"], clock: "top", title: d => [d === "dep" ? "Departures" : "Arrivals", ""] },
+  lgw: { name: "Gatwick", cls: "tb-lgw", cols: ["time", "dest", "fl", "st", "gate"], clock: "top", title: d => [d === "dep" ? "Departures" : "Arrivals", ""], heads: { time: "Time", dest: "Destination", fl: "Flight", st: "Status", gate: "Gate" } },
+  edi: { name: "Edinburgh", cls: "tb-edi", cols: ["tile", "time", "dest", "fl", "gate", "st"], clock: "top", title: d => [d === "dep" ? "Departures" : "Arrivals", ""] },
+  ags: { name: "AGS (GLA/ABZ/SOU)", cls: "tb-ags", cols: ["time", "dest", "fl", "gate", "st"], clock: "top", title: d => [d === "dep" ? "Departures" : "Arrivals", ""] },
+  bhx: { name: "Birmingham", cls: "tb-bhx", cols: ["logo", "time", "dest", "fl", "gate", "st"], clock: "top", title: d => [d === "dep" ? "Departures" : "Arrivals", ""] },
+  daa: { name: "daa (DUB/ORK)", cls: "tb-daa", cols: ["time", "dest", "fl", "term", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Imeachtaí", "Departures"] : ["Teachtaí", "Arrivals"], heads: { time: "Time", dest: "Destination", fl: "Flight", term: "Term", gate: "Gate", st: "Remarks" } },
+  bel: { name: "Belfast", cls: "tb-bel", cols: ["logo", "time", "dest", "fl", "st"], clock: "top", title: d => [d === "dep" ? "Departures" : "Arrivals", ""] },
+  isl: { name: "Islands (JER/GCI/IOM)", cls: "tb-isl", cols: ["time", "dest", "fl", "st"], clock: "top", title: d => [d === "dep" ? "Departures" : "Arrivals", ""] },
+  regional: { name: "UK regional", cls: "tb-reg", cols: ["tile", "time", "dest", "fl", "gate", "st"], clock: "top", title: d => [d === "dep" ? "Departures" : "Arrivals", ""] },
   led: { name: "Amber LED", cls: "tb-led", cols: ["time", "fl", "dest", "gate", "st"], panels: 2, clock: "bottom", title: d => d === "dep" ? ["Départs", "Departures"] : ["Arrivées", "Arrivals"] },
 };
 const NORDIC = /^(OSL|BGO|TRD|SVG|TOS|BOO|AES|KRS|HAU|EVE|ALF|BDU|MOL|KSU|LKL|HFT|VDS|KKN|ANX|SSJ|MQN|FRO|SOG|HOV|ORW|SDN|FDE|RRS|BNN|MJF|RVK|VAW|BVG|SKN|SVJ|LKN|VRY|RET|NVK|HAA|BJF|MEH|OSY|NTB|SOJ)$/;
-export const autoTheme = (iata: string) => /^(MAN|STN|EMA)$/.test(iata) ? "mag" : /^(LHR|LGW)$/.test(iata) ? "lhr" : iata === "FRA" ? "fra" : NORDIC.test(iata) ? "avinor" : /^(SYD|MEL|BNE)$/.test(iata) ? "syd" : iata === "AMS" ? "ams" : /^(CDG|ORY)$/.test(iata) ? "cdg" : "led";
+const UKREG = /^(LTN|LCY|SEN|BRS|NCL|LBA|LPL|BOH|EXT|NQY|NWI|MME|HUY|DSA|BLK|CAX|ISC|LEQ|BZZ|OXF|BQH|FAB|ESH|LYX|QUG|CWL|VLY|INV|PIK|DND|SYY|KOI|LSI|BRR|BEB|TRE|ILY|CAL|WIC|LWK|NRL|PPW|SOY|WRY|EOI|FIE|FOA|COL|CSA|OUK|SNN|NOC|KIR|WAT|SXL|IOR|CFN|LDY)$/;
+export const autoTheme = (iata: string) => iata === "LGW" ? "lgw" : iata === "EDI" ? "edi" : /^(GLA|ABZ|SOU)$/.test(iata) ? "ags" : iata === "BHX" ? "bhx" : /^(DUB|ORK)$/.test(iata) ? "daa" : /^(BFS|BHD)$/.test(iata) ? "bel" : /^(JER|GCI|IOM|ACI)$/.test(iata) ? "isl" : UKREG.test(iata) ? "regional" : /^(MAN|STN|EMA)$/.test(iata) ? "mag" : iata === "LHR" ? "lhr" : iata === "FRA" ? "fra" : NORDIC.test(iata) ? "avinor" : /^(SYD|MEL|BNE)$/.test(iata) ? "syd" : iata === "AMS" ? "ams" : /^(CDG|ORY)$/.test(iata) ? "cdg" : "led";
 const Tile = ({ a }: { a: any }) => <AirlineTile a={a} className="tb-tile" mode={BRAND[a?.iata] ? "white" : "colour"} />;
 const HEAD: Record<Col, string> = { tile: "", time: "Time", dest: "Destination", fl: "Flight", logo: "", tag: "Flight", gate: "Gate", term: "Term", st: "Remarks", icon: "", est: "Est" };
 const tagColor = (c = "") => { if (BRAND[c]) return BRAND[c]; let h = 0; for (const x of c) h = (h * 31 + x.charCodeAt(0)) % 360; return `hsl(${h} 45% 32%)`; };
@@ -95,7 +105,7 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen }:
     .sort((a: any, b: any) => ((dir === "dep" ? a.dep : a.arr).scheduled < (dir === "dep" ? b.dep : b.arr).scheduled ? -1 : 1)), [d, dir]);
   const live = d?.liveOnly; const portrait = vp.h > vp.w; const panels = (THEMES[th].panels || 1) > 1 && !portrait ? THEMES[th].panels! : 1;
   // "Fit width": lay the board out at a fixed design width that always has room for every column (status included), then scale it to the screen.
-  const designW = panels > 1 ? 1500 : portrait ? 720 : 1100; const s = Math.min(1, vp.w / designW) * zoom; const stageH = vp.h / s;
+  const designW = panels > 1 ? 1500 : portrait ? 720 : 1100; const s = Math.min(1, vp.w / designW) * zoom; const BAR = 66; const stageH = (vp.h - BAR) / s;
   const rowH = th === "mag" ? 50 : 40; const per = Math.max(6, Math.min(30, Math.floor((stageH - (th === "mag" ? 150 : 110)) / rowH))); const pages = Math.max(1, Math.ceil(rows.length / (per * panels)));
   useEffect(() => { if (paused) return; const t = setInterval(() => setPage(p => (p + 1) % pages), 9000); return () => clearInterval(t); }, [paused, pages]);
   const pg = Math.min(page, pages - 1); void 0; const vis = rows.slice(pg * per, pg * per + per); const solari = th === "solari";
@@ -119,17 +129,17 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen }:
     } };
   const fraSt = (st: any) => th === "fra" ? <span className={"tb-st " + st.k}>{st.txt}</span> : null;
   const panel = (list: any[], k: number) => <div className="tb-panel" key={k}>
-    {["avinor", "ams", "led"].includes(th) && panels > 1 && <div className="tb-ptitle" style={k === panels - 1 ? { paddingRight: 236 / s } : undefined}><b>{tt.title(dir)[0]}</b> <span>{tt.title(dir)[1]}</span>{th === "avinor" && <em>{clock}</em>}</div>}
+    {["avinor", "ams", "led"].includes(th) && panels > 1 && <div className="tb-ptitle"><b>{tt.title(dir)[0]}</b> <span>{tt.title(dir)[1]}</span>{th === "avinor" && <em>{clock}</em>}</div>}
     <div className="tb-head" style={{ gridTemplateColumns: grid }}>{tt.cols.map(c => <span key={c}>{(dir === "arr" && c === "dest" && (tt.heads || {})[c] ? (tt.heads || {})[c]!.replace("Ziel", "Von").replace("Destination", "From") : dir === "arr" && c === "gate" && (tt.heads || {})[c] ? "Belt" : (tt.heads || {})[c]) ?? (c === "gate" && dir === "arr" ? "Belt" : c === "dest" && dir === "arr" ? "From" : HEAD[c])}</span>)}</div>
     <div className="tb-rows">{list.map((f: any, i: number) => { const st = status(f, dir);
       return <div key={f.id + pg + i + (solari ? st.txt : "")} className={"tb-row " + (i % 2 ? "alt" : "")} style={{ gridTemplateColumns: grid }} onClick={e => { if (!onOpen) return; e.stopPropagation(); closed.current = true; onOpen(f); }}>{tt.cols.map(c => <span key={c} className={"c-" + c}>{cellOf(f, c, st)}</span>)}{fraSt(st)}</div>; })}</div></div>;
   const W: Record<Col, string> = { tile: "minmax(100px,.8fr)", time: th === "mag" ? "84px" : "4.2em", est: "4em", dest: "minmax(5em,1.4fr)", fl: th === "mag" || th === "syd" || solari ? "6.5em" : "11em", logo: "100px", tag: "6em", gate: "3.4em", term: "3.2em", st: solari ? "minmax(19em,1.4fr)" : "minmax(11.5em,1.3fr)", icon: "22px" };
   const grid = tt.cols.map(c => W[c]).join(" ") + (th === "fra" ? " minmax(0,1fr)" : "");
   const msg = !d ? "Loading live board…" : d.error ? d.error : live && !rows.length ? `No live ADS-B ${dir === "dep" ? "departures" : "arrivals"} near ${iata} right now.` : rows.length === 0 ? `No more ${dir === "dep" ? "departures" : "arrivals"} listed for this date.` : "";
-  return <div ref={ref} className={"tboard " + tt.cls + (paused ? " paused" : "")} onClick={() => setPaused(p => !p)} onTouchStart={e => { ty.current = e.touches[0].clientY; }} onTouchEnd={e => { const y0 = ty.current; ty.current = null; if (y0 != null && y0 < innerHeight * 0.5 && e.changedTouches[0].clientY - y0 > 110) close(); }}>
+  return createPortal(<div ref={ref} className={"tboard " + tt.cls + (paused ? " paused" : "")} onClick={() => setPaused(p => !p)} onTouchStart={e => { ty.current = e.touches[0].clientY; }} onTouchEnd={e => { const y0 = ty.current; ty.current = null; if (y0 != null && y0 < innerHeight * 0.5 && e.changedTouches[0].clientY - y0 > 110) close(); }}>
     <div className="tb-fab" onClick={e => e.stopPropagation()}><div className="tb-seg" role="tablist"><button className={dir === "dep" ? "on" : ""} onClick={() => { setDir("dep"); setPage(0); }}>Departures</button><button className={dir === "arr" ? "on" : ""} onClick={() => { setDir("arr"); setPage(0); }}>Arrivals</button></div>
       <button className="tb-x" aria-label="Close board" onClick={close}><svg viewBox="0 0 24 24" width="22" height="22"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" /></svg></button></div><div className="tb-stage" style={{ ["--per" as any]: per, ["--rh" as any]: rowH + "px", width: vp.w / s, height: stageH, transform: `scale(${s})` }}>
-    {(panels === 1 || !["avinor", "ams", "led"].includes(th)) && <div className="tb-top" style={{ paddingRight: 236 / s }}><div className="tb-title"><b>{tt.title(dir)[0]}</b>{tt.title(dir)[1] && <span>{tt.title(dir)[1]}</span>}</div>
+    {(panels === 1 || !["avinor", "ams", "led"].includes(th)) && <div className="tb-top"><div className="tb-title"><b>{tt.title(dir)[0]}</b>{tt.title(dir)[1] && <span>{tt.title(dir)[1]}</span>}</div>
       <div className="tb-ap">{d?.airport?.name || iata}{sec && <span className="tb-sec">{sec.available ? "Security " + sec.queues.filter((q: any) => q.kind === "Departures").map((q: any) => `${q.terminal} ${q.text}`).join(" · ") : "Security: no live queue data"}</span>}</div>{tt.clock === "top" && <div className="tb-clock">{clock}</div>}</div>}
     {msg ? <div className="tb-msg">{msg}</div> : <div className="tb-panels">{Array.from({ length: panels }, (_, k) => panel(show.slice(k * per, k * per + per), k))}</div>}
     {tt.clock !== "top" && <div className={"tb-bclock " + tt.clock}>{clock}</div>}
@@ -141,5 +151,5 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen }:
         <select value={theme} onChange={e => setTheme(e.target.value)}><option value="auto">Auto ({THEMES[autoTheme(iata)].name})</option>{Object.entries(THEMES).map(([k, v]) => <option key={k} value={k}>{v.name}</option>)}</select>
         <span className="tb-zoom"><button onClick={() => setZ(zoom - 0.1)} aria-label="Zoom out">A-</button><button className={zoom === 1 ? "on" : ""} onClick={() => setZ(1)}>Fit</button><button onClick={() => setZ(zoom + 0.1)} aria-label="Zoom in">A+</button></span>
         <button onClick={close}>Close</button></span></div>
-  </div></div>;
+  </div></div>, document.body);
 }

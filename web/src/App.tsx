@@ -12,7 +12,7 @@ import { EXAMPLE } from "./example";
 import { Timeline, Progress, WeatherCard, AirportInfo, PassportMore, PasteImport, exportIcs, UnitsCard, AlertPrefsCard } from "./more";
 import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras, DepartureDay, UpdateBanner, PushChecklist, BUILD, localNotify } from "./extras";
 
-type Ov = { t: "flight"; f: Flight } | { t: "board"; iata: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" } | { t: "tools"; id?: string } | { t: "features" } | { t: "dayof"; f: Flight };
+type Ov = { t: "flight"; f: Flight } | { t: "board"; iata: string; term?: boolean; dir?: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" } | { t: "tools"; id?: string } | { t: "features" } | { t: "dayof"; f: Flight };
 const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <AirlineTile a={a} className="card-tile" mode="colour" style={{ width: Math.round(s * 2.4), height: s }} />;
 
 export default function App() {
@@ -95,7 +95,7 @@ function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => 
     <GlobalSearch push={push} onFlight={f => push({ t: "flight", f })} />
     {(() => { const nx = list.filter(f => !f.example && phaseOf(f) !== "cancelled" && !(f.status === "landed" && Date.now() - +new Date(f.arr.actual || f.arr.scheduled || 0) > 3 * 3600e3)).sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1)[0];
       return nx ? <NextHero f={nx} open={() => open(nx)} dayof={() => push({ t: "dayof", f: nx })} /> : null; })()}
-    <div className="qa">{([[I.alert, "Disruptions", "Live delay scores", () => push({ t: "airports", mode: "disruptions" }), "r"], [I.grid, "Tools", `${TOOLS.length} aviation tools`, () => push({ t: "tools" }), "b"], [I.spark, "What's new", "All features", () => push({ t: "features" }), "v"], [I.globe, "Airports", "Status worldwide", () => push({ t: "airports" }), "b"], [I.takeoff, "MAN board", "Departures now", () => push({ t: "board", iata: "MAN" }), "g"], [I.sliders, "Settings", "Keys & theme", () => push({ t: "settings" }), "v"]] as const).map(([ic, t, s, fn, c]) => <button key={t} className={"qtile press q" + c} onClick={fn}><span className="qic">{ic}</span><b>{t}</b><small>{s}</small></button>)}</div>
+    <div className="qa">{([[I.alert, "Disruptions", "Live delay scores", () => push({ t: "airports", mode: "disruptions" }), "r"], [I.grid, "Tools", `${TOOLS.length} aviation tools`, () => push({ t: "tools" }), "b"], [I.spark, "What's new", "All features", () => push({ t: "features" }), "v"], [I.globe, "UK & Ireland", "Every airport board", () => push({ t: "airports", mode: "uk" }), "b"], [I.takeoff, "MAN board", "Departures now", () => push({ t: "board", iata: "MAN" }), "g"], [I.sliders, "Settings", "Keys & theme", () => push({ t: "settings" }), "v"]] as const).map(([ic, t, s, fn, c]) => <button key={t} className={"qtile press q" + c} onClick={fn}><span className="qic">{ic}</span><b>{t}</b><small>{s}</small></button>)}</div>
     {!list.length ? <div className="empty"><b>Let's Fly Somewhere</b><span>Tap <span className="mini">{I.search}</span> Search to add your next flight</span>
       <div className="row g8 mt16 wrap center"><button className="chip" onClick={() => push({ t: "board", iata: "MAN" })}>Manchester board</button><button className="chip" onClick={() => push({ t: "airports" })}>Airport delays</button></div></div>
       : list.sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1).map(f => <FlightCard key={f.id} f={f} onClick={() => open(f)} pred />)}
@@ -162,7 +162,7 @@ function Overlay(p: { o: Ov; z: number; close: () => void; push: (o: Ov) => void
   if (o.t === "search") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><SearchView {...p} x={x} /></Sheet>;
   if (o.t === "flight") return <Sheet z={z} onClose={close} snaps={[0.5, 0.94]} initial={0} header={<div className="head fhead"><div className="row g10"><Logo a={o.f.airline} /><div><div className="muted sm">{o.f.number} • {fmtD(o.f.date, { weekday: "short", day: "numeric", month: "short" }).toUpperCase()}</div><h2>{o.f.origin?.city} to {o.f.diverted ? <s>{o.f.destination?.city}</s> : o.f.destination?.city}</h2></div></div>{x}</div>}>
     <FlightDetail f={p.flights.find(f => f.id === o.f.id) || o.f} {...p} /></Sheet>;
-  if (o.t === "board") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Board iata={o.iata} x={x} push={p.push} /></Sheet>;
+  if (o.t === "board") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Board iata={o.iata} x={x} push={p.push} term0={o.term} /></Sheet>;
   if (o.t === "airports") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Airports x={x} push={p.push} flights={p.flights} initial={o.mode} /></Sheet>;
   if (o.t === "tools") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Head title="Tools" right={x} /><div className="px"><ToolsHub open={o.id} /></div></Sheet>;
   if (o.t === "dayof") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><DayOf f={p.flights.find(f => f.id === o.f.id) || o.f} push={p.push} x={x} /></Sheet>;
@@ -315,8 +315,8 @@ function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => voi
     <div className="grow"><b>{a?.city || a?.name || a?.iata}</b><div className="sm" style={{ color: bsC }}>● {bs.txt}{d != null && d >= 5 && !/cancel/i.test(bs.txt) ? ` (+${d}m)` : ""}{f.pred && f.pred.d >= 10 && f.status !== "cancelled" && <span className="aibadge sm" onClick={e => { e.stopPropagation(); (window as any).__why?.(f); }}> AI +{f.pred.d}m{f.pred.top ? ` · ${f.pred.top.icon}` : ""}</span>}</div></div>
     <div className="right"><b>{f.number.replace(/^([A-Z0-9]{2})/, "$1 ")}</b><div className="faint sm">{[t.terminal && "T" + String(t.terminal).replace(/^T/, ""), dir === "dep" ? (t.gate && "Gate " + t.gate) : (f.arr?.baggage && "Belt " + f.arr.baggage)].filter(Boolean).join(" · ")}</div>{f.aircraft?.model || f.aircraft?.type ? <div className="faint sm">{f.aircraft.model || f.aircraft.type}</div> : null}</div></div>;
 }
-function Board({ iata, x, push }: any) {
-  const [info, setInfo] = useState(false); const [term, setTerm] = useState(() => /term=1/.test(location.hash));
+function Board({ iata, x, push, term0 }: any) {
+  const [info, setInfo] = useState(false); const [term, setTerm] = useState(() => !!term0 || /term=1/.test(location.hash));
   const [dir, setDir] = useState("dep"); const [date, setDate] = useState(today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState("");
   useEffect(() => { setD(null); api(`/board/${iata}?dir=${dir}&date=${date}`).then(setD).catch(e => setD({ error: e.message, needsKey: e.needsKey })); }, [iata, dir, date]);
   const ap = d?.airport; const [, tick] = useState(0); useEffect(() => { const t = setInterval(() => tick(n => n + 1), 30e3); return () => clearInterval(t); }, []);
@@ -343,10 +343,30 @@ function Board({ iata, x, push }: any) {
 }
 
 function Airports({ x, push, flights, initial }: any) {
-  const [mode, setMode] = useState<"status" | "disruptions">(initial || "status");
-  const seg = <div className="segs"><button className={mode === "status" ? "on" : ""} onClick={() => setMode("status")}>Status</button><button className={mode === "disruptions" ? "on" : ""} onClick={() => setMode("disruptions")}>Disruptions</button></div>;
+  const [mode, setMode] = useState<"status" | "disruptions" | "uk">(initial || "status");
+  const seg = <div className="segs"><button className={mode === "uk" ? "on" : ""} onClick={() => setMode("uk")}>UK &amp; Ireland</button><button className={mode === "status" ? "on" : ""} onClick={() => setMode("status")}>Status</button><button className={mode === "disruptions" ? "on" : ""} onClick={() => setMode("disruptions")}>Disruptions</button></div>;
   if (mode === "disruptions") return <Disruptions x={x} push={push} seg={seg} />;
+  if (mode === "uk") return <UkList x={x} push={push} seg={seg} />;
   return <AirportStatus x={x} push={push} flights={flights} seg={seg} />;
+}
+function UkList({ x, push, seg }: any) {
+  const [d, setD] = useState<any>(null); const [err, setErr] = useState(""); const [q, setQ] = useState(""); const [n, setN] = useState(0); const [only, setOnly] = useState("all");
+  useEffect(() => { let on = true; const go = () => api("/uk").then(r => { if (on) { setD(r); setErr(""); } }).catch(e => on && setErr(e.message || "Could not load airports")); go(); const t = setInterval(go, 60e3); return () => { on = false; clearInterval(t); }; }, [n]);
+  const ql = q.trim().toLowerCase(); const A = (d?.airports || []).filter((a: any) => (only === "all" || a.feed === only) && (!ql || [a.iata, a.name, a.city, a.country].some((v: string) => (v || "").toLowerCase().includes(ql))));
+  const groups: Record<string, any[]> = {}; for (const a of A) (groups[a.country] = groups[a.country] || []).push(a);
+  const cnt = (a: any) => { const c = a.counts; if (!c) return <span className="faint sm">counting…</span>; if (c.kind === "official") return <span className="sm"><b>{c.dep ?? "–"}</b> dep · <b>{c.arr ?? "–"}</b> arr</span>; return <span className="sm"><b>{c.arriving}</b> arriving · <b>{c.departing}</b> departing · <b>{c.ground}</b> on ground</span>; };
+  const nOff = (d?.airports || []).filter((a: any) => a.feed === "official").length;
+  return <><Head title="Airports" right={<>{x}</>} />{seg}
+    <div className="px"><input className="field" placeholder="Search UK & Irish airports" value={q} onChange={e => setQ(e.target.value)} /></div>
+    <div className="px row g8 mt8">{[["all", "All"], ["official", "Official board"], ["live", "Live traffic"]].map(([k, l]) => <button key={k} className={"chip" + (only === k ? " blue" : "")} onClick={() => setOnly(k)}>{l}</button>)}</div>
+    {d && <div className="px muted sm mt8">{(d.airports || []).length} airports. {nOff} publish an official board we can read; the rest show real live ADS-B traffic (no scheduled times).</div>}
+    {err && <div className="note warn">{err} <button className="chip" onClick={() => { setErr(""); setN(v => v + 1); }}>Retry</button></div>}
+    {!d && !err && <div className="faint sm px mt8">Loading UK &amp; Ireland airports…</div>}
+    {Object.entries(groups).map(([g, L]) => <div key={g}><div className="px faint sm mt12" style={{ textTransform: "uppercase", letterSpacing: ".08em" }}>{g}</div><div className="card">{L.map((a: any) => <div key={a.iata} className="lrow press" onClick={() => push({ t: "board", iata: a.iata })}>
+      <span className="code">{a.iata}</span><div className="grow"><b>{a.name.replace(/ (International )?Airport$/, "")}</b><div className="muted sm">{a.city} · {g}</div><div>{cnt(a)}</div></div>
+      <div className="col g8" style={{ alignItems: "flex-end" }}><span className={"fbadge " + a.feed}>{a.feed === "official" ? "Official" : a.feed === "aerodatabox" ? "Schedule" : "Live traffic"}</span><button className="chip" onClick={e => { e.stopPropagation(); push({ t: "board", iata: a.iata, term: true }); }}>Board</button></div></div>)}</div></div>)}
+    {d && !A.length && <div className="px faint mt8">No airport matches “{q}”.</div>}
+  </>;
 }
 const dsev = (v: number | null | undefined) => v == null ? -1 : v >= 3.5 ? 2 : v >= 2 ? 1 : 0;
 function Disruptions({ x, push, seg }: any) {
@@ -426,7 +446,7 @@ function Settings({ x, theme, setTheme, push }: any) {
     <div className="card m0"><h3>Your data</h3><div className="muted sm">Your flights, friends and settings are saved on this iPhone and survive server restarts. Make a backup file to move them to another device.</div>
       <div className="row g8 mt8 wrap"><button className="secondary" onClick={() => exportBackup()}>⇩ Back up</button><label className="secondary">⇪ Restore<input hidden type="file" accept=".json,application/json" onChange={e => e.target.files?.[0] && importBackup(e.target.files[0]).catch(er => setMsg(er.message))} /></label></div>
       <input className="field mt8" placeholder="Your name (shown on flights you share)" defaultValue={localStorage.getItem("sk.name") || ""} onBlur={e => localStorage.setItem("sk.name", e.target.value.trim())} /></div>
-    <div className="card m0"><h3>AeroDataBox key (optional)</h3><div className="muted sm"><b>You don’t need this.</b> Real schedules already work free, with no key, at MAN, STN, EMA, FRA, SYD and 45 Norwegian (Avinor) airports. Every other airport shows real live ADS-B traffic. If you want schedules everywhere: Free “Basic” plan at rapidapi.com/aedbx-aedbx/api/aerodatabox → Subscribe → copy X-RapidAPI-Key. Enables boards & flight search at any airport, aircraft registration, inbound-plane chain and global airport delay stats. Status: <b>{s.aerodatabox || "not set"}</b></div>
+    <div className="card m0"><h3>AeroDataBox key (optional)</h3><div className="muted sm"><b>You don’t need this.</b> Real schedules already work free, with no key, at MAN, STN, EMA, LHR, DUB, ORK, BFS, BHD, LDY, LTN, GCI, NOC, BOH, FRA, SYD and 45 Norwegian (Avinor) airports. Every other airport shows real live ADS-B traffic. If you want schedules everywhere: Free “Basic” plan at rapidapi.com/aedbx-aedbx/api/aerodatabox → Subscribe → copy X-RapidAPI-Key. Enables boards & flight search at any airport, aircraft registration, inbound-plane chain and global airport delay stats. Status: <b>{s.aerodatabox || "not set"}</b></div>
       <input className="field mt8" placeholder="Paste RapidAPI key" value={k} onChange={e => setK(e.target.value)} /><button className="primary mt8" onClick={() => saveK({ aerodataboxKey: k })}>Save key</button></div>
     <div className="card m0"><h3>LLM explanations (optional)</h3><div className="muted sm">Any OpenAI-compatible API (default xAI: console.x.ai). Used only to word the AI-prediction explanation. Status: <b>{s.llm || "not set"}</b></div>
       <input className="field mt8" placeholder="API key" value={lk} onChange={e => setLk(e.target.value)} /><input className="field mt8" placeholder="Base URL" value={lb} onChange={e => setLb(e.target.value)} /><input className="field mt8" placeholder="Model" value={lm} onChange={e => setLm(e.target.value)} />

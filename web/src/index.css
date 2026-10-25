@@ -357,7 +357,7 @@ h1,h2,h3,.froute,.big,.iata{letter-spacing:-.025em}.ftime,.big,.iata,.brow,.boar
 .tb-syd .c-logo .tb-logo.al-tile,.c-logo .tb-logo.al-tile{width:100%;height:80%;margin:0}
 .card-tile.al-tile{aspect-ratio:auto;border-radius:8px;flex:none;padding:4px 6px;border:1px solid rgba(255,255,255,.08)}
 .al-tile.m-white img,.al-tile.m-colour img{width:100%!important;height:100%!important;background:none!important;border-radius:0}
-.tb-stage{position:absolute;left:0;top:0;transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden}
+.tb-stage{position:absolute;left:0;top:calc(env(safe-area-inset-top,0px) + 66px);transform-origin:0 0;display:flex;flex-direction:column;overflow:hidden}
 .tb-row>span{overflow:hidden;text-overflow:ellipsis;min-width:0}.tb-row>span.c-st{overflow:visible}
 .tb-zoom{display:inline-flex;gap:2px}.tb-zoom button{min-width:30px}.tb-zoom button.on{background:#fff;color:#000}
 /* tools hub */
@@ -421,3 +421,16 @@ h1,h2,h3,.froute,.big,.iata{letter-spacing:-.025em}.ftime,.big,.iata,.brow,.boar
 .dstep{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06)}.dstep i{width:10px;height:10px;border-radius:50%;background:#3b82f6}.dstep.past{opacity:.45}.dstep.past i{background:#666}
 .mx{margin:0 16px 12px;width:calc(100% - 32px)}
 .green{color:var(--green,#22c55e)}
+
+.tboard>.tb-fab{position:relative;top:auto;right:auto;flex:0 0 auto;justify-content:flex-end;height:66px;box-sizing:border-box;padding:calc(env(safe-area-inset-top,0px) + 10px) calc(env(safe-area-inset-right,0px) + 10px) 10px 10px;background:#07090d}
+.fbadge{font:700 10px/1 system-ui;letter-spacing:.06em;text-transform:uppercase;padding:5px 7px;border-radius:6px;white-space:nowrap}.fbadge.official{background:rgba(61,220,106,.15);color:#5be38a;border:1px solid rgba(61,220,106,.35)}.fbadge.live{background:rgba(255,77,77,.12);color:#ff7a7a;border:1px solid rgba(255,77,77,.35)}.fbadge.aerodatabox{background:rgba(90,140,255,.15);color:#8fb0ff}
+
+/* UK & Ireland board looks: original CSS inspired by the general style of each airport's public screens; not official designs */
+.tb-lgw{--bg:#001a4d;--fg:#fff;--ok:#7cf29c;--warn:#ffd23f;--bad:#ff6b6b}.tb-lgw .tb-panel{background:#002a6e}.tb-lgw .tb-head{background:#001a4d;color:#9fc0ff}.tb-lgw .tb-row.alt{background:#00337f}.tb-lgw .tb-top{background:#001a4d}
+.tb-edi{--bg:#140a24;--fg:#fff;--ok:#8ef0b0;--warn:#ffcc33;--bad:#ff5c7a}.tb-edi .tb-panel{background:#1d0f36}.tb-edi .tb-head{background:#5b2a86;color:#fff}.tb-edi .tb-row.alt{background:#26144a}.tb-edi .tb-top{background:#5b2a86}
+.tb-ags{--bg:#04121f;--fg:#fff;--ok:#5be3c3;--warn:#ffd400;--bad:#ff5050}.tb-ags .tb-panel{background:#0a2540}.tb-ags .tb-head{background:#00a3ad;color:#002030}.tb-ags .tb-row.alt{background:#0e2e4f}.tb-ags .tb-top{background:#00a3ad;color:#002030}
+.tb-bhx{--bg:#0b0b0b;--fg:#fff;--ok:#5fe08a;--warn:#ffb81c;--bad:#ff4d4d}.tb-bhx .tb-panel{background:#151515}.tb-bhx .tb-head{background:#6d2077;color:#fff}.tb-bhx .tb-row.alt{background:#202020}.tb-bhx .tb-top{background:#6d2077}
+.tb-daa{--bg:#000;--fg:#ffd21f;--ok:#7dff8a;--warn:#fff;--bad:#ff4a3d}.tb-daa .tb-panel{background:#000}.tb-daa .tb-head{background:#0e3b2e;color:#fff}.tb-daa .tb-row{border-bottom:1px solid #1f1f1f}.tb-daa .tb-top{background:#0e3b2e;color:#fff}
+.tb-bel{--bg:#08142b;--fg:#fff;--ok:#6ef0a0;--warn:#ffd23f;--bad:#ff6060}.tb-bel .tb-panel{background:#0f2650}.tb-bel .tb-head{background:#e4007c;color:#fff}.tb-bel .tb-row.alt{background:#132e60}.tb-bel .tb-top{background:#0f2650}.tb-bel .c-logo{background:#fff;height:100%;display:grid;place-items:center}
+.tb-isl{--bg:#002b36;--fg:#fff;--ok:#9effc4;--warn:#ffe066;--bad:#ff7070}.tb-isl .tb-panel{background:#004652}.tb-isl .tb-head{background:#00727f;color:#fff}.tb-isl .tb-row.alt{background:#00525f}.tb-isl .tb-top{background:#00727f}
+.tb-reg{--bg:#111318;--fg:#fff;--ok:#62e38a;--warn:#ffc83d;--bad:#ff5a5a}.tb-reg .tb-panel{background:#1a1d24}.tb-reg .tb-head{background:#2b3140;color:#cfd6e4}.tb-reg .tb-row.alt{background:#20242d}.tb-reg .tb-top{background:#2b3140}

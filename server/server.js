@@ -206,6 +206,73 @@ for (const c of AVINOR) OFFICIAL[c] = { fn: avinorBoard, label: "Avinor official
 OFFICIAL.FRA = { fn: fraBoard, label: "Frankfurt Airport official flight info", provider: "Official airport feed", site: "frankfurt-airport.com" };
 OFFICIAL.LHR = { fn: lhrBoard, label: "Heathrow official flight info", provider: "Official airport feed", site: "heathrow.com" };
 OFFICIAL.SYD = { fn: sydBoard, label: "Sydney Airport official flight info", provider: "Official airport feed", site: "sydneyairport.com.au" };
+
+// ---------- UK & Ireland official airport feeds (all public, no key; the same endpoints/pages the airports' own websites serve to browsers) ----------
+// DUB (api.dublinairport.com) and ORK (corkairport.com/api) — daa flight-listing JSON (upcoming flights only)
+// BFS — belfastairport.com/act/flight-tracker JSON; LDY — cityofderryairport.com/wp-content/*.json
+// BHD, GCI, LTN, NOC, BOH — server-rendered HTML flight tables on the airports' own pages
+const PLACE = { stansted: "STN", gatwick: "LGW", heathrow: "LHR", luton: "LTN", "london city": "LCY", southend: "SEN", "belfast city": "BHD", "george best": "BHD", "belfast int": "BFS", "glasgow prestwick": "PIK", prestwick: "PIK", "glasgow": "GLA", "dublin": "DUB", "manchester": "MAN", "birmingham": "BHX", "edinburgh": "EDI", "tenerife south": "TFS", "tenerife north": "TFN", "tenerife": "TFS", "gran canaria": "LPA", "lanzarote": "ACE", "fuerteventura": "FUE", "paris cdg": "CDG", "paris charles": "CDG", "paris beauvais": "BVA", "paris orly": "ORY", "milan bergamo": "BGY", "milan malpensa": "MXP", "rome ciampino": "CIA", "rome fiumicino": "FCO", "venice treviso": "TSF", "brussels charleroi": "CRL", charleroi: "CRL", "isle of man": "IOM", "jersey": "JER", "guernsey": "GCI", "alderney": "ACI", "kerry": "KIR", "knock": "NOC", "shannon": "SNN", "cork": "ORK", "derry": "LDY", "newquay": "NQY", "exeter": "EXT", "southampton": "SOU", "east midlands": "EMA", "london": "LHR", faro: "FAO", alicante: "ALC", malaga: "AGP", "málaga": "AGP", palma: "PMI", majorca: "PMI", amsterdam: "AMS", berlin: "BER", "new york": "JFK", krakow: "KRK", "kraków": "KRK", lisbon: "LIS", porto: "OPO", barcelona: "BCN", madrid: "MAD", geneva: "GVA", "bristol": "BRS", "newcastle": "NCL", "leeds": "LBA", "liverpool": "LPL", "aberdeen": "ABZ", "inverness": "INV", "cardiff": "CWL", "norwich": "NWI", "jersey": "JER" };
+const placeIata = (name = "") => { const n = name.toLowerCase().replace(/\s+/g, " ").replace(/[()]/g, "").replace(/ int(ernational)?\.?$/, "").trim(); if (!n) return null;
+  for (const k of Object.keys(PLACE).sort((a, b) => b.length - a.length)) if (n.startsWith(k) || n.includes(" " + k) || n === k) return PLACE[k];
+  return cityIata(n) || cityIata(n.split(/[ -]/)[0]) || null; };
+const titleCase = s => (s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/\s+/g, " ").trim();
+const ukTimes = (ymd, hm, statusText) => { const sched = localToUtc("Europe/London", ymd, hm); const m = (statusText || "").match(/(\d{1,2}):?(\d{2})\b/); let t = m ? localToUtc("Europe/London", ymd, `${m[1].padStart(2, "0")}:${m[2]}`) : undefined;
+  if (t && sched && new Date(t) - new Date(sched) < -12 * 3600e3) t = new Date(+new Date(t) + 86400e3).toISOString();
+  const done = /landed|arrived|departed|airborne|took off|delivered/i.test(statusText || ""); return { sched, est: done ? undefined : t, act: done ? t : undefined }; };
+const ukStatus = s => { const x = statusFromMag(s); if (x === "scheduled" && /expected|approx|estimated|new time|delay/i.test(s || "")) return "scheduled"; return x; };
+const strip = h => (h || "").replace(/<span class="mobile-th">[^<]*<\/span>/g, "").replace(/<span class="details-for-small">[\s\S]*?<\/span>/g, "").replace(/<br\s*\/?>/g, " ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+const UK_SRC = {};
+const ukRow = (apt, dir, ymd, { num, airline, place, hm, st, gate, belt, term, codeshares, sched, est, act, placeIataHint }) => {
+  num = (num || "").replace(/\s+/g, "").toUpperCase(); if (!num) return null; const t = sched ? { sched, est, act } : ukTimes(ymd, hm, st);
+  const oi = placeIataHint || placeIata(place); const alc = /^[A-Z]{3}\d/.test(num) ? (AL_ICAO[num.slice(0, 3)]?.iata || num.slice(0, 2)) : num.slice(0, 2);
+  const status = /landed|arrived|bags|baggage|belt/i.test(st || "") && dir === "arr" ? "landed" : /landed|arrived/i.test(st || "") ? "landed" : /departed|airborne/i.test(st || "") ? "departed" : ukStatus(st);
+  const f = mkFlight(apt, dir, oi, titleCase(place), num, alc, airline, { ...t, gate, belt, term }, st || "Scheduled", status === "scheduled" && t.est && t.sched && new Date(t.est) - new Date(t.sched) >= 15 * 60e3 ? "delayed" : status, UK_SRC[apt], codeshares ? { codeshares } : {});
+  if (!AP[oi]) { const o = { iata: oi || undefined, name: titleCase(place), city: titleCase(place) }; dir === "dep" ? (f.destination = o) : (f.origin = o); } return f; };
+const ukCache = (k, ymd, fn) => cached(`uk:${k}:${ymd}`, ymd < todayLondon() ? 6 * 3600 : 90, fn);
+const dayOk = ymd => ymd === todayLondon();
+async function daaBoard(apt, dir, ymd) { return ukCache(apt + dir, ymd, async () => {
+  const base = apt === "DUB" ? "https://api.dublinairport.com/dap/flight-listing/" : "https://www.corkairport.com/api/flight-listing/";
+  const site = apt === "DUB" ? "https://www.dublinairport.com" : "https://www.corkairport.com"; const out = []; const seen = new Set(); let url = `${base}${dir === "dep" ? "departures" : "arrivals"}?date=${ymd}&limit=200`;
+  const r = await getJSON(url, { headers: { origin: site, referer: site + "/" } }); for (const x of r.content || []) { if (seen.has(x.internalFlightId)) continue; seen.add(x.internalFlightId);
+    const sm = titleCase(x.statusMessage || ""); const done = /landed|arrived|departed|airborne/i.test(sm);
+    out.push(ukRow(apt, dir, ymd, { num: x.flightIdentity, airline: x.carrierName, place: x.originAirportName || x.destinationAirportName, placeIataHint: x.airportCode, st: sm, gate: x.gate, belt: x.baggageBelt, term: x.terminalName, codeshares: x.codeShares,
+      sched: x.scheduledDateTime, est: done ? undefined : x.estimatedDateTime !== x.scheduledDateTime ? x.estimatedDateTime : undefined, act: done ? (ukTimes(ymd, "00:00", sm).act || x.estimatedDateTime) : undefined })); }
+  return out.filter(Boolean); }); }
+async function bfsBoard(apt, dir, ymd) { if (!dayOk(ymd)) return []; return ukCache(apt + dir, ymd, async () => {
+  const r = await getJSON(`https://www.belfastairport.com/act/flight-tracker/flights/${dir === "dep" ? "departures" : "arrivals"}?hours=24&limit=300`, { headers: { referer: "https://www.belfastairport.com/flights/departures" } });
+  return (r.data?.flights || []).filter(x => !x.isCodeShare).map(x => { const st = x.status?.text || "Scheduled"; const done = /landed|arrived|departed/i.test(st);
+    return ukRow(apt, dir, ymd, { num: x.flightNumber, airline: x.airline?.name, place: dir === "dep" ? x.destinationDisplayName : x.originDisplayName, placeIataHint: dir === "dep" ? x.destination : x.origin, st: x.status?.publicText || st,
+      sched: x.scheduledTime, est: done ? undefined : x.estimatedTime && x.estimatedTime !== x.scheduledTime ? x.estimatedTime : undefined, act: x.actualTime || (done ? x.displayTime : undefined), gate: x.gate, belt: x.baggageClaim, term: x.terminal }); }).filter(Boolean); }); }
+async function ldyBoard(apt, dir, ymd) { return ukCache(apt + dir, ymd, async () => {
+  const r = await getJSON(`https://www.cityofderryairport.com/wp-content/${dir === "dep" ? "departures" : "arrivals"}.json`, { headers: { referer: "https://www.cityofderryairport.com/flight-information/live-flight-information/" } });
+  return r.map(x => { const [d, m, y] = (x.scheduled_date || "").split("/"); const day = `${y}-${m}-${d}`; if (day !== ymd) return null;
+    return ukRow(apt, dir, day, { num: x.flight_number, place: x.airport_name_1, hm: x.scheduled_flight_time, st: x.flight_status || "Scheduled" }); }).filter(Boolean); }); }
+const HTML_SITES = { BHD: "https://www.belfastcityairport.com/departures", GCI: "https://www.airport.gg/arrivals-departures", LTN: "https://www.london-luton.co.uk/flights/", NOC: "https://www.irelandwestairport.com/flight-information/departures-arrivals/", BOH: "https://www.bournemouthairport.com/arrivals-departures/" };
+async function htmlBoard(apt, dir, ymd) { const tmr = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date(Date.now() + 86400e3)); if (!dayOk(ymd) && !(ymd === tmr && /GCI|LTN|BOH/.test(apt))) return []; return ukCache(apt + dir, ymd, async () => {
+  const url = apt === "LTN" ? HTML_SITES.LTN + (dir === "dep" ? "departures" : "arrivals") : HTML_SITES[apt]; const h = await getText(url, { headers: { accept: "text/html" } }); const rows = [];
+  if (apt === "BHD") { const i = h.indexOf(dir === "dep" ? 'id="departuresTable"' : 'id="arrivalsTable"'); const seg = h.slice(i, h.indexOf("</table>", i));
+    for (const tr of seg.split("<tr>").slice(2)) { const td = [...tr.matchAll(/<td>([\s\S]*?)<\/td>/g)].map(m => strip(m[1])); if (td.length < 5) continue; const [num, ...cs] = td[1].split(/\s*\/\s*|,/);
+      const al = (tr.match(/alt="([^"]+?) logo"/) || [])[1]; rows.push({ hm: td[0], num, codeshares: cs.filter(Boolean), place: td[2], airline: al, st: td[4] }); } }
+  if (apt === "GCI") { const i = h.indexOf(dir === "dep" ? 'id="table-departures"' : 'id="table-arrivals"'); const seg = h.slice(i, h.indexOf("</table>", i)); let day = ymd;
+    for (const tr of seg.split(/<tr\b/).slice(1)) { const c = n => strip((tr.match(new RegExp(`<td class="${n}">([\\s\\S]*?)</td>`)) || [])[1]); const dt = c("date").match(/(\d\d)\/(\d\d)\/(\d{4})/); if (!dt) continue; day = `${dt[3]}-${dt[2]}-${dt[1]}`;
+      if (day !== ymd) continue; rows.push({ hm: c("time"), num: c("flight"), place: c("airport"), airline: c("airline"), st: c("status") }); } }
+  if (apt === "LTN") { const items = h.split('id="flightListItem"').slice(1); const ymdTxt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" }).format(new Date(ymd + "T12:00:00Z"));
+    let curDay = null; const dates = [...h.matchAll(/class='flightDate'>([^<]+)</g)].map(m => [m.index, m[1].trim()]); let pos = h.indexOf('id="flightListItem"');
+    for (const it of items) { const at = pos; pos = h.indexOf('id="flightListItem"', pos + 10); curDay = (dates.filter(d => d[0] < at).pop() || [0, ymdTxt])[1]; if (curDay !== ymdTxt) continue;
+      const g = n => strip((it.match(new RegExp(`class="${n}">([\\s\\S]*?)</div>`)) || [])[1]); const al = (it.match(/alt="airline-(?:logo-)?([a-z0-9-]+)\./) || [])[1];
+      rows.push({ num: g("flightListing__table__items__item__flightNumber"), hm: g("flightListing__table__items__item__time"), place: g("flightListing__table__items__item__flightOrgDest"), st: g("flightStatus"), airline: al && titleCase(al.replace(/-/g, " ")) }); } }
+  if (apt === "NOC") { const p = dir === "dep" ? "dept_" : "arr_"; const cells = [...h.matchAll(/<div class="flight" role="row">([\s\S]*?)<\/div><\/div>/g)].map(m => m[1]).filter(r => r.includes(`aria-labelledby="${p}airline"`));
+    for (const r of cells) { const c = n => strip((r.match(new RegExp(`class="${n}"[^>]*>([\\s\\S]*?)</div>`)) || [])[1]); rows.push({ airline: c("airline"), num: c("flight-number"), hm: c(dir === "dep" ? "departure-time" : "arrival-time"), place: c(dir === "dep" ? "destination" : "origin"), st: c("remarks") }); } }
+  if (apt === "BOH") { const seen = new Set(); for (const m of h.matchAll(/<table class="arrivals-table">([\s\S]*?)<\/table>/g)) { const isArr = /<th class="place">From<\/th>/.test(m[1]); if (isArr !== (dir === "arr")) continue;
+    for (const tr of m[1].split("<tr>").slice(2)) { const c = n => [...tr.matchAll(new RegExp(`<td[^>]*class="${n}"[^>]*>([\\s\\S]*?)</td>`, "g"))].map(x => strip(x[1])); const tm = c("time"); const num = c("flight")[0];
+      if (!num || seen.has(num + tm[1])) continue; seen.add(num + tm[1]); const [dd, mm] = (tm[0] || "").split("/"); if (dd && `${ymd.slice(8)}/${ymd.slice(5, 7)}` !== `${dd}/${mm}`) continue; rows.push({ place: c("place")[0], airline: c("airline")[0], num, hm: tm[1], st: c("status")[0] }); } } }
+  return rows.filter(r => /^\d{1,2}:\d{2}$/.test(r.hm || "")).map(r => ukRow(apt, dir, ymd, { ...r, hm: r.hm.padStart(5, "0") })).filter(Boolean); }); }
+const UK_OFFICIAL = { DUB: [daaBoard, "Dublin Airport official flight info", "dublinairport.com"], ORK: [daaBoard, "Cork Airport official flight info", "corkairport.com"], BFS: [bfsBoard, "Belfast International official flight info", "belfastairport.com"],
+  LDY: [ldyBoard, "City of Derry Airport official flight info", "cityofderryairport.com"], BHD: [htmlBoard, "Belfast City Airport official flight info", "belfastcityairport.com"], GCI: [htmlBoard, "Guernsey Airport official flight info", "airport.gg"],
+  LTN: [htmlBoard, "London Luton official flight info", "london-luton.co.uk"], NOC: [htmlBoard, "Ireland West Airport Knock official flight info", "irelandwestairport.com"], BOH: [htmlBoard, "Bournemouth Airport official flight info", "bournemouthairport.com"] };
+for (const [c, [fn, label, site]] of Object.entries(UK_OFFICIAL)) { UK_SRC[c] = `${label} (${site})`; OFFICIAL[c] = { fn, label, provider: "Official airport feed", site }; }
+// Every commercial airport in the UK, Crown Dependencies and Republic of Ireland
+const UKI = { "England": "LHR LGW STN LTN LCY SEN MAN BHX BRS NCL LBA LPL EMA BOH SOU EXT NQY NWI MME HUY DSA BLK CAX ISC LEQ BZZ QUG OXF BQH FAB ESH LYX".split(" "), "Scotland": "EDI GLA ABZ INV PIK DND SYY KOI LSI BRR BEB TRE ILY CAL WIC LWK NRL PPW SOY WRY EOI FIE FOA OUK CSA COL".split(" "), "Wales": ["CWL", "VLY"], "Northern Ireland": ["BFS", "BHD", "LDY"], "Channel Islands": ["JER", "GCI", "ACI"], "Isle of Man": ["IOM"], "Ireland": "DUB ORK SNN NOC KIR WAT SXL IOR CFN DUB".split(" ").filter((x, i, a) => a.indexOf(x) === i) };
 const officialBoard = (apt, dir, ymd) => OFFICIAL[apt].fn(apt, dir, ymd);
 
 // ---------- AeroDataBox (optional key, RapidAPI) ----------
@@ -501,6 +568,13 @@ function statsFrom(list, now = Date.now()) {
   const dn = recent.filter(f => f.status !== "cancelled").map(delayMin).filter(d => d != null && !Number.isNaN(d)), late = dn.filter(d => d >= 15).length, trend = [3, 2, 1, 0].map(h => { const b = recent.filter(f => { const t = new Date(f.dep.scheduled || f.arr.scheduled); return t <= now - h * 3600e3 && t > now - (h + 1) * 3600e3; }).map(delayMin).filter(d => d != null && !Number.isNaN(d)); return b.length ? Math.round(b.reduce((a, c) => a + Math.max(0, c), 0) / b.length) : null; });
   return { counts: { onTime: dn.length - late, late, cancelled: canc, unknown: Math.max(0, recent.length - dn.length - canc) }, trend, n: recent.length, onTime: ds.length ? Math.round(ds.filter(d => d < 15).length / ds.length * 100) : null, avgDelay: ds.length ? Math.max(0, Math.round(ds.reduce((a, c) => a + Math.max(0, c), 0) / ds.length)) : null, cancelled: recent.length ? Math.round(canc / recent.length * 100) : 0 };
 }
+const UKC = {}; async function ukCount(c) { const h = UKC[c]; if (h && Date.now() - h.t < 600e3) return h.v; let v;
+  if (OFFICIAL[c]) { const ymd = todayLondon(); const [d, r] = await Promise.all([officialBoard(c, "dep", ymd).catch(() => null), officialBoard(c, "arr", ymd).catch(() => null)]); v = d || r ? { dep: d?.length ?? null, arr: r?.length ?? null, kind: "official" } : null; }
+  if (!v) { try { const l = await liveCounts(c); v = { ...l, kind: "live" }; } catch { v = null; } } UKC[c] = { t: Date.now(), v }; return v; }
+api.get("/uk", wrap(async (req, res) => { const out = [];
+  for (const [country, codes] of Object.entries(UKI)) for (const c of codes) { const a = AP[c]; if (!a) continue; out.push({ ...airportOut(a), country, feed: OFFICIAL[c] ? "official" : cfg.aerodataboxKey ? "aerodatabox" : "live", source: OFFICIAL[c]?.site || null }); }
+  res.json({ airports: out.map(a => ({ ...a, counts: UKC[a.iata]?.v ?? null, countsAt: UKC[a.iata] ? new Date(UKC[a.iata].t).toISOString() : null })), at: new Date().toISOString() }); }));
+(async function warmUk() { for (const c of Object.values(UKI).flat()) { if (!AP[c]) continue; try { await ukCount(c); } catch {} await new Promise(r => setTimeout(r, 1500)); } setTimeout(warmUk, 60e3); })();
 api.get("/status", wrap(async (req, res) => {
   const region = String(req.query.region || "All"); const codes = (region === "All" ? Object.values(STATUS_AIRPORTS).flat() : STATUS_AIRPORTS[region] || []).filter(c => AP[c]);
   const out = await Promise.all(codes.map(async c => { const a = airportOut(AP[c]); const reg = Object.keys(STATUS_AIRPORTS).find(k => STATUS_AIRPORTS[k].includes(c));
