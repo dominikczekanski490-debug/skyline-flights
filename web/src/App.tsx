@@ -371,17 +371,22 @@ function TimeBlock({ dir, a, t, d, badge, est }: any) {
 function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => void }) {
   const t = dir === "dep" ? f.dep : f.arr; const a = dir === "dep" ? f.destination : f.origin; const d = delay(t); const tz = (dir === "dep" ? f.origin : f.destination)?.tz;
   const st = f.status === "cancelled" ? ["Cancelled", "var(--red)"] : f.status === "landed" ? ["Landed " + (t.actual ? fmtT(t.actual, tz) : ""), "var(--green)"] : f.status === "departed" ? ["Departed " + lateLabel(d), lateColor(d)] : [lateLabel(d) || f.statusText || "Scheduled", lateColor(d)];
-  const bs = boardStatus(f, dir); const bsC = /bad/.test(bs.k) ? "var(--red)" : /warn/.test(bs.k) ? "var(--orange, #f59e0b)" : /ok/.test(bs.k) ? "var(--green)" : /dim/.test(bs.k) ? "var(--muted)" : st[1]; void st;
+  const bs = boardStatus(f, dir); const bsC = /bad/.test(bs.k) ? "var(--red)" : /warn/.test(bs.k) ? "var(--orange, #f59e0b)" : /ok/.test(bs.k) ? "var(--green)" : /dim/.test(bs.k) ? "var(--muted)" : st[1]; void st; void bsC;
   if (f.liveOnly) return <div className="brow press" onClick={onClick}><div className="bt"><span className="livedot" /><span className="faint sm">LIVE</span></div>
     <div className="grow"><b>{a?.city || a?.name || a?.iata || "Route unknown"}</b><div className="sm" style={{ color: f.status === "approaching" || f.status === "departed" ? "var(--blue)" : "var(--green)" }}>● {f.statusText}</div></div>
     <div className="right"><b>{f.number}</b><div className="faint sm">{f.aircraft?.type || ""} {f.live?.alt && f.live.alt !== "ground" ? `${Math.round(f.live.alt / 100) * 100}ft` : ""}</div></div></div>;
-  return <div className="brow press" onClick={onClick}><div className="bt">{d != null && Math.abs(d) >= 5 ? <><s>{fmtT(t.scheduled, tz)}</s><b style={{ color: lateColor(d) }}>{fmtT(t.actual || t.estimated, tz)}</b></> : <b>{fmtT(t.scheduled, tz)}</b>}</div>
-    <div className="grow"><b>{a?.city || a?.name || a?.iata}</b><div className="sm" style={{ color: bsC }}>● {bs.txt}{d != null && d >= 5 && !/cancel/i.test(bs.txt) ? ` (+${d}m)` : ""}{f.pred && f.pred.d >= 10 && f.status !== "cancelled" && <span className="aibadge sm" onClick={e => { e.stopPropagation(); (window as any).__why?.(f); }}> AI +{f.pred.d}m{f.pred.top ? ` · ${f.pred.top.icon}` : ""}</span>}</div></div>
-    <div className="right"><b>{f.number.replace(/^([A-Z0-9]{2})/, "$1 ")}</b><div className="faint sm">{[t.terminal && "T" + String(t.terminal).replace(/^T/, ""), dir === "dep" ? (t.gate && "Gate " + t.gate) : (f.arr?.baggage && "Belt " + f.arr.baggage)].filter(Boolean).join(" · ")}</div>{f.aircraft?.model || f.aircraft?.type ? <div className="faint sm">{f.aircraft.model || f.aircraft.type}</div> : null}</div></div>;
+  const chipK = /bad/.test(bs.k) ? "bad" : /warn/.test(bs.k) ? "warn" : /ok/.test(bs.k) ? "ok" : /dim/.test(bs.k) ? "dim" : d != null && d >= 15 ? "warn" : "ok";
+  const late = d != null && Math.abs(d) >= 5; const pills = [t.terminal && "T" + String(t.terminal).replace(/^T/, ""), dir === "dep" ? (t.gate && "Gate " + t.gate) : (f.arr?.baggage && "Belt " + f.arr.baggage)].filter(Boolean) as string[];
+  return <div className="brow2 press" onClick={onClick}>
+    <div className="b2t"><b className={late ? "lt" : ""}>{fmtT(late ? t.actual || t.estimated : t.scheduled, tz)}</b>{late && <s>{fmtT(t.scheduled, tz)}</s>}</div>
+    <div className="b2logo"><Logo a={f.airline} s={18} /></div>
+    <div className="grow b2m"><div className="b2c">{a?.city || a?.name || a?.iata}<span className="b2i">{a?.iata}</span></div>
+      <div className="b2s"><span className={"b2chip " + chipK}>{bs.txt}</span>{d != null && d >= 5 && !/cancel/i.test(bs.txt) && <span className="b2chip delay">+{d}m</span>}{f.pred && f.pred.d >= 10 && f.status !== "cancelled" && <span className="aibadge sm" onClick={e => { e.stopPropagation(); (window as any).__why?.(f); }}>AI +{f.pred.d}m</span>}</div></div>
+    <div className="b2r"><b>{f.number.replace(/^([A-Z0-9]{2})(?=\d)/, "$1 ")}</b><div className="b2p">{pills.map(x => <span key={x}>{x}</span>)}</div></div></div>;
 }
 function Board({ iata, x, push, term0 }: any) {
   const [info, setInfo] = useState(false); const [term, setTerm] = useState(() => !!term0 || /term=1/.test(location.hash));
-  const [dir, setDir] = useState("dep"); const [date, setDate] = useState(today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState("");
+  const [dir, setDir] = useState("dep"); const [date, setDate] = useState(today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState(""); const [earlier, setEarlier] = useState(false);
   useEffect(() => setD(null), [iata, dir, date]);
   const poll = usePoll(() => api(`/board/${iata}?dir=${dir}&date=${date}`).then(setD).catch(e => setD((p: any) => p && !p.error ? p : { error: e.message, needsKey: e.needsKey, airport: e.airport || p?.airport })), [iata, dir, date]);
   const ap = d?.airport; const [, tick] = useState(0); useEffect(() => { const t = setInterval(() => tick(n => n + 1), 30e3); return () => clearInterval(t); }, []);
@@ -406,7 +411,12 @@ function Board({ iata, x, push, term0 }: any) {
     {d?.note && <div className="note warn">{d.note}</div>}
     <Refreshed {...poll} note={d?.sourceKind === "aerodatabox" ? "schedule refreshes every 20 min (limited by free data plan)" : undefined} />
     {d?.flights && <div className="faint sm px">Source: {d.source}{d.attribution ? <> • <a href="https://aerodatabox.com" target="_blank" rel="noreferrer">{d.attribution}</a></> : null} • AI badges are predictions</div>}
-    <div className="board">{list.map((f: any, i: number) => <div key={f.id + i} id={i === nowIdx ? "brow-now" : undefined}><BoardRow f={f} dir={dir} onClick={() => push({ t: "flight", f: { ...f, date } })} /></div>)}</div></>}</>;
+    {(() => { const tOf = (f: any) => +new Date(best(dir === "dep" ? f.dep : f.arr) || (dir === "dep" ? f.dep : f.arr).scheduled || 0);
+      const cut = Date.now() - 150 * 60e3; const old = date === today() && !q ? list.filter((f: any) => !f.liveOnly && tOf(f) < cut) : []; const L = earlier ? list : list.filter((f: any) => !old.includes(f));
+      let lastH = ""; const tz = ap?.tz || "Europe/London";
+      return <div className="board b2">{old.length > 0 && <button className="chip b2earlier" onClick={() => setEarlier(v => !v)}>{earlier ? "Hide earlier flights" : `Show ${old.length} earlier flights`}</button>}
+        {L.map((f: any, i: number) => { const h = f.liveOnly ? "Live" : new Date((dir === "dep" ? f.dep : f.arr).scheduled || tOf(f)).toLocaleTimeString("en-GB", { hour: "2-digit", timeZone: tz }) + ":00"; const hd = h !== lastH; lastH = h;
+          return <div key={f.id + i} id={i === nowIdx ? "brow-now" : undefined}>{hd && <div className="b2h">{h}</div>}<BoardRow f={f} dir={dir} onClick={() => push({ t: "flight", f: { ...f, date } })} /></div>; })}</div>; })()}</>}</>;
 }
 
 function Airports({ x, push, flights, initial }: any) {
