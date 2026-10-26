@@ -397,7 +397,9 @@ function Board({ iata, x, push, term0 }: any) {
   const [dir, setDir] = useState("dep"); const [date, setDate] = useState(today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState(""); const [earlier, setEarlier] = useState(false);
   useEffect(() => setD(null), [iata, dir, date]);
   const poll = usePoll(() => api(`/board/${iata}?dir=${dir}&date=${date}`).then(setD).catch(e => setD((p: any) => p && !p.error ? p : { error: e.message, needsKey: e.needsKey, airport: e.airport || p?.airport })), [iata, dir, date]);
-  const ap = d?.airport; const [, tick] = useState(0); useEffect(() => { const t = setInterval(() => tick(n => n + 1), 30e3); return () => clearInterval(t); }, []);
+  const ap = d?.airport; const adj = useRef(false); // v23: open on the airport's local "today" (e.g. Greece/Turkey are past midnight before London)
+  useEffect(() => { if (adj.current || !ap?.tz || date !== today()) return; adj.current = true; try { const loc = new Date().toLocaleDateString("en-CA", { timeZone: ap.tz }); if (loc !== date) setDate(loc); } catch {} }, [ap?.tz]);
+  const [, tick] = useState(0); useEffect(() => { const t = setInterval(() => tick(n => n + 1), 30e3); return () => clearInterval(t); }, []);
   const list = (d?.flights || []).filter((f: any) => (!airline || f.airline?.iata === airline) && (!q || JSON.stringify([f.number, f.destination?.city, f.origin?.city]).toLowerCase().includes(q.toLowerCase())))
     .sort((a: any, b: any) => a.liveOnly ? 0 : ((dir === "dep" ? a.dep : a.arr).scheduled < (dir === "dep" ? b.dep : b.arr).scheduled ? -1 : 1));
   const nowIdx = list.findIndex((f: any) => +new Date((dir === "dep" ? f.dep : f.arr).scheduled) > Date.now() - 30 * 60e3);

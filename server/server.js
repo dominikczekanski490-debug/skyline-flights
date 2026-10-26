@@ -27,6 +27,9 @@ for (const l of fs.readFileSync(path.join(__dir, "data/airports.dat"), "utf8").s
   const a = { name: c[1], city: c[2], country: c[3], iata: c[4], icao: c[5], lat: +c[6], lon: +c[7], elev: +c[8] || 0, tz: c[11] };
   if (a.iata) AP[a.iata] = a; if (a.icao) AP_ICAO[a.icao] = a;
 }
+// v23: fill missing/\N time zones for the countries we cover (OpenFlights has gaps, e.g. IST)
+{ const CTZ = { Turkey: "Europe/Istanbul", Greece: "Europe/Athens", Cyprus: "Asia/Nicosia", Malta: "Europe/Malta", Romania: "Europe/Bucharest", Bulgaria: "Europe/Sofia", Serbia: "Europe/Belgrade", Croatia: "Europe/Zagreb", Albania: "Europe/Tirane", Montenegro: "Europe/Podgorica", "Bosnia and Herzegovina": "Europe/Sarajevo", Macedonia: "Europe/Skopje", "North Macedonia": "Europe/Skopje", Hungary: "Europe/Budapest", Poland: "Europe/Warsaw", Lithuania: "Europe/Vilnius", Latvia: "Europe/Riga", Estonia: "Europe/Tallinn", Moldova: "Europe/Chisinau", Slovenia: "Europe/Ljubljana", Kosovo: "Europe/Belgrade" };
+  for (const a of Object.values(AP)) if ((!a.tz || a.tz === "\\N") && CTZ[a.country]) a.tz = CTZ[a.country]; }
 const AL = {}, AL_ICAO = {};
 for (const l of fs.readFileSync(path.join(__dir, "data/airlines.dat"), "utf8").split("\n")) {
   const c = csv(l); if (c.length < 8) continue;
@@ -34,6 +37,8 @@ for (const l of fs.readFileSync(path.join(__dir, "data/airlines.dat"), "utf8").s
   if (a.iata && a.iata !== "-" && (!AL[a.iata] || (a.active && !AL[a.iata].active))) AL[a.iata] = a;
   if (a.icao && (!AL_ICAO[a.icao] || a.active)) AL_ICAO[a.icao] = a;
 }
+// v23: correct stale OpenFlights rows for airlines common on the new SE-Europe boards
+for (const [iata, icao, name, country] of [["GQ", "SEH", "Sky Express", "Greece"], ["EC", "EJU", "easyJet Europe", "Austria"], ["DS", "EZS", "easyJet Switzerland", "Switzerland"], ["OA", "OAL", "Olympic Air", "Greece"], ["A3", "AEE", "Aegean Airlines", "Greece"], ["CY", "CYP", "Cyprus Airways", "Cyprus"], ["KM", "KMM", "KM Malta Airlines", "Malta"], ["VF", "TKJ", "AJet", "Turkey"], ["XQ", "SXS", "SunExpress", "Turkey"], ["H4", "HLY", "HiSky", "Moldova"], ["W4", "WMT", "Wizz Air Malta", "Malta"], ["DK", "VKG", "Sunclass Airlines", "Denmark"]]) { const a = { name, iata, icao, callsign: AL_ICAO[icao]?.callsign || "", country, active: true }; AL[iata] = a; AL_ICAO[icao] = a; }
 // fixes for common carriers whose OpenFlights rows are ambiguous
 Object.assign(AL, { LS: { name: "Jet2.com", iata: "LS", icao: "EXS", callsign: "CHANNEX", country: "United Kingdom", active: true },
   FR: { name: "Ryanair", iata: "FR", icao: "RYR", callsign: "RYANAIR", country: "Ireland", active: true },
@@ -406,7 +411,7 @@ async function fraportGrBoard(apt, dir, ymd) { const host = `https://www.${FRAPO
   return rows.map(x => { const [d, tm] = grT(x.sched).split("T"); const sched = localToUtc(tz, d, tm); const stx = String(x.status || "").replace(/&nbsp;/g, "").trim(); const st = stx ? genStatus(stx, dir) : "scheduled";
       const hhmm = stx.match(/(\d\d):(\d\d)/); let at = hhmm ? localToUtc(tz, d, hhmm[0]) : undefined; if (at && sched && +new Date(at) < +new Date(sched) - 12 * 3600e3) at = new Date(+new Date(at) + 86400e3).toISOString();
       const e = grT(x.esti); const est = st === "departed" || st === "landed" ? undefined : at || (e ? localToUtc(tz, ...e.split("T")) : undefined);
-      const num = (x.fnr || "").replace(/\s+/g, ""); const alI = AL_ICAO[x.al]?.iata || (/^[A-Z0-9]{2}\d/.test(num) ? num.slice(0, 2) : null); const number = /^[A-Z]{3}\d/.test(num) && alI ? alI + num.slice(3) : num;
+      const num = (x.fnr || "").replace(/\s+/g, ""); const alI = (/^[A-Z0-9]{2}\d/.test(num) ? num.slice(0, 2) : null) || AL_ICAO[x.al]?.iata; const number = /^[A-Z]{3}\d/.test(num) && alI ? alI + num.slice(3) : num;
       return mkFlight(apt, dir, apByName(x.apname), x.apname, number, alI, x.alname, { sched, est, act: st === "departed" || st === "landed" ? at : undefined, gate: x.gate || undefined, term: x.terminal || undefined, belt: x.ausgang || undefined }, stx || "Scheduled", st, `${AP[apt]?.name || apt} official flight board (${FRAPORT_GR[apt]}-airport.gr, Fraport Greece)`, { codeshares: x.cs || undefined, checkin: x.schalter || undefined }); })
     .filter(f => inDay(f.dep?.scheduled || f.arr?.scheduled, ymd)); }
 for (const c of Object.keys(FRAPORT_GR)) if (AP[c]) OFFICIAL[c] = { fn: fraportGrBoard, label: "Fraport Greece official flight board", provider: "Official airport feed (Fraport Greece)", site: FRAPORT_GR[c] + "-airport.gr" };
@@ -438,9 +443,9 @@ async function hermesBoard(apt, dir, ymd) { const tz = "Asia/Nicosia"; const T =
   const out = []; let day = null;
   for (const r of html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || []) { const c = (r.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/g) || []).map(htx);
     if (c.length === 1) { const d = new Date(c[0] + " 12:00 UTC"); if (!isNaN(d)) day = d.toISOString().slice(0, 10); continue; }
-    if (c.length < 5 || c[1] === "Flight" || !day || day !== ymd) continue; const n0 = c[1].replace(/\s+/g, ""); const ai = /^[A-Z]{3}\d/.test(n0) ? AL_ICAO[n0.slice(0, 3)]?.iata : null; const num = ai ? ai + n0.slice(3) : n0; const rm = c[4] || "Scheduled"; const st = c[4] ? genStatus(rm, dir) : "scheduled";
+    if (c.length < 5 || c[1] === "Flight" || !day || day !== ymd) continue; const parts = c[1].replace(/\s+/g, "").split("/"); const n0 = parts[0].replace(/^([A-Z0-9]{2,3}?)0(\d{3,4})$/, "$1$2"); const ai = /^[A-Z]{3}\d/.test(n0) ? AL_ICAO[n0.slice(0, 3)]?.iata : null; const num = ai ? ai + n0.slice(3) : n0; const rm = c[4] || "Scheduled"; const st = c[4] ? genStatus(rm, dir) : "scheduled";
     const sched = localToUtc(tz, day, c[3]); const hm = rm.match(/(\d\d:\d\d)/); const at = hm ? localToUtc(tz, day, hm[1]) : undefined;
-    out.push(mkFlight(apt, dir, apByName2(c[2]), c[2], num, ai || alFromNum(num), null,  { sched, est: st === "departed" || st === "landed" ? undefined : at, act: st === "departed" || st === "landed" ? at : undefined }, rm, st, `${AP[apt]?.name || apt} official flight board (hermesairports.com)`)); }
+    out.push(mkFlight(apt, dir, apByName2(c[2]), c[2], num, ai || alFromNum(num), null,  { sched, est: st === "departed" || st === "landed" ? undefined : at, act: st === "departed" || st === "landed" ? at : undefined }, rm, st, `${AP[apt]?.name || apt} official flight board (hermesairports.com)`, { codeshares: parts.slice(1).join(", ") || undefined })); }
   return out; }
 // Malta International (maltairport.com) — per-row JSON in the save-flight button
 async function mlaBoard(apt, dir, ymd) { const tz = "Europe/Malta";

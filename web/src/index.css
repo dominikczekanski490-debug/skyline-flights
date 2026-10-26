@@ -627,3 +627,21 @@ h1,.h1s{letter-spacing:-.6px}h3{letter-spacing:-.2px}.sect{font-size:12px;letter
 .b2earlier{margin:8px 18px}
 .board.b2{scroll-behavior:smooth}
 .tb-earlier{font:inherit;font-size:11px;padding:3px 9px;border-radius:99px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:inherit;margin-right:6px;cursor:pointer}
+/* v23 Fraport Greece — recreated from the user's photo (not an official design) */
+.tb-fgr{--bg:#0b2a78;--hd:#08215f;--fg:#fff;--alt:#0e3189;--ok:#2fd35a;--warn:#fff;--bad:#ff2b2b;--acc:#f3e35a;font-family:"Arial Narrow","Roboto Condensed",Arial,sans-serif;background:linear-gradient(180deg,#0a2470 0%,#0c2d80 55%,#0a2672 100%)}
+.tb-fgr .tb-top{padding:6px 12px 4px;background:linear-gradient(180deg,#0a1f5c,#0b2a78);border-bottom:0}
+.tb-fgr .tb-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tb-fgr .tb-mark{width:26px;height:26px;border-radius:50%;background:#39b54a;display:inline-flex;padding:4px;box-sizing:border-box;flex:none}
+.tb-fgr .tb-title b{color:#f3e35a;font-size:22px;font-weight:600;letter-spacing:.3px}.tb-fgr .tb-title span{color:#f3e35a;font-size:16px;font-weight:600;flex-basis:100%;margin-left:34px;margin-top:-4px}
+.tb-fgr .tb-clock{color:#f3e35a;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.tb-fgr .tb-head{background:#c9ced8;color:#0b2a78;font-size:8px;font-weight:700;opacity:1;line-height:1.05}
+.tb-fgr .tb-row{border-bottom:1px solid #0a2366;font-size:calc(var(--rh,40px)*.40)}.tb-fgr .tb-row:nth-child(even){background:#0e3189}
+.tb-fgr .c-time{color:#fff;font-variant-numeric:tabular-nums}.tb-fgr .c-fl{color:#fff}.tb-fgr .c-dest{color:#fff}.tb-fgr .c-gate{text-align:center;color:#fff}
+.tb-fgr .c-logo .card-tile,.tb-fgr .tb-logo{border-radius:2px;height:15px;background:#fff}
+.tb-fgr .tb-st{color:#fff;font-weight:600}.tb-fgr .tb-st.bad,.tb-fgr .tb-st.blink.bad{color:var(--bad)}.tb-fgr .tb-st.ok,.tb-fgr .tb-st.blink.ok{color:var(--ok);animation:none}.tb-fgr .tb-st.warn{color:#fff}.tb-fgr .tb-st.dim{opacity:.75}
+/* v23 regional fallbacks (not photo-matched) */
+.tb-ee{--bg:#111418;--hd:#1a1f26;--fg:#f2f4f7;--alt:#171b21;--ok:#36d07a;--warn:#ffc531;--bad:#ff4d4d;--acc:#ffc531;font-family:"Roboto Condensed","Arial Narrow",Arial,sans-serif}
+.tb-ee .tb-title b{font-size:19px;color:#ffc531}.tb-ee .tb-title span{color:#cfd6df}.tb-ee .tb-head{font-size:8px;color:#9aa6b4;opacity:1}.tb-ee .tb-row{font-size:calc(var(--rh,40px)*.40)}.tb-ee .c-gate{text-align:center}
+.tb-tr{--bg:#0d0f13;--acc:#e30a17}.tb-tr .tb-title b{color:#fff}.tb-tr .tb-top{border-bottom:2px solid #e30a17}
+.tb-cy{--bg:#0f2346;--alt:#132b55}.tb-cy .tb-title b{color:#fff}
+.tb-mla{--bg:#14161a}.tb-mla .tb-top{border-bottom:2px solid #cf142b}
