@@ -20,7 +20,10 @@ export function NextHero({ f, open, dayof, noMode }: { f: Flight; open: () => vo
   const g = withEstArr(f); const ph = phaseOf(f); const p = leavePlan(f); const tz = f.origin?.tz, atz = f.destination?.tz; const now = Date.now(); const dd = delay(f.dep);
   const depAt = best(f.dep) ? +new Date(best(f.dep)!) : 0, arrAt = best(g.arr) ? +new Date(best(g.arr)!) : 0;
   const boarding = /board/i.test(f.statusText || "");
-  const big = ph === "pre" ? (boarding ? "Boarding" : depAt > now ? "Departs in " + ago(depAt - now) : "Due to depart") : ph === "air" ? (arrAt > now ? "Landing in " + ago(arrAt - now) : "Landing now") : ph === "landed" ? "Landed " + fmtT(f.arr.actual || best(g.arr), atz) : ph === "cancelled" ? "Cancelled" : "Diverted";
+  // Live ETA from ADS-B position/speed beats the block-time estimate; with no live data and the estimate passed, say so honestly.
+  const lvEta = lv && lv.lat != null && lv.gs > 80 && f.destination?.lat != null ? now + dist({ lat: lv.lat, lon: lv.lon } as any, f.destination) / 1.15078 / lv.gs * 3600e3 + 8 * 60e3 : 0;
+  const eArr = lvEta || arrAt;
+  const big = ph === "pre" ? (boarding ? "Boarding" : depAt > now ? "Departs in " + ago(depAt - now) : "Due to depart") : ph === "air" ? (eArr > now ? (lvEta && eArr - now < 15 * 60e3 ? "Landing now" : "Landing in " + ago(eArr - now) + (lvEta ? "" : " (est.)")) : lv ? "Landing now" : "Should have landed — no update yet") : ph === "landed" ? "Landed " + fmtT(f.arr.actual || best(g.arr), atz) : ph === "cancelled" ? "Cancelled" : "Diverted";
   const prog = ph === "landed" ? 1 : ph === "air" ? (lv?.progress != null ? lv.progress / 100 : depAt && arrAt > depAt ? Math.min(.97, Math.max(.03, (now - depAt) / (arrAt - depAt))) : .5) : 0;
   const next = ph !== "pre" || !p ? null : now < p.leave ? ["Leave by", p.leave] : now < p.boarding ? ["Boarding about", p.boarding] : now < p.gateClose ? ["Gate closes about", p.gateClose] : null;
   const cells: [string, string | null | undefined][] = ph === "landed" || ph === "air" ? [["Departed", fmtT(f.dep.actual || best(f.dep), tz)], ["Terminal", f.arr.terminal], ["Belt", f.arr.baggage], ["Arrives", fmtT(best(g.arr), atz)]] : [["Terminal", f.dep.terminal], ["Gate", f.dep.gate || (f.statusText || "").match(/gate\s+([A-Z]?\d+[A-Z]?)/i)?.[1]], ["Zone", zoneOf(f)], ["Departs", fmtT(best(f.dep), tz)]];

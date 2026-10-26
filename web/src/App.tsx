@@ -16,7 +16,7 @@ import { api, today, dist, fmtT, fmtD, best, delay, dur, lateLabel, lateColor, w
 import { liveOf, statusOf } from "./lib";
 import { AirlineTile } from "./brand";
 import { EtaLine } from "./eta";
-import { Tracked, isTracked } from "./tracked";
+import { Tracked, isTracked, finishStale } from "./tracked";
 import { EXAMPLE } from "./example";
 import { Timeline, Progress, WeatherCard, AirportInfo, PassportMore, PasteImport, exportIcs, UnitsCard, AlertPrefsCard } from "./more";
 import { AskSkyline, LockView, RouteWeather, useInsights } from "./v21";
@@ -27,7 +27,7 @@ const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <AirlineTile a={a} clas
 
 export default function App() {
   const [tab, setTab] = useState<"mine" | "friends" | "tracked" | "passport">("mine");
-  const [flights, setFlights] = useState<Flight[]>(load);
+  const [flights, setFlights] = useState<Flight[]>(() => load().map(finishStale));
   const [ov, setOv] = useState<Ov[]>([]);
   const [live, setLive] = useState<Record<string, any>>({});
   const [mapStyle, setMapStyle] = useState(localStorage.getItem("sk.map2") || "dark");
@@ -59,7 +59,7 @@ export default function App() {
         const n: Flight = { ...f, ...r.flight, dep: keep(f.dep, r.flight.dep), arr: keep(f.arr, r.flight.arr), id: f.id, date: f.date, notes: f.notes, friend: f.friend, checkedAt: Date.now(), live: r.live ? { ...r.live, at: Date.now() } : null, aircraft: { ...f.aircraft, ...r.flight.aircraft, ...(r.live ? { reg: r.live.reg, hex: r.live.hex, model: r.live.type } : {}) } } as any;
         const msg: string[] = []; if (n.statusText !== f.statusText && n.statusText) msg.push(n.statusText!); if (n.dep.gate !== f.dep.gate && n.dep.gate) msg.push(`Gate ${n.dep.gate}`);
         if (msg.length) { n.updates = [...(f.updates || []), { at: Date.now(), text: msg.join(" · ") }]; localNotify(`${n.number} ${n.origin?.iata}→${n.destination?.iata}`, msg.join(" · "), n.id); }
-        upd(n); } } catch (e) { console.warn("refresh", f.number, e); } }
+        upd(finishStale(n)); } } catch (e) { console.warn("refresh", f.number, e); } }
     markTracked(); busy = false; };
     tick(); const t = setInterval(tick, TRACK_MS); const v = () => document.visibilityState === "visible" && tick(); document.addEventListener("visibilitychange", v); window.addEventListener("focus", v);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", v); window.removeEventListener("focus", v); }; }, [active.map(f => f.id).join()]);

@@ -4,9 +4,17 @@ import { useFlightPhoto } from "./livery";
 import { AirlineTile } from "./brand";
 import { exportIcs } from "./assist";
 // A flight is "tracked" (finished) once it landed >20 min ago, was cancelled, or its date has passed while not airborne.
-export const isTracked = (f: Flight) => { const a: any = f.arr || {}; const t = a.actual || a.estimated || a.scheduled;
-  if (f.status === "landed") return !t || Date.now() - +new Date(t) > 20 * 60e3; if (f.status === "cancelled") return f.date < today();
+// A flight belongs in Tracked once it has finished: official "landed" + 20 min, ADS-B on the ground near the destination,
+// or (if the feed never confirmed) 20 min past its arrival time (60 min if that arrival is only a Skyline block-time estimate).
+export const isTracked = (f: Flight) => { const a: any = withEstArr(f).arr || {}; const t = a.actual || a.estimated || a.scheduled; const now = Date.now();
+  if (f.status === "landed") return !t || now - +new Date(t) > 20 * 60e3; if (f.status === "cancelled" || f.status === "diverted") return f.date < today();
+  const lv: any = (f as any).live; if (lv && lv.onGround && f.destination?.lat != null && Math.hypot(lv.lat - f.destination.lat, lv.lon - (f.destination.lon ?? 0)) < 0.3 && now - (lv.at || 0) < 3600e3) return true;
+  if (t && now - +new Date(t) > (a.estimatedOnly ? 60 : 20) * 60e3) return true;
   return f.date < today() && !["departed", "enroute"].includes(f.status || ""); };
+// Migration/normaliser: a departed flight whose arrival time is long past without a "landed" update is shown as "Landed (est.)".
+export const finishStale = (f: Flight): Flight => { if (!["departed", "enroute", "boarding", "gate", "scheduled", "delayed", "unknown", ""].includes(f.status || "")) return f;
+  const a: any = withEstArr(f).arr || {}; const t = a.actual || a.estimated || a.scheduled; if (!t || Date.now() - +new Date(t) < (a.estimatedOnly ? 60 : 20) * 60e3) return f;
+  if (!f.dep?.actual && !["departed", "enroute"].includes(f.status || "")) return f; return { ...f, status: "landed", statusText: "Landed (est.)", staleInferred: true }; };
 const mins = (f: Flight) => { const g = withEstArr(f); const a = f.arr.actual || best(g.arr), d = f.dep.actual || best(f.dep); return a && d ? Math.max(0, (+new Date(a) - +new Date(d)) / 60000) : estDurMin(f.origin, f.destination) || 0; };
 const tm = (k: string, d: any, a: any, f: Flight) => { const x = (t: any, tz: any) => t ? fmtT(t, tz) : "?"; return d || a ? `${k} ${x(d, f.origin?.tz)}–${x(a, f.destination?.tz)}` : ""; };
 const CC: Record<string, string> = {};
