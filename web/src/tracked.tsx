@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, best, delay, dist, dur, estDurMin, fmtT, fmtD, today, download, withEstArr, type Flight } from "./lib";
 import { useFlightPhoto } from "./livery";
 import { AirlineTile } from "./brand";
+import { exportIcs } from "./assist";
 // A flight is "tracked" (finished) once it landed >20 min ago, was cancelled, or its date has passed while not airborne.
 export const isTracked = (f: Flight) => { const a: any = f.arr || {}; const t = a.actual || a.estimated || a.scheduled;
   if (f.status === "landed") return !t || Date.now() - +new Date(t) > 20 * 60e3; if (f.status === "cancelled") return f.date < today();
@@ -14,7 +15,7 @@ function Row({ f, open, del }: { f: Flight; open: () => void; del: () => void })
   return <div className="trk-wrap">{dx < 0 && <button className="trk-del" onClick={del}>Delete</button>}
     <div className="trk card press" style={{ transform: `translateX(${dx}px)` }} onClick={() => dx ? setDx(0) : open()}
       onTouchStart={e => x0.current = e.touches[0].clientX} onTouchMove={e => { if (x0.current != null) setDx(Math.min(0, Math.max(-96, e.touches[0].clientX - x0.current))); }} onTouchEnd={() => { setDx(d => d < -48 ? -96 : 0); x0.current = null; }}>
-      {ph?.src ? <img className="trk-ph" src={ph.src} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <div className="trk-ph none" />}
+      {ph?.src ? <img className="trk-ph" src={ph.src} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <div className="trk-ph none"><AirlineTile a={f.airline} className="card-tile" mode="colour" style={{ width: 52, height: 22 }} /><span>{f.aircraft?.model || f.airline?.name || ""}</span></div>}
       <div className="trk-b"><div className="row between"><b>{f.origin?.iata} → {f.destination?.iata}</b><span className={"trk-dl " + (f.status === "cancelled" ? "bad" : dl == null ? "" : dl >= 15 ? "bad" : dl >= 5 ? "warn" : "ok")}>{f.status === "cancelled" ? "Cancelled" : dl == null ? "—" : dl >= 5 ? `+${dur(dl)}` : "On time"}</span></div>
         <div className="row g8 trk-s"><AirlineTile a={f.airline} className="card-tile" mode="colour" style={{ width: 40, height: 18 }} /><span>{f.number} · {fmtD(f.date, { weekday: "short", day: "numeric", month: "short" })}</span></div>
         <div className="trk-t">{tm("Sched", f.dep.scheduled, f.arr.scheduled, f)}{f.dep.actual || f.arr.actual ? " · " + tm("Actual", f.dep.actual, f.arr.actual, f) : ""}</div>
@@ -39,5 +40,5 @@ export function Tracked({ flights, setFlights, open }: { flights: Flight[]; setF
       {s.ot != null && <small className="muted">On-time = arrived &lt;15 min late, over {s.n} flights with known times. Same flights feed Passport; nothing is stored twice.</small>}</div>
     {!L.length ? <div className="empty16"><b>No tracked flights yet</b><span>When a flight you follow lands (or its date passes), it moves here automatically with its times, delay, aircraft and distance.</span></div>
       : <>{groups.map(([k, fs]) => <div key={k}><div className="sect">{k}</div>{fs.map(f => <Row key={f.id} f={f} open={() => open(f)} del={() => confirm(`Delete ${f.number} on ${f.date}?`) && setFlights((l: Flight[]) => l.filter(x => x.id !== f.id))} />)}</div>)}
-        <div className="row g8 px mt12"><button className="chip" onClick={() => exp("csv")}>Export CSV</button><button className="chip" onClick={() => exp("json")}>Export JSON</button></div></>}
+        <div className="row g8 px mt12"><button className="chip" onClick={() => exp("csv")}>Export CSV</button><button className="chip" onClick={() => exp("json")}>Export JSON</button><button className="chip" onClick={() => exportIcs(L)}>Calendar (.ics)</button></div></>}
     <div style={{ height: 170 }} /></>; }
