@@ -1376,12 +1376,33 @@ api.get("/guide/:iata", wrap(async (req, res) => { const c = req.params.iata.toU
 const acNum = n => (String(n || "").match(/^([A-Z0-9]{2})(\d+)([A-Z]?)$/) || []);
 const icaoCs = f => { const [, al, d, sx] = acNum((f.number || "").replace(/\s/g, "")); const ic = AL[al]?.icao; return ic && d ? ic + String(+d) + (sx || "") : null; };
 async function areaAc(iata) { const a = AP[iata]; if (!a) return []; try { return await adsb(`point/${a.lat.toFixed(3)}/${a.lon.toFixed(3)}/40`); } catch { return []; } }
+// In-flight search: look around where the flight should be now for the airline's transponders, then confirm each
+// candidate's route with adsbdb (callsigns like EXS15PD / EZY45TC / RYR5YP don't contain the flight number).
+async function findInFlight(f) { const o = AP[f.origin?.iata], d = AP[f.destination?.iata]; const al = acNum((f.number || "").replace(/\s/g, ""))[1]; const ic = f.airline?.icao || AL[al]?.icao || (/^[A-Z]{3}$/.test(String(f.number).slice(0, 3)) ? String(f.number).slice(0, 3) : null);
+  const t0 = Date.parse(f.dep?.actual || (/departed|enroute/.test(f.status || "") ? f.dep?.estimated || f.dep?.scheduled : "") || ""); if (!o || !d || !ic || !t0) return null;
+  const R = 6371, r = Math.PI / 180; const km = 2 * R * Math.asin(Math.sqrt(Math.sin((d.lat - o.lat) * r / 2) ** 2 + Math.cos(o.lat * r) * Math.cos(d.lat * r) * Math.sin((d.lon - o.lon) * r / 2) ** 2));
+  const durMs = (km / 780 + 0.4) * 3600e3; const fr = (Date.now() - t0) / durMs; if (fr < 0 || fr > 1.4) return null; const k = Math.min(1, Math.max(0, fr));
+  const lat = o.lat + (d.lat - o.lat) * k, lon = o.lon + (d.lon - o.lon) * k;
+  return cached(`inflt:${f.number}:${f.date}`, 60, async () => { const near = await adsb(`point/${lat.toFixed(2)}/${lon.toFixed(2)}/250`).catch(() => []);
+    const C = (near || []).filter(x => (x.flight || "").trim().toUpperCase().startsWith(ic)).slice(0, 25);
+    const exact = C.find(x => (x.flight || "").trim().toUpperCase() === ic + String(+acNum(f.number)[2])); const order = exact ? [exact, ...C.filter(x => x !== exact)] : C;
+    for (const x of order) { const rt = await routeCs((x.flight || "").trim()); const oi = rt?.origin?.iata_code, di = rt?.destination?.iata_code;
+      if (oi === f.origin.iata && di === f.destination.iata) return { reg: (x.reg || x.r) || null, type: (x.type || x.t) || null, hex: x.hex, callsign: (x.flight || "").trim(), lat: x.lat, lon: x.lon, alt: (x.alt ?? x.alt_baro), gs: x.gs, track: x.track, onGround: (x.alt ?? x.alt_baro) === "ground" }; }
+    // adsbdb often doesn't know alphanumeric callsigns: fall back to geometry. Candidate must sit on the route corridor, head for the
+    // destination and be about as far along as the elapsed time implies. Accept only if exactly one of the airline's aircraft fits.
+    const brg = (a, b) => { const y = Math.sin((b.lon - a.lon) * r) * Math.cos(b.lat * r), x = Math.cos(a.lat * r) * Math.sin(b.lat * r) - Math.sin(a.lat * r) * Math.cos(b.lat * r) * Math.cos((b.lon - a.lon) * r); return (Math.atan2(y, x) / r + 360) % 360; };
+    const hav = (a, b) => 2 * R * Math.asin(Math.sqrt(Math.sin((b.lat - a.lat) * r / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin((b.lon - a.lon) * r / 2) ** 2));
+    const fit = C.filter(x => { if (x.lat == null || typeof (x.alt ?? x.alt_baro) !== "number" || (x.alt ?? x.alt_baro) < 5000) return false; const p = { lat: x.lat, lon: x.lon }; const dO = hav(o, p), dD = hav(p, d);
+      if (dO + dD > km * 1.08) return false; const dt = Math.abs(((brg(p, d) - (x.track ?? -999)) + 540) % 360 - 180); if (dt > 25) return false; const prog = dO / km; return Math.abs(prog - Math.min(1, fr)) < 0.3; });
+    if (fit.length === 1) { const x = fit[0]; return { reg: (x.reg || x.r) || null, type: (x.type || x.t) || null, hex: x.hex, callsign: (x.flight || "").trim(), lat: x.lat, lon: x.lon, alt: (x.alt ?? x.alt_baro), gs: x.gs, track: x.track, onGround: false, geom: true }; }
+    return null; }); }
 async function resolveAircraft(f, ctx) {
   const out = { reg: f.aircraft?.reg || null, type: f.aircraft?.model || f.aircraft?.type || null, how: f.aircraft?.reg ? "board" : null, confidence: f.aircraft?.reg ? "airline" : null, inbound: null };
   const alF = acNum((f.number || "").replace(/\s/g, ""))[1]; const bn = ctx.byNum?.[(f.number || "").replace(/\s/g, "")] || ctx.byRoute?.[`${alF}:${f.origin?.iata}:${f.destination?.iata}`]?.[0]; if (bn && !out.reg) Object.assign(out, { reg: bn.reg, type: out.type || bn.type, how: "adsb-callsign", confidence: "transponder", live: bn.live || null });
+  if (!out.reg && (f.dep?.actual || /departed|enroute/.test(f.status || ""))) { const L = await findInFlight(f).catch(() => null); if (L) Object.assign(out, { reg: L.reg, type: out.type || L.type, how: L.geom ? "adsb-geometry" : "adsb-route", confidence: L.geom ? "likely" : "transponder", live: { lat: L.lat, lon: L.lon, alt: L.alt, gs: L.gs, hex: L.hex, callsign: L.callsign, onGround: L.onGround } }); }
   const css = [...new Set([f.callsign, icaoCs(f)].filter(Boolean).map(x => x.replace(/\s/g, "").toUpperCase()))];
   const near = ctx.near || []; const hit = near.find(x => css.includes((x.flight || "").trim().toUpperCase()));
-  if (hit && !out.reg && hit.r) Object.assign(out, { reg: hit.r, type: out.type || hit.t, how: "adsb-callsign", confidence: "transponder", live: { lat: hit.lat, lon: hit.lon, alt: hit.alt_baro, gs: hit.gs, hex: hit.hex } });
+  if (hit && !out.reg && (hit.reg || hit.r)) Object.assign(out, { reg: (hit.reg || (hit.reg || hit.r)), type: out.type || (hit.type || hit.t), how: "adsb-callsign", confidence: "transponder", live: { lat: hit.lat, lon: hit.lon, alt: (hit.alt ?? hit.alt_baro), gs: hit.gs, hex: hit.hex } });
   // rotation: the same airline's arrival into this airport 25 min–4 h before departure with the paired flight number
   const [, al, d] = acNum((f.number || "").replace(/\s/g, "")); const dep = +new Date(f.dep?.estimated || f.dep?.scheduled || 0);
   if (al && d && dep && ctx.arr?.length) {
@@ -1402,14 +1423,15 @@ function typicalTypes(rows) { const c = {}; for (const r of rows) { const al = a
 async function acContext(iata, ymd) { return cached(`acctx:${iata}:${ymd}`, 60, async () => { const [dep, arr, near] = await Promise.all([board(iata, "dep", ymd).catch(() => ({ flights: [] })), board(iata, "arr", ymd).catch(() => ({ flights: [] })), areaAc(iata)]);
   const D = (dep.flights || []).filter(f => !f.liveOnly), A = (arr.flights || []).filter(f => !f.liveOnly);
   // transponder callsign -> IATA flight number via adsbdb for everything seen at/near this airport (landed, parked, taxiing, airborne nearby)
-  const byNum = {}, byRoute = {}; const o = obsOf(iata); const seen = [...(o.events || []).map(e => ({ cs: e.cs, reg: e.reg, type: e.type, t: e.t, kind: e.kind })), ...Object.values(o.ac || {}).map(p => ({ cs: p.cs, reg: p.reg, type: p.type })), ...near.map(x => ({ cs: (x.flight || "").trim(), reg: x.r, type: x.t, live: { lat: x.lat, lon: x.lon, alt: x.alt_baro, gs: x.gs } }))].filter(x => x.cs && x.reg);
+  const byNum = {}, byRoute = {}; const o = obsOf(iata); const seen = [...(o.events || []).map(e => ({ cs: e.cs, reg: e.reg, type: e.type, t: e.t, kind: e.kind })), ...Object.values(o.ac || {}).map(p => ({ cs: p.cs, reg: p.reg, type: p.type })), ...near.map(x => ({ cs: (x.flight || "").trim(), reg: x.reg || x.r, type: x.type || x.t, live: { lat: x.lat, lon: x.lon, alt: x.alt ?? x.alt_baro, gs: x.gs } }))].filter(x => x.cs && x.reg);
   for (const x of seen.slice(0, 120)) { const rt = await routeCs(x.cs).catch(() => null); const n = rt?.callsign_iata; if (n && !byNum[n]) byNum[n] = x;
     const al = rt?.airline?.iata, og = rt?.origin?.iata_code, ds = rt?.destination?.iata_code; if (al && og && ds) { const k = `${al}:${og}:${ds}`; (byRoute[k] = byRoute[k] || []).push(x); } }
   for (const k in byRoute) if (new Set(byRoute[k].map(x => x.reg)).size > 1) delete byRoute[k]; // ambiguous — two aircraft on the same airline+route, don't guess
   return { dep: D, arr: A, near, byNum, byRoute, typical: typicalTypes([...D, ...A]) }; }); }
 api.get("/aircraft-for", async (req, res) => { try { const { number, o } = req.query; const ymd = req.query.date || todayLondon(); const ctx = await acContext(String(o).toUpperCase(), ymd);
   const f = ctx.dep.find(x => (x.number || "").replace(/\s/g, "") === String(number).toUpperCase()) || { number: String(number).toUpperCase(), origin: AP[o], dep: { scheduled: req.query.dep }, destination: { iata: req.query.d } };
-  res.json({ number, ...(await resolveAircraft(f, ctx)), hint: "Airlines usually assign the aircraft 2–3 hours before departure; Skyline keeps checking." }); } catch (e) { res.status(500).json({ error: e.message }); } });
+  const gone = !!(f.dep?.actual || /departed|enroute|landed/.test(f.status || ""));
+  res.json({ number, departed: gone, ...(await resolveAircraft(f, ctx)), hint: gone ? "This flight has departed, but its transponder isn't matched right now — either it's outside volunteer ADS-B coverage (e.g. over sea) or it has already landed. Skyline keeps checking." : "Airlines usually assign the aircraft 2–3 hours before departure; Skyline keeps checking." }); } catch (e) { res.status(500).json({ error: e.message }); } });
 api.get("/acresolve/:iata", async (req, res) => { try { const iata = req.params.iata.toUpperCase(); const ctx = await acContext(iata, todayLondon()); const now = Date.now(), H = (+req.query.h || 6) * 3600e3;
   const L = ctx.dep.filter(f => { const t = +new Date(f.dep?.estimated || f.dep?.scheduled || 0); return t > now - 15 * 60e3 && t < now + H && f.status !== "cancelled"; });
   const R = []; for (const f of L) R.push({ number: f.number, to: f.destination?.iata, before: f.aircraft?.reg || null, ...(await resolveAircraft(f, ctx)) });
