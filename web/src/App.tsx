@@ -285,7 +285,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   const [wx, setWx] = useState<any[]>([]); const [ac, setAc] = useState<any>(null); const [fc, setFc] = useState<any>(null); const [inb, setInb] = useState<any>(null); const [al, setAl] = useState<any>(f.airline);
   useEffect(() => { Promise.all([f.origin, f.destination].map((a: Ap) => a?.lat ? api(`/weather?lat=${a.lat}&lon=${a.lon}`).catch(() => null) : null)).then(setWx);
     if (!f.example) api(`/forecast/${f.number}`).then(setFc).catch(() => {}); if (f.airline?.iata && !f.airline.links) api("/airline/" + f.airline.iata).then(setAl).catch(() => {}); }, [f.id]);
-  const rs = useAircraft(f); const hex = lv?.hex || f.aircraft?.hex, reg = lv?.reg || f.aircraft?.reg || rs?.reg || undefined;
+  const rs = useAircraft(f); const hex = lv?.hex || f.aircraft?.hex || rs?.live?.hex, reg = lv?.reg || f.aircraft?.reg || rs?.reg || undefined;
   useEffect(() => { if (hex || reg) api(`/aircraft?hex=${hex || ""}&reg=${reg || ""}`).then(setAc).catch(() => {}); if (reg) api(`/inbound?reg=${reg}&date=${f.date}`).then(setInb).catch(e => setInb({ err: e.message, needsKey: e.needsKey })); }, [hex, reg]);
   const tracked = flights.some((x: Flight) => x.id === f.id);
   const [fresh, setFresh] = useState<any>(null);
