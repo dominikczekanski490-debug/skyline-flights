@@ -1,0 +1,22 @@
+/* ===== v24 premium pass ===== */
+html:root{--acc:#c9a86a;--acc2:#e9d3a0;--ink:#0a0b0e}
+.sheet{background:radial-gradient(120% 60% at 0% 0%,rgba(201,168,106,.10),transparent 60%),radial-gradient(100% 50% at 100% 0%,rgba(90,110,255,.10),transparent 60%),var(--bg)!important}
+.sheet-body{padding-bottom:calc(env(safe-area-inset-bottom) + 128px)!important}
+.head h1{font-size:36px;font-weight:800;letter-spacing:-.045em;background:linear-gradient(180deg,var(--text),color-mix(in srgb,var(--text) 70%,var(--acc)));-webkit-background-clip:text;background-clip:text;color:transparent}
+/* tab bar: solid frosted dock, never see-through over content */
+html body .app nav.tabbar{bottom:0!important;padding:10px 14px calc(env(safe-area-inset-bottom) + 12px)!important;background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--bg) 92%,transparent) 38%);}
+html body nav.tabbar .pill{background:color-mix(in srgb,var(--card) 94%,transparent)!important;border:1px solid color-mix(in srgb,var(--acc) 28%,transparent)!important;box-shadow:0 10px 40px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06)!important}
+html body nav.tabbar .pill button{font-size:11px!important;letter-spacing:0;white-space:nowrap;min-width:0}
+html body nav.tabbar .pill button.on{color:var(--acc2)!important}
+html body nav.tabbar .searchbtn{background:linear-gradient(140deg,var(--acc2),var(--acc))!important;color:var(--ink)!important;border:0!important;box-shadow:0 10px 30px rgba(201,168,106,.35)!important}
+.card{border:1px solid transparent!important;background:linear-gradient(var(--card),var(--card)) padding-box,linear-gradient(160deg,color-mix(in srgb,var(--acc) 40%,transparent),rgba(127,127,127,.12) 40%,rgba(127,127,127,.06)) border-box!important}
+.primary{background:linear-gradient(140deg,var(--acc2),var(--acc))!important;color:var(--ink)!important;font-weight:700}
+/* pulse */
+.pulse{margin:14px 0;border-radius:24px;padding:14px;background:linear-gradient(var(--card),var(--card)) padding-box,linear-gradient(160deg,color-mix(in srgb,var(--acc) 55%,transparent),rgba(127,127,127,.1)) border-box;border:1px solid transparent}
+.pulse-h{display:flex;flex-direction:column;margin:0 4px 8px}.pulse-h b{font-size:19px;letter-spacing:-.02em}.pulse-h span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+.pulse-r{display:grid;grid-template-columns:10px 44px 1fr auto;gap:10px;align-items:center;width:100%;text-align:left;padding:11px 6px;border-top:1px solid var(--line)}
+.pulse-dot{width:9px;height:9px;border-radius:50%;background:var(--faint)}.good .pulse-dot{background:var(--green);box-shadow:0 0 10px var(--green)}.warn .pulse-dot{background:var(--orange);box-shadow:0 0 10px var(--orange)}.bad .pulse-dot{background:var(--red);box-shadow:0 0 10px var(--red)}
+.load .pulse-dot{animation:pp 1s infinite alternate}@keyframes pp{to{opacity:.2}}
+.pulse-iata{font-weight:800;font-size:17px;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.pulse-t{font-size:13px;line-height:1.3;color:var(--muted)}
+.pulse-n{display:flex;flex-direction:column;align-items:flex-end;font-size:10px;color:var(--muted);text-transform:uppercase}.pulse-n b{font-size:18px;color:var(--text)}
