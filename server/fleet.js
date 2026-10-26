@@ -16,7 +16,7 @@ export function startFleet({ AP, adsb, STATE }) {
   const close = (p, to, t, how) => { const L = p.legs[p.legs.length - 1]; if (L && L[3] == null && t > L[1] && L[0] !== to) { L[2] = to; L[3] = t; L[5] = (L[5] || "") + how; } else if (!L || L[3] != null) { if (L && L[2] === to && Math.abs(L[3] - t) < 40 * 60e3) return; p.legs.push([null, null, to, t, p.cs, how]); if (p.legs.length > 14) p.legs.shift(); } };
   function ingest(list, now) {
     for (const x of list) { if (!x.hex || x.lat == null) continue; const gnd = x.alt === "ground"; const alt = gnd ? 0 : +x.alt; if (!gnd && !isFinite(alt)) continue;
-      let p = F.get(x.hex); if (!p) { if (!x.reg && !x.type) continue; p = { reg: x.reg, type: x.type, cs: null, last: null, legs: [] }; F.set(x.hex, p); }
+      let p = F.get(x.hex); if (!p) { if ((!x.reg && !x.type) || F.size > 30000) continue; p = { reg: x.reg, type: x.type, cs: null, last: null, legs: [] }; F.set(x.hex, p); }
       const cs = (x.flight || "").trim() || p.cs; const t = now - (x.seen || 0) * 1000; const prev = p.last; p.reg = x.reg || p.reg; p.type = x.type || p.type;
       const s = { t, la: x.lat, lo: x.lon, alt, gnd, vs: x.vs || 0, gs: x.gs || 0, trk: x.track || 0 };
       const fresh = prev && t - prev.t < 25 * 60e3;

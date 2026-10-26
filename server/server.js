@@ -714,7 +714,7 @@ const kmTo = (a, lat, lon) => { const R = 6371, r = x => x * Math.PI / 180, dl =
 // ---------- Rolling ADS-B observation log for airports without a free timetable feed ----------
 // Samples aircraft within 25nm of tracked airports, keeps per-aircraft tracks and derives observed events
 // (departed / landed) with real observed times. In memory (6h), mirrored to Upstash KV when configured.
-const OBS = {}; const OBS_KEEP = 6 * 3600e3; const TOP_LIVE = ["LGW", "EDI", "GLA", "BHX", "BRS", "NCL", "LBA", "LPL", "CWL", "ABZ", "LCY", "SOU", "JER", "IOM", "BFS"];
+const OBS = {}; const OBS_KEEP = 6 * 3600e3; const EV_KEEP = 26 * 3600e3; // aircraft positions 6 h; take-off/landing events 26 h (about 1 MB) const TOP_LIVE = ["LGW", "EDI", "GLA", "BHX", "BRS", "NCL", "LBA", "LPL", "CWL", "ABZ", "LCY", "SOU", "JER", "IOM", "BFS"];
 const REQ = {}; // iata -> last requested ms
 const obsOf = c => OBS[c] || (OBS[c] = { iata: c, ac: {}, events: [], lastSeen: null, sampledAt: null, backfilled: 0 });
 const nearAir = (a, nm = 25) => cached(`near:${a.iata}:${nm}`, 45, () => adsbGate(async () => { for (const u of [`https://api.adsb.lol/v2/point/${a.lat}/${a.lon}/${nm}`, `https://api.airplanes.live/v2/point/${a.lat}/${a.lon}/${nm}`, `https://opendata.adsb.fi/api/v2/lat/${a.lat}/lon/${a.lon}/dist/${nm}`]) { try { const r = await getJSON(u); if (r.ac || r.aircraft) return { ac: r.ac || r.aircraft, src: u.includes("lol") ? "adsb.lol" : u.includes("airplanes") ? "airplanes.live" : "adsb.fi" }; } catch {} } throw new Error("no ADS-B source"); }));
@@ -731,7 +731,7 @@ async function observe(c) { const a = AP[c]; if (!a) return null; const { ac, sr
     else if (!prev && !s.gnd && s.agl < 3000 && s.km < 12 && s.vs > 500) addEv(o, p, "dep", s.t, "Departed — first seen climbing out", true);
     else if (!prev && !s.gnd && s.agl < 1500 && s.km < 8 && s.vs < -300) addEv(o, p, "arr", s.t, "Landing — first seen on short final", true); }
   for (const [h, p] of Object.entries(o.ac)) if (now - p.last > OBS_KEEP) delete o.ac[h];
-  o.events = o.events.filter(e => now - e.t < OBS_KEEP); return o; }
+  o.events = o.events.filter(e => now - e.t < EV_KEEP); if (o.events.length > 4000) o.events = o.events.slice(-4000); return o; }
 function addEv(o, p, kind, t, text, approx) { if (o.events.some(e => e.hex === p.hex && e.kind === kind && Math.abs(e.t - t) < 30 * 60e3)) return; o.events.push({ hex: p.hex, cs: p.cs, reg: p.reg, type: p.type, kind, t, text, approx: !!approx }); }
 function current(o, p) { const s = p.samples[p.samples.length - 1]; if (!s || Date.now() - p.last > 3 * 60e3) return null;
   const prev = p.samples[p.samples.length - 2]; if (s.gnd) return { phase: p.samples.some(q => !q.gnd) && !p.samples.slice(p.samples.findIndex(q => !q.gnd)).every(q => !q.gnd) ? "arrived" : (s.gs ?? 0) > 5 ? "taxi" : "stand", s };
@@ -1173,16 +1173,30 @@ api.get("/disruptions", wrap(async (req, res) => {
 const KV_URL = process.env.UPSTASH_REDIS_REST_URL, KV_TOK = process.env.UPSTASH_REDIS_REST_TOKEN;
 const STATE_FILE = path.join(DATA_DIR, "state.json");
 let STATE = { subs: {}, vapid: null };
+// Storage is split into 3 keys so no single Upstash request gets near its 10 MB limit, and heavy logs are
+// written rarely (bandwidth: free tier has 10 GB a month). core = subs/vapid/hist (on change);
+// flog = flight log (hourly); live = obs events + fleet legs (every 20 min).
+const KVH = () => ({ headers: { authorization: "Bearer " + KV_TOK } });
+const kvRead = async k => { try { const r = await getJSON(KV_URL.replace(/\/$/, "") + "/get/" + k, KVH()); return r.result ? JSON.parse(r.result) : null; } catch { return null; } };
+const KV_MAX = 8e6;
+async function kvWrite(k, body) { if (body.length > KV_MAX) { console.warn(`state ${k} too big (${body.length}), skipped`); return false; }
+  const r = await fetch(KV_URL.replace(/\/$/, "") + "/set/" + k, { method: "POST", ...KVH(), body }); if (!r.ok) console.warn("kv save", k, r.status); return r.ok; }
 async function loadState() {
-  try { if (KV_URL) { const r = await getJSON(KV_URL.replace(/\/$/, "") + "/get/skyline_state", { headers: { authorization: "Bearer " + KV_TOK } }); if (r.result) Object.assign(STATE, JSON.parse(r.result)); }
+  try { if (KV_URL) { const [a, f, l] = await Promise.all([kvRead("skyline_state"), kvRead("skyline_flog"), kvRead("skyline_live")]); if (a) Object.assign(STATE, a); if (f) STATE.flog = f; if (l) { STATE.obs = l.obs; STATE.fleet = l.fleet; } }
     else Object.assign(STATE, JSON.parse(fs.readFileSync(STATE_FILE, "utf8"))); } catch {}
-  if (STATE.obs) for (const [k, v] of Object.entries(STATE.obs)) { const o = obsOf(k); o.events = (v.events || []).filter(e => Date.now() - e.t < OBS_KEEP); o.lastSeen = v.lastSeen; }
+  if (STATE.obs) for (const [k, v] of Object.entries(STATE.obs)) { const o = obsOf(k); o.events = (v.events || []).filter(e => Date.now() - e.t < EV_KEEP); o.lastSeen = v.lastSeen; }
   if (STATE.hist && typeof STATE.hist === "object") for (const k in STATE.hist) HIST[k] = { ...(HIST[k] || {}), ...STATE.hist[k] };
 }
-let saveT = null; function saveState() { clearTimeout(saveT); saveT = setTimeout(async () => { const body = JSON.stringify({ ...STATE, hist: KV_URL ? HIST : undefined });
-  try { if (KV_URL) await fetch(KV_URL.replace(/\/$/, "") + "/set/skyline_state", { method: "POST", headers: { authorization: "Bearer " + KV_TOK }, body }); else fs.writeFileSync(STATE_FILE, body); } catch (e) { console.warn("state save failed", e.message); } }, 1500); }
-setInterval(() => { if (KV_URL) saveState(); }, 30 * 60e3);
-setInterval(() => { FLEET?.persist(); STATE.obs = Object.fromEntries(Object.entries(OBS).map(([k, o]) => [k, { events: o.events, lastSeen: o.lastSeen }])); saveState(); }, 10 * 60e3); // keep delay history durable too
+function trimFlog(n) { const L = STATE.flog || {}; const ks = Object.keys(L); if (ks.length > n) ks.sort((a, b) => L[a].at - L[b].at).slice(0, ks.length - n).forEach(k => delete L[k]); }
+let saveT = null, saving = false; const PEND = new Set();
+function saveState(which = "core") { PEND.add(which); clearTimeout(saveT); saveT = setTimeout(async () => { if (saving) return saveState(which); saving = true; const W = new Set(PEND); PEND.clear(); const want = k => W.has(k) || W.has("all");
+  try { if (KV_URL) { if (want("core")) await kvWrite("skyline_state", JSON.stringify({ subs: STATE.subs, vapid: STATE.vapid, hist: HIST }));
+      if (want("flog")) { let b = JSON.stringify(STATE.flog || {}); if (b.length > KV_MAX) { trimFlog(3000); b = JSON.stringify(STATE.flog); } await kvWrite("skyline_flog", b); }
+      if (want("live")) await kvWrite("skyline_live", JSON.stringify({ obs: STATE.obs, fleet: STATE.fleet })); }
+    else { let b = JSON.stringify(STATE); if (b.length > 2 * KV_MAX) { trimFlog(3000); b = JSON.stringify(STATE); } fs.writeFileSync(STATE_FILE, b); } }
+  catch (e) { console.warn("state save failed", e.message); } finally { saving = false; } }, 1500); }
+setInterval(() => saveState("flog"), 60 * 60e3); setInterval(() => saveState("core"), 30 * 60e3);
+setInterval(() => { FLEET?.persist(); STATE.obs = Object.fromEntries(Object.entries(OBS).map(([k, o]) => [k, { events: o.events, lastSeen: o.lastSeen }])); saveState(KV_URL ? "live" : "all"); }, 20 * 60e3);
 import webpush from "web-push";
 import { startFleet } from "./fleet.js";
 let FLEET = null;
