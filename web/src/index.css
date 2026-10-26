@@ -546,3 +546,10 @@ h1,h2,h3,.froute,.big,.iata{letter-spacing:-.025em}.ftime,.big,.iata,.brow,.boar
 .trk-b{flex:1;min-width:0}.trk-s{font-size:12px;opacity:.8;margin:4px 0}.trk-t{font-size:11px;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trk-dl{font-size:12px;font-weight:700}.trk-dl.ok{color:var(--green)}.trk-dl.warn{color:var(--orange)}.trk-dl.bad{color:var(--red)}
 .tabind{width:calc((100% - 10px)/4)!important}
+/* Kraków: charcoal LCD, alternating grey bands, thin header with plane + ODLOTY, white clock, bold caps "CITY (IATA)", white caps remarks */
+.tb-krk{--bg:#2b2d31;--hd:#1d1e21;--fg:#f2f2f2;--alt:#3a3c41;--ok:#fff;--warn:#fff;--bad:#fff;--acc:#fff;font-family:"Arial Narrow","Roboto Condensed",Arial,sans-serif}
+.tb-krk .tb-top{padding:4px 12px;border-bottom:1px solid #444}.tb-krk .tb-title b{font-size:18px;letter-spacing:.5px}.tb-krk .tb-clock{font-size:20px;font-weight:600}
+.tb-krk .tb-head{font-size:8px;color:#bbb;background:#232427;opacity:1}.tb-krk .tb-row{border-bottom:1px solid #222}
+.tb-krk .c-dest b{font-weight:700;letter-spacing:.3px}.tb-krk .tb-st{text-transform:uppercase;color:#fff!important;font-weight:600}.tb-krk .c-est{color:#fff}.tb-krk .c-gate{text-align:center}
+.tb-krk .card-tile,.tb-krk .tb-code{border-radius:2px;height:16px}
+.tb-krk .c-logo .card-tile{width:52px!important;height:16px!important}.tb-krk .tb-row{font-size:calc(var(--rh,40px)*.40)}

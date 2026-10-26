@@ -636,7 +636,7 @@ async function krkBoard(apt, dir, ymd) {
       for (const [x] of fl) { if (!x?.flight_no) continue; const iso = v => { const t = Array.isArray(v) ? v[0] : v; return t ? new Date(t).toISOString() : undefined; };
         const rmk = x.remarks || (x.is_cancelled ? "CANCELLED" : "SCHEDULED"); const st = x.is_cancelled ? "cancelled" : genStatus(rmk, dir); const done = st === "departed" || st === "landed";
         const ex = iso(x.expected_time) || iso(x.arrival_datetime_pl); const num = x.flight_no.replace(/\s+/g, "");
-        out.push(mkFlight(apt, dir, dir === "dep" ? x.destination_iata : x.origin_iata, dir === "dep" ? x.destination : x.origin, num, num.slice(0, 2), x.airline, { sched: iso(x.scheduled_datetime_pl), est: done ? undefined : ex, act: done ? ex : undefined, gate: x.gate_id || undefined, term: x.terminal || undefined }, rmk[0] + rmk.slice(1).toLowerCase(), st, "Kraków Airport official flight board (krakowairport.pl)")); } }
+        out.push(mkFlight(apt, dir, dir === "dep" ? x.destination_iata : x.origin_iata, dir === "dep" ? x.destination : x.origin, num, num.slice(0, 2), x.airline, { sched: iso(x.scheduled_datetime_pl), est: done ? undefined : ex, act: done ? ex : undefined, gate: x.gate_id || undefined, term: x.terminal || undefined }, rmk[0] + rmk.slice(1).toLowerCase(), st, "Kraków Airport official flight board (krakowairport.pl)", { localName: dir === "dep" ? x.destination : x.origin, remarksLocal: x.remarks_pl || undefined })); } }
     return out; });
   return all.filter(f => inDay((dir === "dep" ? f.dep : f.arr).scheduled, ymd)); }
 if (AP.KRK) OFFICIAL.KRK = { fn: krkBoard, label: "Kraków Airport official flight board", provider: "Official airport feed", site: "krakowairport.pl" };
