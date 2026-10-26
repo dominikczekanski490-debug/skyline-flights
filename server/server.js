@@ -54,6 +54,11 @@ const airlineOut = code => { const a = AL[code] || AL_ICAO[code]; return a ? { .
 const C = new Map();
 async function cached(key, ttlS, fn) {
   const h = C.get(key); if (h && h.exp > Date.now()) return h.v;
+  if (INFL.has(key)) return INFL.get(key);
+  const p = cachedRun(key, ttlS, fn, h); INFL.set(key, p); try { return await p; } finally { INFL.delete(key); }
+}
+const INFL = new Map();
+async function cachedRun(key, ttlS, fn, h) {
   try { const v = await fn(); C.set(key, { v, exp: Date.now() + ttlS * 1000, at: Date.now() }); return v; }
   catch (e) { if (h) return h.v; throw e; }
 }
@@ -392,14 +397,27 @@ const v12splitNum = s => { const m = /^([A-Z0-9]{2})\s*0*(\d{1,4}[A-Z]?)$/.exec(
 
 // Aena (all Spanish state airports incl. Canary and Balearic Islands): aena.es Infovuelos JSON, POST as the page does.
 const AENA_ST = { SCH: "Scheduled", HOR: "On time", RET: "Delayed", CAN: "Cancelled", FLY: "In flight", EMB: "Boarding", ULL: "Last call", PRO: "Boarding soon", DES: "Departed", DSP: "Departed", LLE: "Landed", ATE: "Landed", ATR: "Landed", REC: "Baggage on belt", DIV: "Diverted", SAL: "Departed", ENV: "In flight", CER: "Gate closed", INI: "Check-in open", FIN: "Check-in closed" };
+let AENA_Q = Promise.resolve();
+const aenaSerial = fn => { const p = AENA_Q.then(fn, fn); AENA_Q = p.catch(() => {}); return p; };
 async function aenaBoard(apt, dir, ymd) {
-  const all = await cached(`aena:${apt}:${dir}`, 240, async () => { const r = await fetch(`https://www.aena.es/sites/Satellite?pagename=AENA_ConsultarVuelos&airport=${apt}&flightType=${dir === "dep" ? "S" : "L"}&dosDias=si`, { method: "POST", headers: { "user-agent": v12BUA, "content-length": "0", referer: "https://www.aena.es/en/flight-info.html" }, signal: AbortSignal.timeout(25000) });
-    if (!r.ok) throw new Error(`Aena ${r.status}`); const d = await r.json(); if (!Array.isArray(d)) throw new Error("Aena: no list");
-    return d.map(x => { const sched = v12locIso(apt, `${x.fecha} ${x.horaProgramada}`), est = v12locIso(apt, `${x.fechaEstimada} ${x.horaEstimada}`); const st = AENA_ST[x.estado] || (x.estado ? x.estado : "Scheduled");
+  // v12.1: memory-safe. Raw Aena two-day list is ~4 MB / 4,000 rows at MAD; parse once, keep a -3h..+12h window,
+  // merge codeshares (same time + other airport) into one row, cap 400, and never hold the raw JSON in cache.
+  const all = await cached(`aena:${apt}:${dir}`, 240, () => aenaSerial(async () => {
+    const r = await fetch(`https://www.aena.es/sites/Satellite?pagename=AENA_ConsultarVuelos&airport=${apt}&flightType=${dir === "dep" ? "S" : "L"}&dosDias=si`, { method: "POST", headers: { "user-agent": v12BUA, "content-length": "0", referer: "https://www.aena.es/en/flight-info.html" }, signal: AbortSignal.timeout(14000) });
+    if (!r.ok) throw new Error(`Aena ${r.status}`); let d = await r.json(); if (!Array.isArray(d)) throw new Error("Aena: no list");
+    const now = Date.now(), lo = now - 3 * 36e5, hi = now + 12 * 36e5; const groups = new Map();
+    for (const x of d) { const sched = v12locIso(apt, `${x.fecha} ${x.horaProgramada}`); if (!sched) continue; const t = +new Date(sched); if (t < lo || t > hi) continue;
+      const k = `${sched}|${x.iataOtro}`; const g = groups.get(k); const num = `${x.iataCompania || ""}${x.numVuelo}`;
+      if (g) { if (!g.cs.includes(num)) g.cs.push(num); continue; }
+      groups.set(k, { x: { fecha: x.fecha, horaProgramada: x.horaProgramada, fechaEstimada: x.fechaEstimada, horaEstimada: x.horaEstimada, iataOtro: x.iataOtro, ciudadIataOtro: x.ciudadIataOtro, estado: x.estado, terminal: x.terminal, puertaPrimera: x.puertaPrimera, cintaPrimera: x.cintaPrimera, iataCompania: x.iataCompania, nombreCompania: x.nombreCompania, tipoAeronave: x.tipoAeronave }, sched, num, cs: [] }); }
+    d = null;
+    const rows = [...groups.values()].sort((a, b) => a.sched < b.sched ? -1 : 1).slice(0, 400);
+    return rows.map(({ x, sched, num, cs }) => { const est = v12locIso(apt, `${x.fechaEstimada} ${x.horaEstimada}`); const st = AENA_ST[x.estado] || (x.estado ? x.estado : "Scheduled");
       const done = dir === "dep" ? /^(FLY|DES|DSP|SAL|ENV)$/.test(x.estado) : /^(LLE|ATE|ATR|REC)$/.test(x.estado);
-      return mkFlight(apt, dir, x.iataOtro, (x.ciudadIataOtro || "").replace(/\b\w+/g, w => w[0] + w.slice(1).toLowerCase()), `${x.iataCompania || ""}${x.numVuelo}`, x.iataCompania, x.nombreCompania,
+      return mkFlight(apt, dir, x.iataOtro, (x.ciudadIataOtro || "").replace(/\b\w+/g, w => w[0] + w.slice(1).toLowerCase()), num, x.iataCompania, x.nombreCompania,
         { sched, est: done ? undefined : (est !== sched ? est : undefined), act: done ? est : undefined, term: x.terminal, gate: x.puertaPrimera && x.puertaPrimera !== "null" ? x.puertaPrimera : undefined, belt: x.cintaPrimera && x.cintaPrimera !== "null" ? x.cintaPrimera : undefined },
-        st, x.estado === "CAN" ? "cancelled" : done ? (dir === "dep" ? "departed" : "landed") : genStatus(st, dir), "Aena official flight information (aena.es)", { aircraft: { type: x.tipoAeronave } }); }); });
+        st, x.estado === "CAN" ? "cancelled" : done ? (dir === "dep" ? "departed" : "landed") : genStatus(st, dir), "Aena official flight information (aena.es)", { aircraft: { type: x.tipoAeronave }, ...(cs.length ? { codeshares: cs } : {}) }); });
+  }));
   return v12dayFilter(all, apt, ymd, dir);
 }
 
@@ -562,7 +580,7 @@ setTimeout(collect, 3000); setInterval(collect, 30 * 60e3);
 // ---------- routes ----------
 const api = express.Router();
 const wrap = fn => (req, res) => fn(req, res).catch(e => res.status(e.needsKey ? 501 : e.status || 502).json({ error: String(e.message || e), needsKey: !!e.needsKey }));
-api.get("/health", (q, r) => r.json({ ok: true, ...adbStats(), keys: { aerodatabox: !!cfg.aerodataboxKey }, magAirports: Object.keys(MAG_SITES), officialAirports: Object.keys(OFFICIAL) }));
+api.get("/health", (q, r) => r.json({ ok: true, ...adbStats(), keys: { aerodatabox: !!cfg.aerodataboxKey }, magAirports: Object.keys(MAG_SITES), officialAirports: Object.keys(OFFICIAL), mem: Object.fromEntries(Object.entries(process.memoryUsage()).map(([k, v]) => [k, Math.round(v / 1048576)])) }));
 api.get("/settings", (q, r) => r.json({ aerodatabox: cfg.aerodataboxKey ? "set" : "", protected: !!cfg.adminToken }));
 api.post("/settings", (req, res) => {
   if (cfg.adminToken && req.body.adminToken !== cfg.adminToken) return res.status(403).json({ error: "admin token required" });
@@ -679,22 +697,30 @@ async function board(iata, dir, ymd) {
     note: c.budget ? "AeroDataBox monthly budget used up — schedule shown is the last cached copy; live rows are observed ADS-B." : c.stale ? "Showing the last cached AeroDataBox schedule (could not refresh)." : undefined };
 }
 // ---- Completed-flight log: keep what each board/lookup reported (esp. ACTUAL times) for 72h, so yesterday's flights stay recallable.
+setTimeout(() => { const L = STATE.flog || {}; for (const k in L) { const e = L[k]; if (!(e.dep?.actual || e.arr?.actual || ["landed", "departed", "cancelled"].includes(e.status))) { delete L[k]; continue; } if (e.origin) e.origin = slimAp(e.origin); if (e.destination) e.destination = slimAp(e.destination); } }, 0);
 const FLOG_KEEP = 72 * 3600e3; const flogDay = f => { const t = f.dep?.scheduled || f.arr?.scheduled; return t ? new Date(t).toLocaleDateString("en-CA", { timeZone: f.origin?.tz || "Europe/London" }) : null; };
 const pick = (a = {}, b = {}) => { const o = { ...a }; for (const [k, v] of Object.entries(b)) if (v != null && v !== "") o[k] = v; return o; };
+const slimAp = a => ({ iata: a.iata, icao: a.icao, name: a.name, city: a.city, tz: a.tz, lat: a.lat, lon: a.lon });
+const FLOG_MAX = 6000;
 function flogPut(f) { if (!f?.number || !(f.dep?.scheduled || f.arr?.scheduled)) return; const L = STATE.flog || (STATE.flog = {}); const k = f.number + "|" + flogDay(f); const p = L[k] || {};
-  L[k] = { at: Date.now(), number: f.number, airline: f.airline || p.airline, origin: f.origin?.iata ? f.origin : p.origin, destination: f.destination?.iata ? f.destination : p.destination,
+  L[k] = { at: Date.now(), number: f.number, airline: f.airline ? { iata: f.airline.iata, icao: f.airline.icao, name: f.airline.name } : p.airline, origin: f.origin?.iata ? slimAp(f.origin) : p.origin, destination: f.destination?.iata ? slimAp(f.destination) : p.destination,
     dep: pick(p.dep, f.dep), arr: pick(p.arr, f.arr), status: f.status === "scheduled" && p.status ? p.status : f.status, statusText: f.status === "scheduled" && p.statusText ? p.statusText : f.statusText, aircraft: f.aircraft || p.aircraft, callsign: f.callsign || p.callsign,
-    sources: [...new Set([...(p.sources || []), f.source].filter(Boolean))] }; }
+    sources: [...new Set([...(p.sources || []), f.source].filter(Boolean))] };
+  if (!p.at && ++FLOG_N % 200 === 0) { const ks = Object.keys(L); if (ks.length > FLOG_MAX) ks.sort((a, b) => L[a].at - L[b].at).slice(0, ks.length - FLOG_MAX).forEach(k => delete L[k]); } }
+let FLOG_N = 0;
 const flogGet = (num, ymd) => STATE.flog?.[num + "|" + ymd];
 setInterval(() => { const L = STATE.flog || {}; for (const k in L) if (Date.now() - L[k].at > FLOG_KEEP) delete L[k]; }, 3600e3);
 // ADS-B observed landing/take-off at an airport for a callsign, within a time window.
 const obsEvent = (iata, kind, cs, from, to) => cs && OBS[iata]?.events.find(e => e.kind === kind && e.cs === cs && e.t >= from && e.t <= to);
 api.get("/board/:iata", wrap(async (req, res) => { const iata = req.params.iata.toUpperCase(); const dir = req.query.dir === "arr" ? "arr" : "dep";
-  const b = await board(iata, dir, String(req.query.date || todayLondon())); const a = AP[iata];
+  let b; try { b = await Promise.race([board(iata, dir, String(req.query.date || todayLondon())), new Promise((_, rj) => setTimeout(() => rj(Object.assign(new Error("Board source timed out"), { status: 504 })), 25000))]); }
+  catch (e) { return res.status(e.status === 504 ? 504 : 502).json({ error: e.status === 504 ? "The airport's timetable took too long to respond. Try again in a minute." : "The airport's timetable is unavailable right now.", detail: String(e.message || e).slice(0, 200), airport: airportOut(AP[iata]) }); }
+  const a = AP[iata];
   const [wx, st] = await Promise.all([a ? wxCached(a.lat, a.lon).catch(() => null) : null, dir === "dep" ? boardStats(iata) : null]);
   for (const f of b.flights) { if (["landed", "departed", "cancelled"].includes(f.status)) continue; const t = dir === "dep" ? f.dep.scheduled : f.arr.scheduled;
     const p = predictCore(f, dir === "dep" ? { wxDep: wxAt(wx, t), aptStats: st } : { wxArr: wxAt(wx, t) }); f.pred = { d: p.predictedDelay, on: p.probs.onTime, c: p.confidence, top: p.top, summary: p.summary, factors: p.factors.slice(0, 4) }; }
-  for (const f of b.flights) if (!f.liveOnly) flogPut(f);
+  // v12.1: only log flights with an outcome (actual time / departed / landed / cancelled); logging every scheduled row of big boards grew state to 7 MB+ and OOMed 512 MB hosts.
+  for (const f of b.flights) if (!f.liveOnly && (f.dep?.actual || f.arr?.actual || ["landed", "departed", "cancelled"].includes(f.status))) flogPut(f);
   res.json({ airport: airportOut(a), dir, ...b }); }));
 
 
@@ -1091,3 +1117,6 @@ const dist = path.join(__dir, "../web/dist");
 app.use(express.static(dist, { setHeaders: (r, p) => { if (p.endsWith("sw.js") || p.endsWith(".html") || p.endsWith("version.json")) r.setHeader("cache-control", "no-cache"); } }));
 app.get(/^\/(?!api).*/, (q, r) => r.sendFile(path.join(dist, "index.html")));
 app.listen(PORT, "0.0.0.0", () => console.log("Skyline on :" + PORT));
+
+process.on("unhandledRejection", e => console.error("[unhandledRejection]", e?.message || e));
+process.on("uncaughtException", e => console.error("[uncaughtException]", e?.message || e));
