@@ -54,8 +54,8 @@ const airlineOut = code => { const a = AL[code] || AL_ICAO[code]; return a ? { .
 const C = new Map();
 async function cached(key, ttlS, fn) {
   const h = C.get(key); if (h && h.exp > Date.now()) return h.v;
-  if (INFL.has(key)) return INFL.get(key);
-  const p = cachedRun(key, ttlS, fn, h); INFL.set(key, p); try { return await p; } finally { INFL.delete(key); }
+  const inf = INFL.get(key); if (inf && Date.now() - inf.t < 30000) return inf.p; // v15: a stuck in-flight promise can't block a key forever
+  const p = cachedRun(key, ttlS, fn, h); const me = { p, t: Date.now() }; INFL.set(key, me); try { return await p; } finally { if (INFL.get(key) === me) INFL.delete(key); }
 }
 const INFL = new Map();
 async function cachedRun(key, ttlS, fn, h) {
@@ -63,7 +63,7 @@ async function cachedRun(key, ttlS, fn, h) {
   catch (e) { if (h) return h.v; throw e; }
 }
 async function getJSON(url, opt = {}) {
-  const r = await fetch(url, { ...opt, headers: { "user-agent": UA, accept: "application/json", ...(opt.headers || {}) }, signal: AbortSignal.timeout(15000) });
+  const r = await fetch(url, { ...opt, headers: { "user-agent": UA, accept: "application/json", ...(opt.headers || {}) }, signal: AbortSignal.timeout(opt.timeout || 14000) });
   if (!r.ok) { const e = new Error(`${r.status} ${url.split("?")[0]}`); e.status = r.status; throw e; }
   return r.json();
 }
@@ -97,14 +97,27 @@ function normMag(f, apt, dir) {
                        : { scheduled: f.scheduledArrivalDateTime },
     statusText: f.status, status: statusFromMag(f.status), source: `${apt} Airport official flight info (${MAG_SITES[apt].replace("https://www.", "")})` };
 }
+// v15: MAN departures 504'd on the host (board() >25 s). Hardened: 12 s per attempt, retry once with a narrower
+// window (-3 h..+12 h) and smaller page, keep the last good copy per key (served stale on failure), record errors in /api/health.
+const FEED_ERR = {}; const LAST_GOOD = new Map();
+const feedErr = (k, e) => { FEED_ERR[k] = { at: new Date().toISOString(), error: String(e?.message || e).slice(0, 160) }; };
+async function magFetch(apt, dir, start, end, size) {
+  const r = await getJSON(MAG, { method: "POST", timeout: 12000, headers: { "content-type": "application/json", origin: MAG_SITES[apt], referer: MAG_SITES[apt] + "/" },
+    body: JSON.stringify({ query: magQ(dir), variables: { airportCode: apt, startDate: start, endDate: end, size } }) });
+  if (r?.errors?.length && !r.data) throw new Error("MAG feed error: " + (r.errors[0].message || "").slice(0, 100));
+  const list = r?.data && Object.values(r.data)[0]; if (!Array.isArray(list)) throw new Error("MAG feed returned no data"); return list; }
 async function magBoard(apt, dir, ymd) {
-  const ttl = ymd < todayLondon() ? 6 * 3600 : 60;
-  return cached(`mag:${apt}:${dir}:${ymd}`, ttl, async () => {
-    const d = londonDay(ymd);
-    const r = await getJSON(MAG, { method: "POST", headers: { "content-type": "application/json", origin: MAG_SITES[apt], referer: MAG_SITES[apt] + "/" },
-      body: JSON.stringify({ query: magQ(dir), variables: { airportCode: apt, startDate: d.start, endDate: d.end, size: 2000 } }) });
-    const list = r?.data && Object.values(r.data)[0]; if (!Array.isArray(list)) throw new Error("MAG feed returned no data");
-    return list.map(f => normMag(f, apt, dir));
+  const ttl = ymd < todayLondon() ? 6 * 3600 : 90; const key = `mag:${apt}:${dir}:${ymd}`;
+  return cached(key, ttl, async () => {
+    const d = londonDay(ymd); let list;
+    try { list = await magFetch(apt, dir, d.start, d.end, 1500); }
+    catch (e) { feedErr(key, e); console.warn("MAG", apt, dir, e.message);
+      try { const now = Date.now(); const s = ymd === todayLondon() ? new Date(Math.max(+new Date(d.start), now - 3 * 3600e3)).toISOString() : d.start;
+        const en = ymd === todayLondon() ? new Date(Math.min(+new Date(d.end), now + 12 * 3600e3)).toISOString() : d.end; list = await magFetch(apt, dir, s, en, 500); }
+      catch (e2) { feedErr(key, e2); const g = LAST_GOOD.get(key); if (g) return g; throw e2; } }
+    const out = []; const seen = new Set();
+    for (const f of list) { try { const n = normMag(f, apt, dir); if (!n.number || seen.has(n.id)) continue; seen.add(n.id); out.push(n); } catch {} }
+    LAST_GOOD.set(key, out); if (LAST_GOOD.size > 40) LAST_GOOD.delete(LAST_GOOD.keys().next().value); delete FEED_ERR[key]; return out;
   });
 }
 
@@ -580,7 +593,7 @@ setTimeout(collect, 3000); setInterval(collect, 30 * 60e3);
 // ---------- routes ----------
 const api = express.Router();
 const wrap = fn => (req, res) => fn(req, res).catch(e => res.status(e.needsKey ? 501 : e.status || 502).json({ error: String(e.message || e), needsKey: !!e.needsKey }));
-api.get("/health", (q, r) => r.json({ ok: true, ...adbStats(), keys: { aerodatabox: !!cfg.aerodataboxKey }, magAirports: Object.keys(MAG_SITES), officialAirports: Object.keys(OFFICIAL), mem: Object.fromEntries(Object.entries(process.memoryUsage()).map(([k, v]) => [k, Math.round(v / 1048576)])) }));
+api.get("/health", (q, r) => r.json({ ok: true, ...adbStats(), keys: { aerodatabox: !!cfg.aerodataboxKey }, magAirports: Object.keys(MAG_SITES), feedErrors: FEED_ERR, officialAirports: Object.keys(OFFICIAL), mem: Object.fromEntries(Object.entries(process.memoryUsage()).map(([k, v]) => [k, Math.round(v / 1048576)])) }));
 api.get("/settings", (q, r) => r.json({ aerodatabox: cfg.aerodataboxKey ? "set" : "", protected: !!cfg.adminToken }));
 api.post("/settings", (req, res) => {
   if (cfg.adminToken && req.body.adminToken !== cfg.adminToken) return res.status(403).json({ error: "admin token required" });
@@ -684,7 +697,9 @@ async function adbFids(iata) { await adbReadyF(); const key = "skyline_adb_" + i
 const adbStats = () => { adbLeft(); return { adbConfigured: !!cfg.aerodataboxKey, adbMonth: ADBU.month, adbUnitsUsed: ADBU.units, adbCalls: ADBU.calls, adbBudget: ADB_BUDGET, adbUnitsPerCall: ADB_UNITS, adbBudgetReached: ADBU.units + ADB_UNITS > ADB_BUDGET, adbLastCall: ADBU.last, adbAirports: ADB_GAP() }; };
 async function board(iata, dir, ymd) {
   if (OFFICIAL[iata]) { try { return { flights: await officialBoard(iata, dir, ymd), source: OFFICIAL[iata].label, sourceKind: "official", provider: OFFICIAL[iata].provider, site: OFFICIAL[iata].site }; } catch (e) { console.warn("official feed failed", iata, e.message); } }
-  const today = ymd === todayLondon(); const obs = today ? await liveBoard(iata, dir) : [];
+  const today = ymd === todayLondon();
+  // never let the ADS-B fallback push a board past the request timeout (busy airports have hundreds of aircraft)
+  const obs = today ? await Promise.race([liveBoard(iata, dir).catch(() => []), new Promise(r => setTimeout(() => r([]), OFFICIAL[iata] ? 8000 : 18000))]) : [];
   const liveOnly = note => ({ flights: obs, source: "Live traffic only (ADS-B)", sourceKind: "live", provider: "Live ADS-B (adsb.lol / adsb.fi)", liveOnly: true, note });
   if (!today || OFFICIAL[iata] || !ADB_GAP().includes(iata) || !cfg.aerodataboxKey) return liveOnly();
   const c = await adbFids(iata);
