@@ -75,3 +75,12 @@ body{letter-spacing:-.01em}
 .cx-row.ok .cx-bar{color:var(--green)}.cx-row.tight .cx-bar{color:var(--orange)}.cx-row.high .cx-bar,.cx-row.missed .cx-bar{color:var(--red)}
 .cx-meta b{display:block;font-size:18px}.cx-meta span{display:block;font-size:12.5px;color:var(--muted)}.cx-meta .bad{color:var(--red)}
 .cx-pick{display:flex;flex-direction:column;gap:8px}.cx-pick select{padding:13px;border-radius:14px;background:var(--chip);border:1px solid var(--v22-edge)}
+.oh-choose{margin:6px 16px;display:flex;flex-direction:column;gap:8px}.oh-why{padding:16px;border-radius:20px;background:var(--v22-glass);border:1px solid var(--v22-edge);display:flex;flex-direction:column;gap:6px}.oh-why span{font-size:14px;color:var(--muted);line-height:1.45}.oh-why span b{color:var(--text)}
+.w100{width:100%}.oh-or{text-align:center;font-size:12px;color:var(--faint);text-transform:uppercase;letter-spacing:.1em;margin:6px 0}
+.oh-opt{display:flex;gap:12px;align-items:center;text-align:left;padding:12px 14px;border-radius:16px;background:var(--v22-glass);border:1px solid var(--v22-edge)}.oh-opt b{min-width:44px;font-size:16px;color:var(--acc3,#2fd6c4)}.oh-opt span{font-size:14px;color:var(--muted)}
+.primary{padding:14px;border-radius:16px;background:var(--v22-g1);color:#fff;font-weight:800}
+.ac22-day{margin-top:14px;display:flex;flex-direction:column;gap:6px}.ac22-day>label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.ac22-leg{position:relative;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--chip)}.ac22-leg.me{background:linear-gradient(135deg,rgba(91,140,255,.25),rgba(166,107,255,.25));border:1px solid rgba(140,150,255,.5)}
+.ac22-lt{display:flex;align-items:center;gap:6px;min-width:120px}.ac22-lt b{font-size:16px}.ac22-lt i{flex:1;height:2px;min-width:18px;background:linear-gradient(90deg,var(--muted),transparent 50%,var(--muted));border-radius:2px}.ac22-leg.air .ac22-lt i{background:repeating-linear-gradient(90deg,var(--green) 0 4px,transparent 4px 8px)}
+.ac22-lm{display:flex;flex-direction:column;font-size:12px;color:var(--muted)}.ac22-lm span:last-child{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}.ac22-leg em{margin-left:auto;font-style:normal;font-size:11px;color:var(--orange)}
+.oh-choose .inp{padding:13px 14px;border-radius:16px;background:var(--chip);border:1px solid var(--v22-edge);color:var(--text);font-size:16px;outline:none}.oh-choose .inp:focus{border-color:#7b8cff}
