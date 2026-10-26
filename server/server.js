@@ -1182,8 +1182,10 @@ async function loadState() {
 let saveT = null; function saveState() { clearTimeout(saveT); saveT = setTimeout(async () => { const body = JSON.stringify({ ...STATE, hist: KV_URL ? HIST : undefined });
   try { if (KV_URL) await fetch(KV_URL.replace(/\/$/, "") + "/set/skyline_state", { method: "POST", headers: { authorization: "Bearer " + KV_TOK }, body }); else fs.writeFileSync(STATE_FILE, body); } catch (e) { console.warn("state save failed", e.message); } }, 1500); }
 setInterval(() => { if (KV_URL) saveState(); }, 30 * 60e3);
-setInterval(() => { STATE.obs = Object.fromEntries(Object.entries(OBS).map(([k, o]) => [k, { events: o.events, lastSeen: o.lastSeen }])); saveState(); }, 10 * 60e3); // keep delay history durable too
+setInterval(() => { FLEET?.persist(); STATE.obs = Object.fromEntries(Object.entries(OBS).map(([k, o]) => [k, { events: o.events, lastSeen: o.lastSeen }])); saveState(); }, 10 * 60e3); // keep delay history durable too
 import webpush from "web-push";
+import { startFleet } from "./fleet.js";
+let FLEET = null;
 import crypto from "crypto";
 // VAPID keys MUST stay stable across restarts, otherwise every iPhone subscription silently dies (DATA_DIR is /tmp on Render).
 // Priority: VAPID_PUBLIC/VAPID_PRIVATE env → keys derived deterministically from a stable server-side secret → stored/generated.
@@ -1193,7 +1195,7 @@ function deriveVapid() { const seed = process.env.VAPID_SEED || process.env.SKYL
 const VAPID_SUBJECT = /^(mailto:[^@\s]+@[^@\s]+\.[a-z]{2,}|https:\/\/[^\s]+)$/i.test(process.env.VAPID_SUBJECT || "") ? process.env.VAPID_SUBJECT : "https://skyline-flights.onrender.com"; // Apple 403s BadJwtToken on bad/example subjects
 let vapidSource = "";
 const PUSHLOG = []; const plog = (...a) => { const line = new Date().toISOString() + " " + a.join(" "); console.log("[push]", line); PUSHLOG.unshift(line); PUSHLOG.length = Math.min(PUSHLOG.length, 40); };
-const ready = loadState().then(() => {
+const ready = loadState().then(() => { if (!process.env.NO_FLEET) FLEET = startFleet({ AP, STATE, adsb: p => (async () => { for (const u of ["https://api.adsb.lol/v2/" + p, "https://api.airplanes.live/v2/" + p]) { try { const j = await adq(() => getJ(u)); return (j.ac || j.aircraft || []).map(slimAc); } catch {} } throw new Error("adsb busy"); })() });
   if (process.env.VAPID_PUBLIC && process.env.VAPID_PRIVATE) { STATE.vapid = { publicKey: process.env.VAPID_PUBLIC, privateKey: process.env.VAPID_PRIVATE }; vapidSource = "env"; }
   else { const d = deriveVapid(); if (d) { if (STATE.vapid?.publicKey !== d.publicKey) STATE.subs = {}; STATE.vapid = d; vapidSource = "derived"; } }
   if (!STATE.vapid) { STATE.vapid = webpush.generateVAPIDKeys(); vapidSource = "generated (rotates on restart!)"; saveState(); } else if (!vapidSource) vapidSource = "stored";
@@ -1439,6 +1441,8 @@ api.get("/acresolve/:iata", async (req, res) => { try { const iata = req.params.
   res.json({ iata, near: ctx.near.length, mapped: Object.keys(ctx.byNum).length, sample: Object.keys(ctx.byNum).slice(0, 12), flights: R.length, regBefore: R.filter(r => r.before).length, regAfter: R.filter(r => r.reg).length, typeKnown: R.filter(r => r.type || r.typicalType).length, by, rows: req.query.rows ? R : undefined }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 // ---------- v22: one aircraft card for ANY flight. Every field says where it came from; gaps carry a reason. ----------
+api.get("/fleet/stats", (req, res) => res.json(FLEET?.stats() || { off: true }));
+api.get("/fleet/:id", (req, res) => { const id = req.params.id; res.json(FLEET?.legsFor(/^[0-9a-f]{6}$/i.test(id) ? { hex: id.toLowerCase() } : { reg: id }) || { legs: [], none: true }); });
 api.get("/plane-card", async (req, res) => { try {
   const q = req.query; const number = String(q.number || "").toUpperCase().replace(/\s/g, ""); const o = String(q.o || "").toUpperCase(), d = String(q.d || "").toUpperCase(); const ymd = String(q.date || todayLondon());
   const [, al, digits] = acNum(number); const icao = AL[al]?.icao || (/^[A-Z]{3}/.test(number) ? number.slice(0, 3) : null); const cs = icao && digits ? icao + digits : null;
@@ -1463,7 +1467,8 @@ api.get("/plane-card", async (req, res) => { try {
   if (out.hex) { const l = (await adsb("hex/" + out.hex).catch(() => []))[0]; if (l?.lat) { if (!out.icaoType && l.type) { out.icaoType = l.type; if (!out.type) out.type = l.type + " (from its transponder)"; } const nc = x => String(x || "").trim().replace(/^([A-Z]{3})0+/, "$1"); if (cs && l.flight && nc(l.flight) !== nc(cs)) gaps.push(`${out.reg || "This aircraft"} is currently flying as ${String(l.flight).trim()}, not ${cs}. The feed's registration may be out of date, or the plane is on another leg first.`); out.live = { other: !!(cs && l.flight && nc(l.flight) !== nc(cs)), lat: l.lat, lon: l.lon, alt: l.alt, gs: l.gs, track: l.track, flight: l.flight, vs: l.vs, seen: l.seen }; out.sources.push("ADS-B (adsb.lol/airplanes.live/adsb.fi)"); } }
   // previous / next legs: Skyline's own observed log (ADS-B take-offs/landings + feeds)
   const legs = []; for (const [ap, ob] of Object.entries(OBS)) for (const e of ob.events) if ((out.hex && e.hex === out.hex) || (out.reg && e.reg === out.reg)) legs.push({ ap, kind: e.kind, t: e.t, cs: e.cs });
-  legs.sort((a, b) => b.t - a.t); out.legs = legs.slice(0, 10).map(l => ({ ...l, at: new Date(l.t).toISOString() })); if (!legs.length) gaps.push("Skyline hasn't logged this aircraft's earlier take-offs or landings (it only logs ADS-B at the airports it watches).");
+  const fl = FLEET?.legsFor({ hex: out.hex, reg: out.reg }); if (fl) { out.today = fl.legs; out.fleetNow = fl.now; if (!out.type && fl.type) { out.icaoType = fl.type; out.type = fl.type; } if (!out.reg && fl.reg) out.reg = fl.reg; out.sources.push("Skyline fleet log (Europe-wide ADS-B sweeps)"); }
+  legs.sort((a, b) => b.t - a.t); out.legs = legs.slice(0, 10).map(l => ({ ...l, at: new Date(l.t).toISOString() })); if (!legs.length && !out.today?.length) gaps.push("Skyline hasn't logged this aircraft's earlier take-offs or landings (it only logs ADS-B at the airports it watches).");
   if (!out.live) gaps.push(status === "landed" ? "Not broadcasting now (parked or switched off)." : "Not visible on ADS-B right now.");
   gaps.push("Build year / age and cabin layout aren't in any free aircraft database Skyline uses."); out.gaps = gaps; res.json(out);
 } catch (e) { res.status(500).json({ error: e.message }); } });
