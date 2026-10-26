@@ -81,7 +81,7 @@ export async function importBackup(file: File) { const j = JSON.parse(await file
 // ---------- Share links (stateless id → survives server restarts) ----------
 const enc = (o: any) => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const dec = (s: string) => JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g, "+").replace(/_/g, "/")))));
-export const shareLink = (f: Flight, from = localStorage.getItem("sk.name") || "") => location.origin + "/s/" + enc({ n: f.number, d: f.date, o: f.origin?.iata, t: f.destination?.iata, by: from || undefined });
+export const shareLink = (f: Flight, from = localStorage.getItem("sk.name") || "") => location.origin + "/s/" + enc({ n: f.number, d: f.date, o: f.origin?.iata, t: f.destination?.iata, by: from || undefined, x: Math.round(((best(f.arr) ? +new Date(best(f.arr)!) : +new Date(f.date + "T23:59:00Z")) + 6 * 3600e3) / 1000) });
 export const parseShare = (url: string) => { const m = url.match(/\/s\/([A-Za-z0-9_-]+)/); return m ? dec(m[1]) : null; };
 
 export function SharedView({ id }: { id: string }) {
@@ -89,11 +89,12 @@ export function SharedView({ id }: { id: string }) {
   const [r, setR] = useState<any>(null); const [err, setErr] = useState("");
   useEffect(() => { if (!s) return; const go = () => api(`/flight/${s.n}?date=${s.d}`).then(setR).catch(e => setErr(e.message)); go(); const t = setInterval(go, 60e3); return () => clearInterval(t); }, [id]);
   if (!s) return <div className="share"><div className="shcard"><b>Link not recognised</b></div></div>;
+  if (s.x && Date.now() / 1000 > s.x) return <div className="share"><div className="shcard"><b>This share link has expired</b><div className="muted sm">Live links stop 6 hours after the flight lands. Ask {s.by || "the sender"} for a new one.</div></div></div>;
   const f: Flight | undefined = r?.flight; const dd = f ? delay(f.dep) : null, da = f ? delay(f.arr) : null; const lv = r?.live;
   const add = () => { const name = prompt("Whose flight is this?", s.by || "Friend") || "Friend"; const K = "skyline.flights.v1"; const L = JSON.parse(localStorage.getItem(K) || "[]");
     const nf = f ? { ...f, id: f.id || s.n + s.d, friend: name } : { id: s.n + s.d, number: s.n, date: s.d, dep: {}, arr: {}, friend: name, scheduleUnknown: true };
     if (!L.some((x: any) => x.number === nf.number && x.date === nf.date && x.friend)) L.push(nf); localStorage.setItem(K, JSON.stringify(L)); location.href = "/?tab=friends"; };
-  return <div className="share"><div className="shbrand"><img src="/icon-192.png" /><b>Skyline</b><span>Live flight{s.by ? ` shared by ${s.by}` : ""}</span></div>
+  return <div className="share"><div className="shbrand"><img src="/icon-192.png" /><b>Skyline</b><span>Live flight{s.by ? ` shared by ${s.by}` : ""}{s.x ? ` · link expires ${new Date(s.x * 1000).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}</span></div>
     <div className="shcard">
       <div className="row between"><div className="row g10"><AirlineTile a={f?.airline || { iata: s.n.slice(0, 2) }} mode="colour" style={{ width: 82, height: 34 }} /><div><b className="shnum">{s.n}</b><div className="muted sm">{f?.airline?.name || ""} · {fmtD(s.d, { weekday: "short", day: "numeric", month: "short" })}</div></div></div>
         <span className="shstat" style={{ background: f?.status === "cancelled" ? "var(--red)" : lv ? "var(--blue)" : lateColor(da ?? dd) }}>{f ? f.status === "cancelled" ? "Cancelled" : lv && f.status !== "landed" ? "In the air" : f.statusText || lateLabel(da ?? dd) || "Scheduled" : err ? "Unavailable" : "Loading…"}</span></div>
