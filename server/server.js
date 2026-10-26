@@ -410,6 +410,64 @@ async function fraportGrBoard(apt, dir, ymd) { const host = `https://www.${FRAPO
       return mkFlight(apt, dir, apByName(x.apname), x.apname, number, alI, x.alname, { sched, est, act: st === "departed" || st === "landed" ? at : undefined, gate: x.gate || undefined, term: x.terminal || undefined, belt: x.ausgang || undefined }, stx || "Scheduled", st, `${AP[apt]?.name || apt} official flight board (${FRAPORT_GR[apt]}-airport.gr, Fraport Greece)`, { codeshares: x.cs || undefined, checkin: x.schalter || undefined }); })
     .filter(f => inDay(f.dep?.scheduled || f.arr?.scheduled, ymd)); }
 for (const c of Object.keys(FRAPORT_GR)) if (AP[c]) OFFICIAL[c] = { fn: fraportGrBoard, label: "Fraport Greece official flight board", provider: "Official airport feed (Fraport Greece)", site: FRAPORT_GR[c] + "-airport.gr" };
+// ---------- v23: Eastern Europe / Turkey / Cyprus / Malta official airport sites ----------
+const htx = s => String(s || "").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+async function getText2(url, opt = {}) { const r = await fetch(url, { ...opt, headers: { "user-agent": UA, ...(opt.headers || {}) }, signal: AbortSignal.timeout(opt.timeout || 15000) });
+  if (!r.ok) { const e = new Error(`${r.status} ${url.split("?")[0]}`); e.status = r.status; throw e; } return r.text(); }
+const apByName2 = n => { const raw = String(n || "").trim(); const m = raw.match(/^(.+?)\s*[-–(\/]\s*([^)]+)\)?$/);
+  if (m) { const c = fold(m[1]), q = fold(m[2]); const hit = Object.values(AP).filter(a => a.iata && fold(a.city) === c && (fold(a.name).includes(q) || q.split(" ").every(w => fold(a.name).includes(w)))); if (hit.length === 1) return hit[0].iata; }
+  return apByName(raw) || (m ? apByName(m[1]) : null) || cityIx()[fold(raw)] || null; };
+const alFromNum = n => /^[A-Z0-9]{2}\d/.test(n) ? n.slice(0, 2) : null;
+// Istanbul Airport (istairport.com public FIDS JSON, 50/page)
+async function istBoard(apt, dir, ymd) { const tz = "Europe/Istanbul";
+  const rows = await cached(`ist:${dir}:${ymd}`, 300, async () => { const u = new Map();
+    for (const intl of [1, 0]) { let from = "00:00";
+      for (let i = 0; i < 30; i++) { const body = new URLSearchParams({ nature: dir === "dep" ? 1 : 0, searchTerm: "", pageNumber: 1, pageSize: 50, isInternational: intl, isCurrentTime: false, date: `${ymd} ${from}`, endDate: `${ymd} 23:59`, culture: "en" });
+        let F; try { const r = await getJSON("https://www.istairport.com/umbraco/api/FlightInfo/GetFlightStatusBoard", { method: "POST", body, headers: { "content-type": "application/x-www-form-urlencoded", "x-requested-with": "XMLHttpRequest", referer: "https://www.istairport.com/en/flights/departure-flights" } }); F = r?.result?.data?.flights || []; } catch { break; }
+        const n0 = u.size; for (const x of F) u.set(x.id, x); const last = (F.at(-1)?.scheduledDatetime || "").slice(11, 16);
+        if (F.length < 50 || !last || u.size === n0 || !last.startsWith(ymd.slice(0, 0)) || (F.at(-1).scheduledDatetime || "").slice(0, 10) !== ymd) break; from = last; await new Promise(z => setTimeout(z, 250)); } }
+    return [...u.values()]; });
+  return rows.map(x => { const [d, t] = (x.scheduledDatetime || "").slice(0, 16).split("T"); const sched = localToUtc(tz, d, t); const e = (x.estimatedDatetime || "").slice(0, 16);
+    const rm = x.remark || "Scheduled"; const st = genStatus(rm, dir); const other = dir === "dep" ? [x.toCityCode, x.toCityName] : [x.fromCityCode, x.fromCityName];
+    const est = e && e !== (x.scheduledDatetime || "").slice(0, 16) ? localToUtc(tz, ...e.split("T")) : undefined;
+    return mkFlight(apt, dir, AP[other[0]] ? other[0] : apByName2(other[1]), other[1], (x.flightNumber || "").replace(/^([A-Z0-9]{2})0(\d{3,4})$/, "$1$2"), x.airlineCode, x.airlineName, { sched, est, act: st === "departed" || st === "landed" ? est || sched : undefined, gate: x.gate || undefined, belt: x.carousel || undefined }, rm, st, "Istanbul Airport official flight board (istairport.com)", { codeshares: (x.codeshare || []).join(", ") || undefined, checkin: x.counter || undefined }); })
+    .filter(f => inDay(f.dep?.scheduled || f.arr?.scheduled, ymd)); }
+// Hermes Airports (LCA/PFO) — server-rendered results table with date headers
+async function hermesBoard(apt, dir, ymd) { const tz = "Asia/Nicosia"; const T = dir === "dep" ? "Departures" : "Arrivals";
+  const html = await cached(`hermes:${apt}:${dir}`, 180, () => getText2("https://www.hermesairports.com/api/flights/search/results", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", "x-requested-with": "XMLHttpRequest" }, body: new URLSearchParams({ FlightsType: T, Airport: apt, [`${T}ShowAllFlights`]: "true", [`${T}FlightInfo`]: "", [`${T}Airline`]: "", [dir === "dep" ? "DeparturesTo" : "ArrivalsFrom"]: "" }) }));
+  const out = []; let day = null;
+  for (const r of html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || []) { const c = (r.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/g) || []).map(htx);
+    if (c.length === 1) { const d = new Date(c[0] + " 12:00 UTC"); if (!isNaN(d)) day = d.toISOString().slice(0, 10); continue; }
+    if (c.length < 5 || c[1] === "Flight" || !day || day !== ymd) continue; const n0 = c[1].replace(/\s+/g, ""); const ai = /^[A-Z]{3}\d/.test(n0) ? AL_ICAO[n0.slice(0, 3)]?.iata : null; const num = ai ? ai + n0.slice(3) : n0; const rm = c[4] || "Scheduled"; const st = c[4] ? genStatus(rm, dir) : "scheduled";
+    const sched = localToUtc(tz, day, c[3]); const hm = rm.match(/(\d\d:\d\d)/); const at = hm ? localToUtc(tz, day, hm[1]) : undefined;
+    out.push(mkFlight(apt, dir, apByName2(c[2]), c[2], num, ai || alFromNum(num), null,  { sched, est: st === "departed" || st === "landed" ? undefined : at, act: st === "departed" || st === "landed" ? at : undefined }, rm, st, `${AP[apt]?.name || apt} official flight board (hermesairports.com)`)); }
+  return out; }
+// Malta International (maltairport.com) — per-row JSON in the save-flight button
+async function mlaBoard(apt, dir, ymd) { const tz = "Europe/Malta";
+  const html = await cached(`mla:${dir}`, 180, () => getText2(`https://maltairport.com/flights/${dir === "dep" ? "departures" : "arrivals"}/`));
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: tz }); const off = { yesterday: -1, today: 0, tomorrow: 1 }; const seen = new Set();
+  return [...html.matchAll(/toggleSaveFlight\(JSON\.parse\('([^']+)'/g)].map(m => { try { return JSON.parse(m[1].replace(/&quot;/g, '"').replace(/\\\//g, "/")); } catch { return null; } })
+    .filter(x => x && /^\d\d:\d\d/.test(x.time || "") && !seen.has(x.flight_id) && seen.add(x.flight_id)).map(x => { const d = new Date(Date.parse(today + "T12:00:00Z") + (off[x.day] ?? 0) * 86400e3).toISOString().slice(0, 10);
+      const num = (x.flight || "").replace(/\s+/g, ""); const n2 = /^[A-Z]{3}\d/.test(num) ? ({ EZY: "U2", RYR: "FR", WZZ: "W6" }[num.slice(0, 3)] || num.slice(0, 3)) + num.slice(3) : num; const rm = x.status || "Scheduled"; const st = genStatus(rm, dir);
+      return { d, f: mkFlight(apt, dir, apByName2(x.destination || x.origin), x.destination || x.origin, n2, alFromNum(n2), x.airline, { sched: localToUtc(tz, d, (x.time || "").slice(0, 5)) }, rm, st, "Malta International Airport official flight board (maltairport.com)") }; })
+    .filter(o => o.d === ymd).map(o => o.f); }
+OFFICIAL.IST = { fn: istBoard, label: "Istanbul Airport official flight board", provider: "Official airport feed (iGA Istanbul)", site: "istairport.com" };
+for (const c of ["LCA", "PFO"]) OFFICIAL[c] = { fn: hermesBoard, label: "Hermes Airports official flight board", provider: "Official airport feed (Hermes Airports)", site: "hermesairports.com" };
+OFFICIAL.MLA = { fn: mlaBoard, label: "Malta Airport official flight board", provider: "Official airport feed (Malta International)", site: "maltairport.com" };
+// Budapest Airport (bud.hu public flight-search JSON, 2-hour windows)
+async function budBoard(apt, dir, ymd) { const tz = "Europe/Budapest"; const D = dir === "dep" ? "departures" : "arrivals";
+  // polite: sequential, per-window cache (past windows kept 6h), stop on WAF block
+  const rows = []; const now = Date.now();
+  for (const h of ["00", "02", "04", "06", "08", "10", "12", "14", "16", "18", "20", "22"]) { const end = Date.parse(localToUtc(tz, ymd, `${h}:00`)) + 2 * 3600e3; const ttl = end < now - 3 * 3600e3 ? 6 * 3600 : 600;
+    let L; try { L = await cached(`bud:${dir}:${ymd}:${h}`, ttl, async () => { await new Promise(z => setTimeout(z, 400)); const r = await getJSON(`https://www.bud.hu/ajax/flight-search?locale=en&query=&date=${ymd}&time=${h}:00&direction=${D}`, { headers: { "x-requested-with": "XMLHttpRequest" } }); if (!Array.isArray(r)) throw new Error("bad"); return r; }); } catch { break; }
+    rows.push(...L); }
+  { const u = new Map(); for (const x of rows) u.set(x.uniqueAutoId, x); rows.splice(0, rows.length, ...u.values()); }
+  if (!rows.length) throw new Error("bud.hu returned nothing (possibly rate-limited)");
+  return rows.map(x => { const [dd, mm, yy] = (x.date || "").split("."); const d = `${yy}-${mm}-${dd}`; const sched = localToUtc(tz, d, x.planned); const rm = x.status?.text || "Scheduled"; const st = x.status?.type ? genStatus(x.status.type + " " + rm, dir) : genStatus(rm, dir);
+      const est = x.expected && x.expected !== x.planned ? localToUtc(tz, d, x.expected) : undefined; const num = (x.flightNumber || "").replace(/\s+/g, "");
+      return mkFlight(apt, dir, apByName2(x.city || x.destination), x.city || x.destination, num, alFromNum(num), x.airline?.name, { sched, est: st === "departed" || st === "landed" ? undefined : est, act: st === "departed" || st === "landed" ? est || sched : undefined, gate: x.gate || undefined, term: x.terminal || undefined, belt: x.baggageClaim || undefined }, rm, st, "Budapest Airport official flight board (bud.hu)", { codeshares: (x.codeshareFlights || []).map(c => c.flightNumber || c).join(", ") || undefined, reg: x.registration || undefined }); })
+    .filter(f => inDay(f.dep?.scheduled || f.arr?.scheduled, ymd)); }
+OFFICIAL.BUD = { fn: budBoard, label: "Budapest Airport official flight board", provider: "Official airport feed (Budapest Airport)", site: "bud.hu" };
 for (const c of SWEDAVIA) if (AP[c]) OFFICIAL[c] = { fn: swedaviaBoard, label: "Swedavia official flight board", provider: "Official airport feed (Swedavia)", site: "swedavia.com" };
 for (const c of FINAVIA) if (AP[c]) OFFICIAL[c] = { fn: finaviaBoard, label: "Finavia official flight board", provider: "Official airport feed (Finavia)", site: "finavia.fi" };
 OFFICIAL.VIE = { fn: vieBoard, label: "Vienna Airport official flight board", provider: "Official airport feed", site: "viennaairport.com" };
