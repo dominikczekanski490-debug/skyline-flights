@@ -26,7 +26,7 @@ export function NextHero({ f, open, dayof, noMode }: { f: Flight; open: () => vo
 
 export function PlaneHere({ f, hex, reg }: { f: Flight; hex?: string; reg?: string }) {
   const [d, setD] = useState<any>(null); const [err, setErr] = useState("");
-  useEffect(() => { if (!hex && !reg) return; let on = true; const go = () => api(`/plane-here?hex=${hex || ""}&reg=${reg || ""}&at=${f.origin?.iata || ""}`).then(r => { on && (setD(r), setErr("")); }).catch(e => on && setErr(e.message)); go(); const i = setInterval(go, 60e3); return () => { on = false; clearInterval(i); }; }, [hex, reg]);
+  useEffect(() => { if (!hex && !reg) return; let on = true; const go = () => api(`/plane-here?hex=${hex || ""}&reg=${reg || ""}&at=${f.origin?.iata || ""}`).then(r => { on && (setD(r), setErr("")); }).catch(e => on && setErr(e.message)); go(); const i = setInterval(go, 240e3); const v = () => document.visibilityState === "visible" && go(); document.addEventListener("visibilitychange", v); return () => { on = false; clearInterval(i); document.removeEventListener("visibilitychange", v); }; }, [hex, reg]);
   if (!hex && !reg) return <div className="card"><h3>Is my plane here yet?</h3><div className="muted sm">No aircraft assigned to {f.number} yet. Airlines usually assign one a few hours before departure; this fills in automatically.</div></div>;
   const pre = phaseOf(f) === "pre";
   return <div className="card"><div className="row between"><h3 className="m0">Is my plane here yet?</h3><span className="srcb live">ADS-B</span></div>
