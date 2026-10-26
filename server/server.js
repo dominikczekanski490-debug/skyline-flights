@@ -110,7 +110,9 @@ async function magBoard(apt, dir, ymd) {
 // Sydney (SYD): JSON endpoint used by sydneyairport.com.au's own public flight board
 const AVINOR = "OSL BGO TRD SVG TOS BOO AES KRS EVE HAU MOL KSU ALF BDU BJF BNN BVG FDE FRO HAA HFT HOV HVG KKN LKL LKN MEH MJF MQN OSY RET RRS RVK SDN SKN SOG SOJ SSJ SVJ VAW VDS VRY LYR ANX TRF".split(" ");
 const getText = async (url, opt = {}) => { const r = await fetch(url, { ...opt, headers: { "user-agent": UA, ...(opt.headers || {}) }, signal: AbortSignal.timeout(20000) }); if (!r.ok) { const e = new Error(`${r.status} ${url.split("?")[0]}`); e.status = r.status; throw e; } return r.text(); };
+const DE_ST = { "Geplant": "Scheduled", "Gestartet": "Departed", "Check-In": "Check-in open", "Beendet": "Boarding closed", "Gepäck": "Baggage on belt", "Gelandet": "Landed", "Annulliert": "Cancelled", "Verspätet": "Delayed", "Erwartet": "Expected", "Annulliert/Cancelled": "Cancelled", "BOR": "Boarding" };
 const mkFlight = (apt, dir, otherIata, otherName, num, alCode, alName, t, statusText, status, source, extra = {}) => {
+  statusText = DE_ST[statusText] || statusText;
   const here = AP[apt], there = AP[otherIata] || { iata: otherIata, name: otherName, city: otherName };
   const side = { scheduled: t.sched, estimated: t.est, actual: t.act, gate: t.gate || undefined, terminal: t.term || undefined, ...(dir === "arr" ? { baggage: t.belt || undefined } : {}) };
   const id = `${num}-${(t.sched || "").slice(0, 10)}`;
@@ -377,8 +379,134 @@ for (const c of FINAVIA) if (AP[c]) OFFICIAL[c] = { fn: finaviaBoard, label: "Fi
 OFFICIAL.VIE = { fn: vieBoard, label: "Vienna Airport official flight board", provider: "Official airport feed", site: "viennaairport.com" };
 OFFICIAL.CRL = { fn: crlBoard, label: "Brussels South Charleroi official flight board", provider: "Official airport feed", site: "brussels-charleroi-airport.com" };
 OFFICIAL.DUS = { fn: dusBoard, label: "Düsseldorf Airport official flight board", provider: "Official airport feed", site: "dus.com" };
+// ---- v12: more official airport websites (public endpoints their own flight pages use) ----
+const v12BUA = "Mozilla/5.0 (compatible; Skyline personal flight tracker)";
+const v12nameIdx = {}; for (const a of Object.values(AP)) for (const k of [a.city, a.name]) if (k) { const n = k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]/g, ""); if (n && !v12nameIdx[n]) v12nameIdx[n] = a.iata; }
+const v12NAME_FIX = { bukarestotopeni: "OTP", palmademallorca: "PMI", londonstansted: "STN", londonluton: "LTN", londongatwick: "LGW", londonheathrow: "LHR", kattowitz: "KTW", danzig: "GDA", krakau: "KRK", warschau: "WAW", posen: "POZ", breslau: "WRO", istanbulsabihagokcen: "SAW", lissabon: "LIS", rom: "FCO", romciampino: "CIA", mailand: "MXP", mailandbergamo: "BGY", neapel: "NAP", venedig: "VCE", gerona: "GRO", girona: "GRO", teneriffasud: "TFS", teneriffa: "TFS", tenerifesouth: "TFS", grancanaria: "LPA", lanzarote: "ACE", fuerteventura: "FUE", kopenhagen: "CPH", copenhagen: "CPH", amsterdam: "AMS", oslo: "OSL", stockholm: "ARN", helsinki: "HEL", paris: "CDG", london: "LHR", sofia: "SOF", tirana: "TIA", skopje: "SKP", belgrad: "BEG", sarajevo: "SJJ", pristina: "PRN", banjaluka: "BNX", kutaisi: "KUT", podgorica: "TGD", tuzla: "TZL", nisch: "INI", nis: "INI", chisinau: "RMO", kischinau: "RMO", iasi: "IAS", cluj: "CLJ", klausenburg: "CLJ", temeswar: "TSR", hurghada: "HRG", antalya: "AYT", izmir: "ADB", malaga: "AGP", alicante: "ALC", faro: "FAO", porto: "OPO", dublin: "DUB", manchester: "MAN", edinburgh: "EDI" };
+const v12iataOf = n => { if (!n) return undefined; const k = n.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]/g, ""); return v12NAME_FIX[k] || v12nameIdx[k]; };
+const v12dmy = s => { const m = /(\d{2})[.\/-](\d{2})[.\/-](\d{4})\s*(\d{2}):?(\d{2})/.exec(s || ""); return m ? [`${m[3]}-${m[2]}-${m[1]}`, `${m[4]}:${m[5]}`] : null; };
+const v12locIso = (apt, s) => { const p = v12dmy(s); return p ? localToUtc(AP[apt].tz, p[0], p[1]) : undefined; };
+const v12hmNear = (apt, ymd, hm, ref) => { if (!hm || !/^\d{1,2}:\d{2}/.test(hm)) return undefined; let t = localToUtc(AP[apt].tz, ymd, hm.slice(0, 5).padStart(5, "0")); if (ref && t) { const d = (+new Date(t) - +new Date(ref)) / 36e5; if (d < -12) t = new Date(+new Date(t) + 864e5).toISOString(); if (d > 12) t = new Date(+new Date(t) - 864e5).toISOString(); } return t; };
+const v12dayFilter = (L, apt, ymd, dir) => L.filter(f => inLocalDay((dir === "dep" ? f.dep : f.arr).scheduled, apt, ymd));
+const v12splitNum = s => { const m = /^([A-Z0-9]{2})\s*0*(\d{1,4}[A-Z]?)$/.exec((s || "").trim().toUpperCase().replace(/\s+/g, " ")); return m ? [m[1], m[1] + m[2]] : [undefined, (s || "").replace(/\s+/g, "")]; };
+
+// Aena (all Spanish state airports incl. Canary and Balearic Islands): aena.es Infovuelos JSON, POST as the page does.
+const AENA_ST = { SCH: "Scheduled", HOR: "On time", RET: "Delayed", CAN: "Cancelled", FLY: "In flight", EMB: "Boarding", ULL: "Last call", PRO: "Boarding soon", DES: "Departed", DSP: "Departed", LLE: "Landed", ATE: "Landed", ATR: "Landed", REC: "Baggage on belt", DIV: "Diverted", SAL: "Departed", ENV: "In flight", CER: "Gate closed", INI: "Check-in open", FIN: "Check-in closed" };
+async function aenaBoard(apt, dir, ymd) {
+  const all = await cached(`aena:${apt}:${dir}`, 240, async () => { const r = await fetch(`https://www.aena.es/sites/Satellite?pagename=AENA_ConsultarVuelos&airport=${apt}&flightType=${dir === "dep" ? "S" : "L"}&dosDias=si`, { method: "POST", headers: { "user-agent": v12BUA, "content-length": "0", referer: "https://www.aena.es/en/flight-info.html" }, signal: AbortSignal.timeout(25000) });
+    if (!r.ok) throw new Error(`Aena ${r.status}`); const d = await r.json(); if (!Array.isArray(d)) throw new Error("Aena: no list");
+    return d.map(x => { const sched = v12locIso(apt, `${x.fecha} ${x.horaProgramada}`), est = v12locIso(apt, `${x.fechaEstimada} ${x.horaEstimada}`); const st = AENA_ST[x.estado] || (x.estado ? x.estado : "Scheduled");
+      const done = dir === "dep" ? /^(FLY|DES|DSP|SAL|ENV)$/.test(x.estado) : /^(LLE|ATE|ATR|REC)$/.test(x.estado);
+      return mkFlight(apt, dir, x.iataOtro, (x.ciudadIataOtro || "").replace(/\b\w+/g, w => w[0] + w.slice(1).toLowerCase()), `${x.iataCompania || ""}${x.numVuelo}`, x.iataCompania, x.nombreCompania,
+        { sched, est: done ? undefined : (est !== sched ? est : undefined), act: done ? est : undefined, term: x.terminal, gate: x.puertaPrimera && x.puertaPrimera !== "null" ? x.puertaPrimera : undefined, belt: x.cintaPrimera && x.cintaPrimera !== "null" ? x.cintaPrimera : undefined },
+        st, x.estado === "CAN" ? "cancelled" : done ? (dir === "dep" ? "departed" : "landed") : genStatus(st, dir), "Aena official flight information (aena.es)", { aircraft: { type: x.tipoAeronave } }); }); });
+  return v12dayFilter(all, apt, ymd, dir);
+}
+
+// Berlin BER: api.flights.json used by ber.berlin-airport.de departures/arrivals page.
+async function berBoard(apt, dir, ymd) {
+  return cached(`ber:${dir}:${ymd}`, 180, async () => { const out = []; for (let p = 1; p <= 20; p++) {
+    const r = await getJSON(`https://ber.berlin-airport.de/api.flights.json?arrivalDeparture=${dir === "dep" ? "D" : "A"}&dateFrom=${ymd}T00:00:00&dateUntil=${ymd}T23:59:59&search=&lang=en&page=${p}&terminal=&itemsPerPage=100`, { headers: { "user-agent": v12BUA, referer: "https://ber.berlin-airport.de/en/flying/departures-arrivals.html", accept: "application/json" } });
+    const L = r?.data?.items || []; for (const x of L) { const s = dir === "dep" ? x.dep_scheduled_time || x.scheduled_time : x.arr_scheduled_time || x.scheduled_time; const e = dir === "dep" ? x.dep_estimated_time : x.arr_estimated_time; const st = x.flight_status_label || "Scheduled"; const g = genStatus(x.flight_status_id || st, dir);
+      const done = (dir === "dep" && g === "departed") || (dir === "arr" && g === "landed"); const [al, num] = v12splitNum(x.flight_number);
+      out.push(mkFlight(apt, dir, dir === "dep" ? x.arr_airport_iata : x.dep_airport_iata, dir === "dep" ? x.arr_airport_name : x.dep_airport_name, num, x.airline_code || al, x.airline_name, { sched: ISO(s), est: done ? undefined : ISO(e), act: done ? ISO(e) : undefined, term: x.terminal, gate: x.gate, belt: x.arr_belt }, st, g, "BER Berlin Brandenburg Airport official flight board (berlin-airport.de)", { aircraft: { type: x.aircraft_type, reg: x.aircraft_reg } })); }
+    const m = r?.data?.meta || r?.meta || {}; if (L.length < 100 || (m.last_page && p >= m.last_page)) break; } return out; });
+}
+
+// Munich: flightsearch HTML fragment used by munich-airport.com all-departures/all-arrivals page.
+async function mucBoard(apt, dir, ymd) {
+  return cached(`muc:${dir}:${ymd}`, 180, async () => { const out = [], seen = new Set(); let from = `${ymd}T00:00:00`;
+    for (let p = 0; p < 30; p++) { const h = await getText(`https://www.munich-airport.com/flightsearch/${dir === "dep" ? "departures" : "arrivals"}?from=${encodeURIComponent(from)}&allow_scroll_back=0&per_page=100&allow_pagination=1&min_date=${ymd}T00%3A00%3A00`, { headers: { "user-agent": v12BUA, referer: "https://www.munich-airport.com/all-departures-1450598" } });
+      const day = /am (\d{2})\.(\d{2})\.(\d{4})/.exec(h); const dy = day ? `${day[3]}-${day[2]}-${day[1]}` : ymd; if (dy !== ymd) break; let added = 0, last;
+      for (const m of h.matchAll(/<tr data-flight-id="([\d.]+)" class="fp-flight-item">([\s\S]*?)<\/tr>/g)) { const id = m[1], b = m[2]; if (seen.has(id)) continue; seen.add(id); added++;
+        const tx = c => (new RegExp(`class="${c}"[^>]*>([\\s\\S]*?)</td>`).exec(b)?.[1] || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+        const ap = tx("fp-flight-airport"), apI = /\(([A-Z]{3})\)/.exec(ap)?.[1], nm = tx("fp-flight-number"), [, fn] = /^([A-Z0-9]{2,3} ?\d{1,4}[A-Z]?)/.exec(nm) || [, nm]; const tm = tx("fp-flight-time-muc").split("|").map(s => s.trim()).filter(Boolean);
+        const airline = /aria-label="([^"]+)"/.exec(b)?.[1]; const stx = tx("fp-flight-status"); const sched = v12hmNear(apt, ymd, tm[0]); last = tm[0];
+        const est = tm[1] ? v12hmNear(apt, ymd, tm[1], sched) : undefined; const g = genStatus({ gestartet: "departed", gelandet: "landed", annulliert: "cancelled", verspätet: "delayed" }[stx.toLowerCase()] || stx, dir);
+        const [al, num] = v12splitNum(fn.replace(/^([A-Z]{3}) /, (_, i) => (Object.entries(v12AL_ICAO || {}).find(([k]) => k === i)?.[1] || i) + " ")); const done = (dir === "dep" && g === "departed") || (dir === "arr" && g === "landed");
+        out.push(mkFlight(apt, dir, apI, ap.replace(/\s*\([A-Z]{3}\)/, ""), num, al, airline, { sched, est: done ? undefined : est, act: done ? est : undefined, term: tx("fp-flight-area") }, stx ? stx[0].toUpperCase() + stx.slice(1) : "Scheduled", g, "Munich Airport official flight search (munich-airport.com)", { aircraft: { type: /\(([A-Z0-9]{3,4})\)/.exec(nm)?.[1] } })); }
+      if (!added || !last) break; from = `${ymd}T${last}:00`; if (added < 3) break; }
+    return out; });
+}
+const v12AL_ICAO = {};
+
+// Dortmund: flight-schedule.json used by dortmund-airport.com departures page (local times, today).
+async function dtmBoard(apt, dir, ymd) {
+  const d = await cached("dtm", 180, () => getJSON("https://www.dortmund-airport.com/flight-schedule.json", { headers: { "user-agent": v12BUA, referer: "https://www.dortmund-airport.com/departures" } }));
+  return v12dayFilter((d[dir === "dep" ? "departures" : "arrivals"] || []).map(x => { const sched = v12locIso(apt, x.scheduledTime), est = v12locIso(apt, x.expectedTime); const [al, num] = v12splitNum(x.flightNumber);
+    const stc = { DP: "Departed", LD: "Landed", BO: "Boarding", GC: "Gate closed", DL: "Delayed", CX: "Cancelled", AR: "Landed" }[x.status] || (x.cancelled ? "Cancelled" : "Scheduled"); const g = genStatus(stc, dir); const done = (dir === "dep" && g === "departed") || (dir === "arr" && g === "landed");
+    return mkFlight(apt, dir, v12iataOf(x.destination), x.destination, num, al, x.airline, { sched, est: done || est === sched ? undefined : est, act: done ? est : undefined, gate: x.gate }, stc, g, "Dortmund Airport official flight schedule (dortmund-airport.com)", { aircraft: { type: x.aircraftType } }); }), apt, ymd, dir);
+}
+
+// Weeze: api/flights.json used by airport-weeze.com (HTML rows; first block = today).
+async function nrnBoard(apt, dir, ymd) {
+  if (ymd !== v12todayLocal(apt)) return [];
+  const d = await cached("nrn", 180, () => getJSON("https://airport-weeze.com/api/flights.json", { headers: { "user-agent": v12BUA, referer: "https://airport-weeze.com/" } }));
+  const h = (d[dir === "dep" ? "return_html_departures" : "return_html_arrivals"] || "").split('class="fs__flights"')[1] || ""; const out = [];
+  for (const r of h.split('class="fs__row fs__body"').slice(1)) { const g1 = re => (re.exec(r)?.[1] || "").replace(/<[^>]+>/g, "").trim(); const fn = g1(/data-label="Flugnr\.">([^<]*)</); const city = g1(/airport-name complete">([^<]*)</);
+    const st = g1(/status__name">([^<]*)</); const sch = g1(/data-label="Geplant"><div>([^<]*)</); const exp = g1(/data-label="Erwartet"><div>([^<]*)</); const sched = v12hmNear(apt, ymd, sch), est = v12hmNear(apt, ymd, exp, sched);
+    const en = { gestartet: "Departed", gelandet: "Landed", annulliert: "Cancelled", verspätet: "Delayed", boarding: "Boarding", "gate geschlossen": "Gate closed" }[st.toLowerCase()] || st || "Scheduled"; const g = genStatus(en, dir); const done = (dir === "dep" && g === "departed") || (dir === "arr" && g === "landed"); const [al, num] = v12splitNum(fn);
+    out.push(mkFlight(apt, dir, v12iataOf(city), city, num, al, undefined, { sched, est: done ? undefined : est, act: done ? est : undefined }, en, g, "Airport Weeze official flight board (airport-weeze.com)")); }
+  return out;
+}
+const v12todayLocal = apt => new Intl.DateTimeFormat("en-CA", { timeZone: AP[apt].tz }).format(new Date());
+
+// Luxembourg: Luxair flight-data API used by lux-airport.lu departures/arrivals pages.
+async function luxBoard(apt, dir, ymd) {
+  return cached(`lux:${dir}:${ymd}`, 180, async () => { const d = await getJSON(`https://luxair-flightdata-1.azurewebsites.net/api/v1/Flights?Day=${ymd}&Sens=${dir === "dep" ? "D" : "A"}&updateMarker=0`, { headers: { "user-agent": v12BUA, referer: "https://www.lux-airport.lu/", origin: "https://www.lux-airport.lu" } });
+    return (d.flights || []).map(x => { const sched = localToUtc(AP[apt].tz, x.schDate.slice(0, 10), x.schDate.slice(11, 16)); const other = Object.keys(x.stops || {})[0]; const act = v12hmNear(apt, ymd, dir === "dep" ? x.timeRunway || x.timeFinal : x.timeRunway || x.timeFinal, sched); const est = v12hmNear(apt, ymd, x.timeEstimated, sched);
+      const stc = { DE: "Departed", AR: "Landed", LA: "Landed", CA: "Cancelled", CX: "Cancelled", BO: "Boarding", DL: "Delayed", GC: "Gate closed" }[x.statusCode] || (x.boarding ? "Boarding" : x.approach ? "Approaching" : "Scheduled"); const g = genStatus(stc, dir);
+      const done = (dir === "dep" && g === "departed") || (dir === "arr" && g === "landed");
+      return mkFlight(apt, dir, other, (x.stops || {})[other], `${x.iataAirCode}${x.flightNum}`, x.iataAirCode, x.airline, { sched, est: done ? undefined : est, act: done ? act : undefined, term: x.terminal, gate: x.boardGates, belt: x.belt }, stc, g, "Luxembourg Airport official flight data (lux-airport.lu)", { aircraft: { type: x.aircraftType } }); }); });
+}
+
+// Billund: FtpData JSON used by bll.dk departures/arrivals pages (Yesterday/Today/Tomorrow, local).
+async function bllBoard(apt, dir, ymd) {
+  const d = await cached(`bll:${dir}`, 180, () => getJSON(`https://www.bll.dk/umbraco/surface/FtpData/${dir === "dep" ? "Departure" : "Arrival"}FlightsData`, { headers: { "user-agent": v12BUA, referer: "https://www.bll.dk/en/flight-traffic/departures" } }));
+  const out = []; for (const k of ["Yesterday", "Today", "Tomorrow"]) for (const x of d[k] || []) { const sched = v12locIso(apt, x.ScheduledDepartureTime.replace(/ (\d{2})(\d{2})$/, " $1:$2")); const est = x.EstimatedTime ? v12hmNear(apt, sched ? sched.slice(0, 10) : ymd, x.EstimatedTime, sched) : undefined;
+    const st = x.Status || (x.CheckInInformation || []).find(s => /cancel/i.test(s)) || "Scheduled"; const g = genStatus(st, dir); const oth = dir === "dep" ? x.ArrivalAirport : x.DepartureAirport; const c = x.AdministratingFlightCode || {};
+    const done = (dir === "dep" && g === "departed") || (dir === "arr" && g === "landed");
+    out.push(mkFlight(apt, dir, oth?.Code || v12iataOf(oth?.Name), oth?.Name, c.Code, c.Airline?.Code, c.Airline?.Name, { sched, est: done ? undefined : est, act: done ? est : undefined }, st, g, "Billund Airport official flight data (bll.dk)")); }
+  return v12dayFilter(out, apt, ymd, dir);
+}
+
+// Nuremberg: flight-status API used by airport-nuernberg.de flight-status page (UTC times, several days).
+async function nueBoard(apt, dir, ymd) {
+  const d = await cached(`nue:${dir}`, 180, () => getJSON(`https://airportnue-service.justrelate.io/production/api/flight-status/${dir === "dep" ? "departures" : "arrivals"}?lang=en`, { headers: { "user-agent": v12BUA, referer: "https://www.airport-nuernberg.de/" } }));
+  return v12dayFilter((d || []).map(x => { const o = dir === "dep" ? x.toAirport : x.fromAirport; const lab = x.status?.label || "scheduled"; const g = genStatus(lab === "started" ? "departed" : lab, dir); const done = (dir === "dep" && g === "departed") || (dir === "arr" && g === "landed");
+    const t = ISO(x.status?.time); const sched = ISO(x.scheduledTime); const stx = lab.replace(/-/g, " "); return mkFlight(apt, dir, o?.iata, o?.name, `${x.flight.airline.iata}${x.flight.number}`, x.flight.airline.iata, x.flight.airline.name, { sched, est: done || t === sched ? undefined : t, act: done ? t : undefined, term: x.terminal, gate: x.gate, belt: x.belt || x.baggageBelt },
+      stx[0].toUpperCase() + stx.slice(1), g, "Nuremberg Airport official flight status (airport-nuernberg.de)", { aircraft: { type: x.aircraft?.iata, reg: x.aircraft?.registration || undefined } }); }), apt, ymd, dir);
+}
+
+// Rotterdam The Hague: rtha/v2/flights JSON used by rotterdamthehagueairport.nl (today).
+async function rtmBoard(apt, dir, ymd) {
+  const d = await cached("rtm", 180, () => getJSON("https://www.rotterdamthehagueairport.nl/en/wp-json/rtha/v2/flights/", { headers: { "user-agent": v12BUA, referer: "https://www.rotterdamthehagueairport.nl/en/" } }));
+  return v12dayFilter((d || []).filter(x => x.movementType === (dir === "dep" ? "D" : "A")).map(x => { const o = dir === "dep" ? x.arrivalAirport : x.departureAirport; const st = x.flightStatusName || "Scheduled"; const s = dir === "dep" ? x.sobt : x.sibt, e = dir === "dep" ? x.eobt : x.eibt, a = dir === "dep" ? x.aobt || x.adtt : x.aibt;
+    return mkFlight(apt, dir, o?.airportIATA, o?.airportDisplayName, x.flightNumber, x.airline?.airlineIATA, x.airline?.airlineName, { sched: ISO(s), est: a ? undefined : ISO(e), act: ISO(a), gate: x.gate, belt: (x.baggageClaimUnits || [])[0] }, st, a ? (dir === "dep" ? "departed" : "landed") : genStatus(st, dir), "Rotterdam The Hague Airport official flight board (rotterdamthehagueairport.nl)", { aircraft: { type: x.aircraftICAOType, reg: x.aircraftRegistration } }); }), apt, ymd, dir);
+}
+
+// Keflavik (Isavia): flight list embedded in kefairport.com departures/arrivals pages (__NEXT_DATA__).
+async function kefBoard(apt, dir, ymd) {
+  const L = await cached(`kef:${dir}`, 180, async () => { const h = await getText(`https://www.kefairport.com/flights/${dir === "dep" ? "departures" : "arrivals"}`, { headers: { "user-agent": v12BUA } }); const m = /id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/.exec(h); if (!m) throw new Error("KEF: no data");
+    const f = JSON.parse(JSON.parse(m[1]).props.pageProps.flightArrayData || "[]"); return f.filter(x => x.arrival === (dir === "arr")); });
+  return v12dayFilter(L.map(x => { const sched = ISO(x.date); const s = x.status || ""; const upd = x.updateDate && x.updatedTime ? ISO(x.updateDate) : undefined;
+    const stx = { ATD: "Departed", ATA: "Landed", LBB: "Landed", EST: "Estimated", BDO: "Boarding", CNL: "Cancelled", CAN: "Cancelled", DEL: "Delayed", GCL: "Gate closed", FCL: "Final call", NoStatus: "Scheduled" }[s] || s || "Scheduled"; const g = genStatus(stx, dir); const done = (dir === "dep" && g === "departed") || (dir === "arr" && g === "landed");
+    return mkFlight(apt, dir, x.airportCode, x.destination, x.flightNumber, x.airlineCode, x.airline, { sched, est: done ? undefined : upd, act: done ? upd : undefined, gate: x.gate || undefined, belt: x.belt || undefined }, stx, g, "Keflavík Airport official flight board (kefairport.com)"); }), apt, ymd, dir);
+}
+
+const AENA_CODES = (WEU.ES || []).map(a => a.iata || a).filter(c => AP[c]);
+for (const c of AENA_CODES) OFFICIAL[c] = { fn: aenaBoard, label: "Aena official flight information", provider: "Official airport feed (Aena)", site: "aena.es" };
+OFFICIAL.BER = { fn: berBoard, label: "BER official flight board", provider: "Official airport feed", site: "berlin-airport.de" };
+OFFICIAL.MUC = { fn: mucBoard, label: "Munich Airport official flight search", provider: "Official airport feed", site: "munich-airport.com" };
+OFFICIAL.DTM = { fn: dtmBoard, label: "Dortmund Airport official flight schedule", provider: "Official airport feed", site: "dortmund-airport.com" };
+OFFICIAL.NRN = { fn: nrnBoard, label: "Airport Weeze official flight board", provider: "Official airport feed", site: "airport-weeze.com" };
+OFFICIAL.LUX = { fn: luxBoard, label: "Luxembourg Airport official flight data", provider: "Official airport feed", site: "lux-airport.lu" };
+OFFICIAL.BLL = { fn: bllBoard, label: "Billund Airport official flight data", provider: "Official airport feed", site: "bll.dk" };
+OFFICIAL.NUE = { fn: nueBoard, label: "Nuremberg Airport official flight status", provider: "Official airport feed", site: "airport-nuernberg.de" };
+OFFICIAL.RTM = { fn: rtmBoard, label: "Rotterdam The Hague Airport official flight board", provider: "Official airport feed", site: "rotterdamthehagueairport.nl" };
+OFFICIAL.KEF = { fn: kefBoard, label: "Keflavík Airport official flight board", provider: "Official airport feed (Isavia)", site: "kefairport.com" };
 // Tested and NOT usable without bypassing protection or a key (documented, not scraped):
-const EU_BLOCKED = { AMS: "Cloudflare challenge on schiphol.nl (Schiphol developer API needs a free key: candidate)", BRU: "Access Denied (bot protection)", CPH: "Access Denied (bot protection)", BER: "CloudFront blocks server requests to its flight API", CGN: "Access Denied (bot protection)", STR: "Access Denied (bot protection)", FCO: "CloudFront 403", CIA: "CloudFront 403 (same ADR site as FCO)", VCE: "Access Denied (bot protection)", BGY: "Cloudflare challenge", NAP: "Radware captcha", MLA: "CloudFront 403", HAM: "Connection refused from the box (Hamburg API portal needs a free key: candidate)" };
+const EU_BLOCKED = {"AMS": "Blocked by airport site: Cloudflare challenge", "BRE": "Blocked by airport site: Cloudflare challenge", "BGY": "Blocked by airport site: Cloudflare challenge", "AAL": "Blocked by airport site: Cloudflare challenge", "GLA": "Blocked by airport site: Cloudflare challenge", "BHX": "Blocked by airport site: Cloudflare challenge", "NCL": "Blocked by airport site: Cloudflare challenge", "PMO": "Blocked by airport site: Cloudflare 'Attention Required'", "NTE": "Blocked by airport site: Cloudflare 'Attention Required'", "INN": "Blocked by airport site: Cloudflare 'Attention Required'", "BRS": "Blocked by airport site: Cloudflare 'Attention Required'", "LCY": "Blocked by airport site: Cloudflare 'Attention Required'", "CDG": "Blocked by airport site: hCaptcha bot protection (Groupe ADP)", "ORY": "Blocked by airport site: hCaptcha bot protection (Groupe ADP)", "BRU": "Blocked by airport site: Access Denied (bot protection)", "CPH": "Blocked by airport site: Access Denied (bot protection)", "CGN": "Blocked by airport site: Access Denied (bot protection)", "STR": "Blocked by airport site: Access Denied (bot protection)", "VCE": "Blocked by airport site: Access Denied (bot protection)", "LEJ": "Blocked by airport site: 403 (Mitteldeutsche Flughafen AG)", "DRS": "Blocked by airport site: 403 (Mitteldeutsche Flughafen AG)", "LPL": "Blocked by airport site: 403", "FCO": "Blocked by airport site: AWS WAF / CloudFront 403 (ADR)", "CIA": "Blocked by airport site: AWS WAF / CloudFront 403 (ADR)", "NAP": "Blocked by airport site: Radware captcha", "LIS": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "OPO": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "FAO": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "FNC": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "PXO": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "PDL": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "TER": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "HOR": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "SMA": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "PIX": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "FLW": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "GRW": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "SJZ": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "CVU": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "BYJ": "Blocked by airport site: Imperva Incapsula (ANA / VINCI)", "HAM": "Blocked by airport site: connection closed to server requests", "PSA": "Blocked by airport site: connection closed to server requests", "FLR": "Blocked by airport site: connection closed to server requests", "EIN": "Blocked by airport site: connection closed to server requests", "GVA": "Blocked by airport site: captcha widget, no public data endpoint", "MLA": "Blocked by airport site: CloudFront 403", "ZRH": "No public flight-data endpoint found on the airport site", "MXP": "No public flight-data endpoint found on the airport site", "LIN": "No public flight-data endpoint found on the airport site", "BLQ": "No public flight-data endpoint found on the airport site", "BSL": "No public flight-data endpoint found on the airport site", "HAJ": "No public flight-data endpoint found on the airport site", "NCE": "No public flight-data endpoint found on the airport site", "SZG": "No public flight-data endpoint found on the airport site", "KLU": "No public flight-data endpoint found on the airport site", "LNZ": "No public flight-data endpoint found on the airport site", "GRZ": "No public flight-data endpoint found on the airport site", "CTA": "No public flight-data endpoint found on the airport site", "TLS": "No public flight-data endpoint found on the airport site", "LYS": "No public flight-data endpoint found on the airport site", "MRS": "No public flight-data endpoint found on the airport site", "BOD": "No public flight-data endpoint found on the airport site", "MST": "No public flight-data endpoint found on the airport site", "AJA": "No public flight-data endpoint found on the airport site", "BIA": "No public flight-data endpoint found on the airport site", "CLY": "No public flight-data endpoint found on the airport site", "FSC": "No public flight-data endpoint found on the airport site", "CAG": "No public flight-data endpoint found on the airport site", "OLB": "No public flight-data endpoint found on the airport site", "AHO": "No public flight-data endpoint found on the airport site", "TPS": "No public flight-data endpoint found on the airport site", "CMN": "No public flight-data endpoint found on the airport site", "PMF": "No public flight-data endpoint found on the airport site", "TRN": "No public flight-data endpoint found on the airport site"};
 const EU_CANDIDATES = { AMS: "Schiphol Public Flight API (free developer key)", HAM: "Hamburg Airport API portal (free key)", FRA: "already official", MAD: "Aena (no public API found; page loads data dynamically, not identified)", LIS: "ANA/VINCI (no public endpoint identified)" };
 // Every commercial airport in the UK, Crown Dependencies and Republic of Ireland
 const UKI = { "England": "LHR LGW STN LTN LCY SEN MAN BHX BRS NCL LBA LPL EMA BOH SOU EXT NQY NWI MME HUY DSA BLK CAX ISC LEQ BZZ QUG OXF BQH FAB ESH LYX".split(" "), "Scotland": "EDI GLA ABZ INV PIK DND SYY KOI LSI BRR BEB TRE ILY CAL WIC LWK NRL PPW SOY WRY EOI FIE FOA OUK CSA COL".split(" "), "Wales": ["CWL", "VLY"], "Northern Ireland": ["BFS", "BHD", "LDY"], "Channel Islands": ["JER", "GCI", "ACI"], "Isle of Man": ["IOM"], "Ireland": "DUB ORK SNN NOC KIR WAT SXL IOR CFN DUB".split(" ").filter((x, i, a) => a.indexOf(x) === i) };
@@ -765,8 +893,9 @@ function statsFrom(list, now = Date.now()) {
 const UKC = {}; async function ukCount(c) { const h = UKC[c]; if (h && Date.now() - h.t < 600e3) return h.v; let v;
   if (OFFICIAL[c]) { const ymd = todayLondon(); const [d, r] = await Promise.all([officialBoard(c, "dep", ymd).catch(() => null), officialBoard(c, "arr", ymd).catch(() => null)]); v = d || r ? { dep: d?.length ?? null, arr: r?.length ?? null, kind: "official" } : null; }
   if (!v) { try { const l = await liveCounts(c); v = { ...l, kind: "live" }; } catch { v = null; } } UKC[c] = { t: Date.now(), v }; return v; }
+const REGION_SUB = { "ES-CN": "Canary Islands", "ES-IB": "Balearic Islands", "PT-20": "Azores", "PT-30": "Madeira", "FR-20R": "Corsica", "FR-COR": "Corsica", "IT-88": "Sardinia", "IT-82": "Sicily" };
 api.get("/uk", wrap(async (req, res) => { const out = []; const eu = req.query.region === "eu";
-  const groups = eu ? Object.fromEntries(Object.entries(WEU).map(([cc, l]) => [WEU_NAMES[cc], l.map(a => a.iata)]).concat([["Norway", AVINOR]])) : UKI;
+  const groups = eu ? (() => { const g = {}; for (const [cc, l] of Object.entries(WEU)) for (const a of l) { const k = WEU_NAMES[cc] + (REGION_SUB[a.region] ? " – " + REGION_SUB[a.region] : ""); (g[k] ||= []).push(a.iata); } g["Norway"] = AVINOR; return g; })() : UKI;
   for (const [country, codes] of Object.entries(groups)) for (const c of codes) { const a = AP[c]; if (!a) continue; out.push({ ...airportOut(a), country, feed: OFFICIAL[c] ? "official" : cfg.aerodataboxKey && !eu ? "aerodatabox" : "live", source: OFFICIAL[c]?.site || null, blocked: EU_BLOCKED[c] || null }); }
   res.json({ airports: out.map(a => { const lc = a.feed === "official" ? null : obsCounts(a.iata); return { ...a, counts: lc || UKC[a.iata]?.v || null, countsAt: lc ? lc.sampledAt : UKC[a.iata] ? new Date(UKC[a.iata].t).toISOString() : null, lastSeen: lc?.lastSeen || null }; }), at: new Date().toISOString() }); }));
 (async function warmUk() { for (const c of Object.values(UKI).flat()) { if (!AP[c] || !OFFICIAL[c]) continue; try { await ukCount(c); } catch {} await new Promise(r => setTimeout(r, 1500)); } setTimeout(warmUk, 5 * 60e3); })();
