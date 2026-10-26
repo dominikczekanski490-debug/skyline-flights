@@ -826,6 +826,13 @@ const flogGet = (num, ymd) => STATE.flog?.[num + "|" + ymd];
 setInterval(() => { const L = STATE.flog || {}; for (const k in L) if (Date.now() - L[k].at > FLOG_KEEP) delete L[k]; }, 3600e3);
 // ADS-B observed landing/take-off at an airport for a callsign, within a time window.
 const obsEvent = (iata, kind, cs, from, to) => cs && OBS[iata]?.events.find(e => e.kind === kind && e.cs === cs && e.t >= from && e.t <= to);
+// Feeds sometimes keep "Final call"/"Boarding" for hours after a flight left. If the best time is well past and the feed never
+// marked it, show it as departed/landed (est.) instead of a stale gate status. Flagged so the UI can label it.
+function staleFix(L, dir) { const now = Date.now(); return L.map(f => { const st = f.status || "";
+  if (/cancel|divert|landed/.test(st)) return f;
+  if (dir === "dep" && !/departed|enroute/.test(st) && !f.dep?.actual) { const t = Date.parse(f.dep?.estimated || f.dep?.scheduled || ""); if (t && now - t > 40 * 60e3) return { ...f, status: "departed", statusText: "Departed (est.)", staleInferred: true }; }
+  if (dir === "arr" && !f.arr?.actual) { const t = Date.parse(f.arr?.estimated || f.arr?.scheduled || ""); if (t && now - t > 45 * 60e3) return { ...f, status: "landed", statusText: "Landed (est.)", staleInferred: true }; }
+  return f; }); }
 api.get("/board/:iata", wrap(async (req, res) => { const iata = req.params.iata.toUpperCase(); const dir = req.query.dir === "arr" ? "arr" : "dep";
   let b; try { b = await Promise.race([board(iata, dir, String(req.query.date || todayLondon())), new Promise((_, rj) => setTimeout(() => rj(Object.assign(new Error("Board source timed out"), { status: 504 })), 25000))]); }
   catch (e) { return res.status(e.status === 504 ? 504 : 502).json({ error: e.status === 504 ? "The airport's timetable took too long to respond. Try again in a minute." : "The airport's timetable is unavailable right now.", detail: String(e.message || e).slice(0, 200), airport: airportOut(AP[iata]) }); }
@@ -835,7 +842,7 @@ api.get("/board/:iata", wrap(async (req, res) => { const iata = req.params.iata.
     const p = predictCore(f, dir === "dep" ? { wxDep: wxAt(wx, t), aptStats: st } : { wxArr: wxAt(wx, t) }); f.pred = { d: p.predictedDelay, on: p.probs.onTime, c: p.confidence, top: p.top, summary: p.summary, factors: p.factors.slice(0, 4) }; }
   // v12.1: only log flights with an outcome (actual time / departed / landed / cancelled); logging every scheduled row of big boards grew state to 7 MB+ and OOMed 512 MB hosts.
   for (const f of b.flights) if (!f.liveOnly && (f.dep?.actual || f.arr?.actual || ["landed", "departed", "cancelled"].includes(f.status))) flogPut(f);
-  warmPhotos(b.flights); res.json({ airport: airportOut(a), dir, ...b }); }));
+  warmPhotos(b.flights); res.json({ airport: airportOut(a), dir, ...b, flights: staleFix(b.flights || [], dir) }); }));
 
 
 // ---- Route-based ADS-B match: many airlines (Jet2 EXS, easyJet EZY...) fly alphanumeric callsigns (EXS8KD), so EXS1747 isn't on ADS-B.

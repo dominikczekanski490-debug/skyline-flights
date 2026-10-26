@@ -1,6 +1,6 @@
 export type Ap = { iata: string; icao?: string; name: string; city?: string; country?: string; lat?: number; lon?: number; tz?: string };
 export type Times = { scheduled?: string | null; estimated?: string | null; actual?: string | null; gate?: string; terminal?: string; baggage?: string };
-export type Flight = { id: string; number: string; date: string; airline?: any; origin?: Ap; destination?: Ap; dep: Times; arr: Times; status?: string; statusText?: string; source?: string;
+export type Flight = { staleInferred?: boolean; id: string; number: string; date: string; airline?: any; origin?: Ap; destination?: Ap; dep: Times; arr: Times; status?: string; statusText?: string; source?: string;
   callsign?: string; aircraft?: { reg?: string; hex?: string; model?: string }; notes?: string; example?: boolean; manual?: boolean; diverted?: Ap; scheduleUnknown?: boolean; updates?: { at: number; text: string }[]; friend?: string };
 // GETs retry twice on network errors, 429 and 5xx (upstream feeds such as adsb.lol/adsb.fi rate-limit), with backoff.
 export const api = async (p: string, o?: RequestInit): Promise<any> => { const get = !o?.method || o.method === "GET";
@@ -51,6 +51,7 @@ export function statusOf(f: Flight, lv?: any): { label: string; cls: "ok" | "bad
   if (s === "landed") return { label: "Landed", cls: "ok" };
   if (s === "enroute" || (lv && typeof lv.alt === "number" && s !== "landed")) return { label: "En route", cls: "air" };
   if (s === "departed") return { label: "Departed", cls: "air" };
+  { const t = Date.parse(f.dep?.estimated || f.dep?.scheduled || ""); if (!f.dep?.actual && t && Date.now() - t > 40 * 60e3 && /boarding|gate|scheduled|delayed|^$/.test(s)) return { label: "Departed (est.)", cls: "air" }; }
   if (s === "boarding") return { label: /final/i.test(f.statusText || "") ? "Final call" : /closing/i.test(f.statusText || "") ? "Gate closing" : "Boarding", cls: "warn" };
   if (s === "gate") return { label: /closed/i.test(f.statusText || "") ? "Gate closed" : "Go to gate", cls: "warn" };
   if (s === "delayed" || (d != null && d >= 15)) return { label: d != null && d > 0 ? `Delayed +${d}m` : "Delayed", cls: "bad" };

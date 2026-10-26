@@ -70,6 +70,7 @@ export function status(f: any, dir: string) {
   if (f.status === "cancelled" || /cancel/.test(s)) return { txt: "Cancelled", k: "bad" };
   if (f.status === "diverted" || /divert/.test(s)) return { txt: "Diverted", k: "bad" };
   if (dir === "dep") {
+    { const bt = Date.parse(t.estimated || t.scheduled || ""); if (f.status === "departed" || f.status === "enroute" || t.actual || (bt && Date.now() - bt > 40 * 60e3)) return { txt: (t.actual || f.status === "departed" && !f.staleInferred ? "Departed" : "Departed (est.)") + (t.actual ? at(t.actual) : ""), k: "ok" }; }
     if (/deallocat/i.test(t.gateAction || f.gateAction || "")) return (d ?? 0) >= 30 ? { txt: "Delayed" + at(t.estimated), k: "warn" } : { txt: "Gate closed", k: "bad" };
     if (/final call/.test(s) || /final call/i.test(t.gateAction || f.gateAction || "")) return { txt: "Final call" + gs, k: "blink bad" };
     if (/flight closing/.test(s)) return { txt: "Flight closing" + gs, k: "blink bad" };
