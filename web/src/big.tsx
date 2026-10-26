@@ -48,7 +48,7 @@ export function NextHero({ f, open, dayof, noMode }: { f: Flight; open: () => vo
 export function PlaneHere({ f, hex, reg }: { f: Flight; hex?: string; reg?: string }) {
   const [d, setD] = useState<any>(null); const [err, setErr] = useState("");
   useEffect(() => { if (!hex && !reg) return; let on = true; const go = () => api(`/plane-here?hex=${hex || ""}&reg=${reg || ""}&at=${f.origin?.iata || ""}`).then(r => { on && (setD(r), setErr("")); }).catch(e => on && setErr(e.message)); go(); const i = setInterval(go, 240e3); const v = () => document.visibilityState === "visible" && go(); document.addEventListener("visibilitychange", v); return () => { on = false; clearInterval(i); document.removeEventListener("visibilitychange", v); }; }, [hex, reg]);
-  if (!hex && !reg) return <div className="card"><h3>Is my plane here yet?</h3><div className="muted sm">No aircraft assigned to {f.number} yet. Airlines usually assign one a few hours before departure; this fills in automatically.</div></div>;
+  if (!hex && !reg) return <div className="card"><h3>Is my plane here yet?</h3><div className="muted sm">The exact aircraft for {f.number} isn't assigned yet — airlines usually do it 2–3 hours before departure. Skyline checks the airport board, live transponders and the inbound flight in the background, so this fills in on its own.</div></div>;
   const pre = phaseOf(f) === "pre";
   return <div className="card"><div className="row between"><h3 className="m0">Is my plane here yet?</h3><span className="srcb live">ADS-B</span></div>
     <div className="muted sm">{reg || hex}{d?.type ? " · " + d.type : ""}</div>

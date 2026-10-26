@@ -38,7 +38,7 @@ export function FindMyPlane({ f, reg, hex, type, flights, inb }: any) {
   return <div className="fmp">
     <div className="fmp-h"><span className="fmp-t">Find My Plane</span>{flown > 0 && <span className="fmp-n">You flew {flown} time{flown > 1 ? "s" : ""} on this aircraft</span>}</div>
     <Livery code={f.airline?.iata} icao={f.airline?.icao} name={f.airline?.name} type={type} reg={reg} hex={hex} />
-    {!reg && !hex && <div className="fmp-na">Aircraft not assigned yet</div>}
+    {!reg && !hex && <div className="fmp-na">Aircraft not assigned yet — usually 2–3 h before departure. Skyline keeps checking.</div>}
     {prev && <div className={"fmp-pill " + (prev.status === "landed" ? (pd != null && pd > 14 ? "red" : "green") : "blue")}>{prev.status === "landed" ? `Inbound aircraft arrived · ${pd == null ? "" : pd > 4 ? `${pd}m late` : "On time"}` : `Inbound aircraft ${prev.number} from ${prev.origin?.iata} · ${prev.statusText || prev.status}`}</div>}
     {(reg || hex) && <div className="fmp-legs"><div className="fmp-lab">Where this aircraft has been</div>
       {!h ? <div className="skel" style={{ height: 70 }} /> : !legs.length ? <div className="faint sm">No recent flight history available</div> :

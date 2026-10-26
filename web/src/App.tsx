@@ -4,6 +4,7 @@ import { usePoll, Refreshed, TRACK_MS, markTracked, LiveLine } from "./refresh";
 import { ToolsHub, FeatureList, TOOLS, BOARD_FEATURES } from "./tools";
 import { TerminalBoard, status as boardStatus } from "./terminal";
 import { mark, toast, Boundary } from "./guard";
+import { PlaneFrom, useAircraft } from "./inbound";
 import { AssistantFeed, TodayCard, NLSearch, CompCard, shareImage, exportIcs as icsOf, AirportGuide } from "./assist";
 import { NextHero, PlaneHere, Facts, GlobalSearch, DayOf, phaseOf } from "./big";
 import { useRef, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -108,6 +109,7 @@ function FlightCard({ f, onClick, pred }: { f: Flight; onClick: () => void; pred
     {!f.example && <EtaLine f={f} live={lv} compact />}
     {!f.example && <Thumb f={f} type={lv?.type} />}
     {p && <PredictCard compact f={f} p={p} onWhy={() => (window as any).__why?.(f)} />}
+    {pred && !f.example && !f.friend && until != null && until > -30 && until < 18 * 60 && <PlaneFrom f={f} compact />}
   </div>;
 }
 
@@ -117,7 +119,7 @@ function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => 
     <Greeting />
     <GlobalSearch push={push} onFlight={f => push({ t: "flight", f })} />
     {(() => { const nx = list.filter(f => !f.example && phaseOf(f) !== "cancelled" && !(f.status === "landed" && Date.now() - +new Date(f.arr.actual || f.arr.scheduled || 0) > 3 * 3600e3)).sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1)[0];
-      return nx ? <NextHero f={nx} open={() => open(nx)} dayof={() => push({ t: "dayof", f: nx })} /> : null; })()}
+      return nx ? <><NextHero f={nx} open={() => open(nx)} dayof={() => push({ t: "dayof", f: nx })} /><div className="px pf-hero"><PlaneFrom f={nx} compact /></div></> : null; })()}
     <TodayCard flights={list} />
     <AssistantFeed flights={list} push={push} />
     <NLSearch open={f => push({ t: "flight", f })} />
@@ -277,7 +279,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   const [wx, setWx] = useState<any[]>([]); const [ac, setAc] = useState<any>(null); const [fc, setFc] = useState<any>(null); const [inb, setInb] = useState<any>(null); const [al, setAl] = useState<any>(f.airline);
   useEffect(() => { Promise.all([f.origin, f.destination].map((a: Ap) => a?.lat ? api(`/weather?lat=${a.lat}&lon=${a.lon}`).catch(() => null) : null)).then(setWx);
     if (!f.example) api(`/forecast/${f.number}`).then(setFc).catch(() => {}); if (f.airline?.iata && !f.airline.links) api("/airline/" + f.airline.iata).then(setAl).catch(() => {}); }, [f.id]);
-  const hex = lv?.hex || f.aircraft?.hex, reg = lv?.reg || f.aircraft?.reg;
+  const rs = useAircraft(f); const hex = lv?.hex || f.aircraft?.hex, reg = lv?.reg || f.aircraft?.reg || rs?.reg || undefined;
   useEffect(() => { if (hex || reg) api(`/aircraft?hex=${hex || ""}&reg=${reg || ""}`).then(setAc).catch(() => {}); if (reg) api(`/inbound?reg=${reg}&date=${f.date}`).then(setInb).catch(e => setInb({ err: e.message, needsKey: e.needsKey })); }, [hex, reg]);
   const tracked = flights.some((x: Flight) => x.id === f.id);
   const [fresh, setFresh] = useState<any>(null);
@@ -313,7 +315,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
       {fc && fc.observed ? <><div className="grid3 mt8"><Stat label="Late" v={`${fc.latePct}%`} /><Stat label="Average of Late" v={`${fc.avgLate}m`} /><Stat label="Observed" v={`${fc.observed} Flights`} /></div>
         {[["Early", fc.buckets.early, "#2f9e44"], ["On Time", fc.buckets.ontime, "#69db7c"], ["15m late", fc.buckets.l15, "#fcc419"], ["30m late", fc.buckets.l30, "#fd7e14"], ["45m+ late", fc.buckets.l45, "#fa5252"], ["Canceled", fc.buckets.cancelled, "#c92a2a"], ["Diverted", fc.buckets.diverted, "#862e2e"]].map(([l, v, c]: any) => <div key={l} className="bar"><span>{l}</span><div><i style={{ width: `${v / fc.observed * 100}%`, background: c }} /></div><b>{Math.round(v / fc.observed * 100)}%</b></div>)}
         <div className="faint sm mt8">{fc.source}</div></> : <div className="muted sm mt8">No recorded history yet. Skyline records every MAN/STN/EMA flight outcome every 30 min, so this fills up over the coming days (up to 60 days).</div>}</div>
-    <div className="card plane"><h3>Where's My Plane?</h3><div className="muted">{ac?.type || lv?.type || f.aircraft?.model || "Aircraft not assigned yet"}{reg && ` • ${reg}`}</div>
+    <PlaneFrom f={f} /><div className="card plane"><h3>Where's My Plane?</h3><div className="muted">{ac?.type || lv?.type || f.aircraft?.model || rs?.reg && rs.type || (rs?.typicalType ? `Typical: ${rs.typicalType.type}` : "Aircraft usually assigned 2–3 h before departure")}{reg && ` • ${reg}`}</div>
       <Livery small code={f.airline?.iata} icao={f.airline?.icao} name={f.airline?.name} type={ac?.icaoType || lv?.type || ac?.type || f.aircraft?.model} reg={reg} hex={hex} />
       <div className="chain"><div className="ci on"><b>This Flight</b><span style={{ color: lateColor(dd) }}>{f.status === "departed" || f.status === "landed" ? `Departed ${lateLabel(dd)}` : lateLabel(dd) || "Scheduled"}</span></div>
         {inb?.flights?.filter((x: Flight) => x.number !== f.number).map((x: Flight) => <div key={x.id} className="ci"><b>{x.number} {x.origin?.iata} → {x.destination?.iata}</b><span style={{ color: lateColor(delay(x.arr)) }}>{x.statusText} {lateLabel(delay(x.arr))}</span></div>)}
