@@ -473,6 +473,22 @@ async function budBoard(apt, dir, ymd) { const tz = "Europe/Budapest"; const D =
       const est = x.expected && x.expected !== x.planned ? localToUtc(tz, d, x.expected) : undefined; const num = (x.flightNumber || "").replace(/\s+/g, "");
       return mkFlight(apt, dir, apByName2(x.city || x.destination), x.city || x.destination, num, alFromNum(num), x.airline?.name, { sched, est: st === "departed" || st === "landed" ? undefined : est, act: st === "departed" || st === "landed" ? est || sched : undefined, gate: x.gate || undefined, term: x.terminal || undefined, belt: x.baggageClaim || undefined }, rm, st, "Budapest Airport official flight board (bud.hu)", { codeshares: (x.codeshareFlights || []).map(c => c.flightNumber || c).join(", ") || undefined, reg: x.registration || undefined }); })
     .filter(f => inDay(f.dep?.scheduled || f.arr?.scheduled, ymd)); }
+// Warsaw Chopin (lotnisko-chopina.pl) — server-rendered list the site pages with ?page=N (20 rows/page, chronological)
+async function wawBoard(apt, dir, ymd) { const tz = "Europe/Warsaw"; const op = dir === "dep" ? "d" : "a";
+  const pages = await cached(`waw:${dir}`, 240, async () => { const out = []; for (let p = 1; p <= 40; p++) { const h = await getText2(`https://www.lotnisko-chopina.pl/en/arrivals-and-departures/?page=${p}&operation=${op}`, { headers: { "x-requested-with": "XMLHttpRequest", "user-agent": "Mozilla/5.0 (compatible; Skyline personal flight tracker)" } }); out.push(h.split("Wersja desktop").slice(1)); if (!h.includes('id="load-more"')) break; await new Promise(z => setTimeout(z, 250)); } return out.flat(); });
+  const col = (r, c) => { const m = r.match(new RegExp(`column-${c}[^"]*"[^>]*>([\\s\\S]*?)</div>`)); return m ? m[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : ""; };
+  const now = new Date(); const nowHm = now.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit" }); const today = now.toLocaleDateString("en-CA", { timeZone: tz });
+  const dayAdd = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+  let d = null, prev = null; const res = [];
+  for (const r of pages) { const tm = (r.match(new RegExp(`column-time[^"]*${dir === "dep" ? "departures" : "arrivals"}-col">\\s*(\\d\\d:\\d\\d)`)) || [])[1]; if (!tm) continue;
+    if (!d) d = tm > nowHm && (+tm.slice(0, 2)) - (+nowHm.slice(0, 2)) > 6 ? dayAdd(today, -1) : today; else if (prev && tm < prev && (+prev.slice(0, 2)) - (+tm.slice(0, 2)) > 6) d = dayAdd(d, 1); prev = tm;
+    const od = col(r, "origin-destination"); const ia = (od.match(/\(([A-Z]{3})\)\s*$/) || [])[1]; const nm = od.replace(/\s*\([A-Z]{3}\)\s*$/, "");
+    const num = col(r, "flight-no").split(/[,/]/)[0].replace(/\s+/g, ""); const alName = (r.match(/airline-logo[^>]*alt="([^"]*)"|alt="([^"]*)"[^>]*airline-logo/) || []).slice(1).find(Boolean);
+    const rm = col(r, "status") || "Scheduled"; const st = genStatus(rm, dir); const ex = (col(r, "expected").match(/\d\d:\d\d/) || [])[0];
+    const sched = localToUtc(tz, d, tm); let est = ex ? localToUtc(tz, d, ex) : undefined; if (est && +new Date(est) < +new Date(sched) - 12 * 36e5) est = new Date(+new Date(est) + 864e5).toISOString();
+    res.push(mkFlight(apt, dir, ia || apByName2(nm), nm, num, alFromNum(num), alName, { sched, est: st === "departed" || st === "landed" ? undefined : est, act: st === "departed" || st === "landed" ? est : undefined, gate: dir === "dep" ? col(r, "gate") || undefined : undefined, term: col(r, "terminal") || undefined, belt: dir === "arr" ? col(r, "belt").replace(/^Tape\s*/i, "") || undefined : undefined }, rm, st, "Warsaw Chopin Airport official flight board (lotnisko-chopina.pl)")); }
+  return res.filter(f => inLocalDay(f.dep?.scheduled || f.arr?.scheduled, apt, ymd)); }
+OFFICIAL.WAW = { fn: wawBoard, label: "Warsaw Chopin official flight board", provider: "Official airport feed (Polish Airports)", site: "lotnisko-chopina.pl" };
 OFFICIAL.BUD = { fn: budBoard, label: "Budapest Airport official flight board", provider: "Official airport feed (Budapest Airport)", site: "bud.hu" };
 for (const c of SWEDAVIA) if (AP[c]) OFFICIAL[c] = { fn: swedaviaBoard, label: "Swedavia official flight board", provider: "Official airport feed (Swedavia)", site: "swedavia.com" };
 for (const c of FINAVIA) if (AP[c]) OFFICIAL[c] = { fn: finaviaBoard, label: "Finavia official flight board", provider: "Official airport feed (Finavia)", site: "finavia.fi" };
@@ -684,7 +700,7 @@ const CE_BLOCKED = {
   HAJ: "No public flight-data endpoint found on the airport site", LEJ: "No public flight-data endpoint found on the airport site", DRS: "No public flight-data endpoint found on the airport site",
   ZRH: "Blocked by airport site: captcha on flight-data API", GVA: "Blocked by airport site: captcha widget, no public data endpoint", BSL: "No public flight-data endpoint found on the airport site",
   SZG: "No public flight-data endpoint found on the airport site (board loaded client-side)", INN: "No public flight-data endpoint found on the airport site", GRZ: "Airport site did not respond to server requests", KLU: "No public flight-data endpoint found on the airport site", LNZ: "No public flight-data endpoint found on the airport site",
-  WAW: "No public flight-data endpoint found on the airport site (board loaded client-side)", KRK: "Blocked by airport site: reCAPTCHA-protected board", KTW: "No public flight-data endpoint found on the airport site (CSRF-protected API)", WRO: "No public flight-data endpoint found on the airport site",
+KRK: "Blocked by airport site: reCAPTCHA-protected board", KTW: "No public flight-data endpoint found on the airport site (CSRF-protected API)", WRO: "No public flight-data endpoint found on the airport site",
   BUD: "No public flight-data endpoint found on the airport site (session-bound API)", BRQ: "No public flight-data endpoint found on the airport site", OSR: "Airport site did not respond to server requests", LJU: "No public flight-data endpoint found on the airport site",
   ZAG: "No public flight-data endpoint found on the airport site", SPU: "Airport site did not respond to server requests", DBV: "No public flight-data endpoint found on the airport site", ZAD: "Airport site publishes a seasonal timetable only (no day-of board)",
   PUY: "No public flight-data endpoint found on the airport site", RJK: "No public flight-data endpoint found on the airport site", FMM: "Airport site did not respond to server requests", FMO: "No public flight-data endpoint found on the airport site",
@@ -796,7 +812,8 @@ const kmTo = (a, lat, lon) => { const R = 6371, r = x => x * Math.PI / 180, dl =
 // ---------- Rolling ADS-B observation log for airports without a free timetable feed ----------
 // Samples aircraft within 25nm of tracked airports, keeps per-aircraft tracks and derives observed events
 // (departed / landed) with real observed times. In memory (6h), mirrored to Upstash KV when configured.
-const OBS = {}; const OBS_KEEP = 6 * 3600e3; const EV_KEEP = 26 * 3600e3; // aircraft positions 6 h; take-off/landing events 26 h (about 1 MB) const TOP_LIVE = ["LGW", "EDI", "GLA", "BHX", "BRS", "NCL", "LBA", "LPL", "CWL", "ABZ", "LCY", "SOU", "JER", "IOM", "BFS"];
+const OBS = {}; const OBS_KEEP = 6 * 3600e3; const EV_KEEP = 26 * 3600e3; // aircraft positions 6 h; take-off/landing events 26 h (about 1 MB)
+const TOP_LIVE = ["LGW", "EDI", "GLA", "BHX", "BRS", "NCL", "LBA", "LPL", "CWL", "ABZ", "LCY", "SOU", "JER", "IOM", "BFS"];
 const REQ = {}; // iata -> last requested ms
 const obsOf = c => OBS[c] || (OBS[c] = { iata: c, ac: {}, events: [], lastSeen: null, sampledAt: null, backfilled: 0 });
 const nearAir = (a, nm = 25) => cached(`near:${a.iata}:${nm}`, 45, () => adsbGate(async () => { for (const u of [`https://api.adsb.lol/v2/point/${a.lat}/${a.lon}/${nm}`, `https://api.airplanes.live/v2/point/${a.lat}/${a.lon}/${nm}`, `https://opendata.adsb.fi/api/v2/lat/${a.lat}/lon/${a.lon}/dist/${nm}`]) { try { const r = await getJSON(u); if (r.ac || r.aircraft) return { ac: r.ac || r.aircraft, src: u.includes("lol") ? "adsb.lol" : u.includes("airplanes") ? "airplanes.live" : "adsb.fi" }; } catch {} } throw new Error("no ADS-B source"); }));

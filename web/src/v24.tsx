@@ -30,7 +30,10 @@ const grade = (p: P) => p.err || !p.n ? "na" : p.canc / p.n > .1 || p.avg > 30 ?
 export function AirportPulse({ push }: { push: (v: any) => void }) {
   const [list] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("sk.pulse") || "") } catch { return DEF } });
   const [data, setData] = useState<Record<string, P>>({});
-  useEffect(() => { let on = true; (async () => { for (const c of list) { const p = await pulse(c).catch(e => ({ iata: c, n: 0, dep: 0, canc: 0, late: 0, avg: 0, err: String(e?.message || e) })); if (on) setData(d => ({ ...d, [c]: p })); } })(); return () => { on = false; }; }, [list.join()]);
+  useEffect(() => { let on = true; const C: Record<string, { at: number; p: P }> = (() => { try { return JSON.parse(sessionStorage.getItem("sk.pulse.c") || "{}"); } catch { return {}; } })();
+    const fresh = Object.fromEntries(list.filter(c => C[c] && Date.now() - C[c].at < 5 * 60e3).map(c => [c, C[c].p])); setData(fresh);
+    list.filter(c => !fresh[c]).forEach(c => pulse(c).catch(e => ({ iata: c, n: 0, dep: 0, canc: 0, late: 0, avg: 0, err: String(e?.message || e) }) as P).then(p => { if (!p.err) { C[c] = { at: Date.now(), p }; try { sessionStorage.setItem("sk.pulse.c", JSON.stringify(C)); } catch {} } if (on) setData(d => ({ ...d, [c]: p })); }));
+    return () => { on = false; }; }, [list.join()]);
   return <div className="pulse">
     <div className="pulse-h"><b>Airport pulse</b><span>Live, from each airport's own board · rule-based summary</span></div>
     {list.map(c => { const p = data[c]; return <button key={c} className={`pulse-r ${p ? grade(p) : "load"}`} onClick={() => push({ t: "board", iata: c })}>
