@@ -554,7 +554,7 @@ const htmlDec = s => s.replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&
 // Gdańsk: the airport's own board page embeds the full JSON schedule in a React props attribute.
 async function gdnBoard(apt, dir, ymd) { return cached(`gdn:${dir}:${ymd}`, 180, async () => {
   const h = await ceGet(`https://www.airport.gdansk.pl/en/flights/current-${dir === "dep" ? "departures" : "arrivals"}`);
-  const key = dir === "dep" ? "departures" : "arrivals"; const m = [...h.matchAll(/react-props-value="([^"]+)"/g)].find(x => x[1].includes("&quot;" + key + "&quot;:&quot;")); if (!m) throw new Error("GDN board data not found"); const props = JSON.parse(htmlDec(m[1]));
+  const key = dir === "dep" ? "departures" : "arrivals"; const m = [...h.matchAll(/react-props-value="([^"]+)"/g)].find(x => x[1].includes("&quot;" + key + "&quot;:&quot;")); if (!m) throw new Error("GDN board data not found"); const props = JSON.parse(krkDec(m[1]));
   const raw = props[dir === "dep" ? "departures" : "arrivals"]; const rows = typeof raw === "string" ? JSON.parse(raw) : raw || [];
   const out = rows.map(x => { const other = x.destination || x.origin || x.from; const num = (x.flight || "").replace(/\s+/g, ""); const sched = x.dateTime && new Date(x.dateTime).toISOString(); const st = ceStatus(x.remarks);
     const est = x.expectedDateTime ? new Date(x.expectedDateTime).toISOString() : undefined; const act = x.landingTime ? new Date(x.landingTime).toISOString() : undefined;
@@ -627,6 +627,19 @@ const EU_BLOCKED = {"AMS": "Blocked by airport site: Cloudflare challenge", "BRE
 const EU_CANDIDATES = { AMS: "Schiphol Public Flight API (free developer key)", HAM: "Hamburg Airport API portal (free key)", FRA: "already official", MAD: "Aena (no public API found; page loads data dynamically, not identified)", LIS: "ANA/VINCI (no public endpoint identified)" };
 // Every commercial airport in the UK, Crown Dependencies and Republic of Ireland
 const UKI = { "England": "LHR LGW STN LTN LCY SEN MAN BHX BRS NCL LBA LPL EMA BOH SOU EXT NQY NWI MME HUY DSA BLK CAX ISC LEQ BZZ QUG OXF BQH FAB ESH LYX".split(" "), "Scotland": "EDI GLA ABZ INV PIK DND SYY KOI LSI BRR BEB TRE ILY CAL WIC LWK NRL PPW SOY WRY EOI FIE FOA OUK CSA COL".split(" "), "Wales": ["CWL", "VLY"], "Northern Ireland": ["BFS", "BHD", "LDY"], "Channel Islands": ["JER", "GCI", "ACI"], "Isle of Man": ["IOM"], "Ireland": "DUB ORK SNN NOC KIR WAT SXL IOR CFN DUB".split(" ").filter((x, i, a) => a.indexOf(x) === i) };
+
+// Kraków: krakowairport.pl renders its public departures/arrivals board server-side (Livewire snapshot JSON in the page). Plain public page; no captcha is involved in reading it.
+const krkDec = t => t.replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+async function krkBoard(apt, dir, ymd) {
+  const all = await cached(`krk:${dir}`, 180, async () => { const h = await getText(`https://krakowairport.pl/pl/pasazer/loty/${dir === "dep" ? "odloty" : "przyloty"}`, { headers: { accept: "text/html" } }); const out = [];
+    for (const m of h.matchAll(/wire:snapshot="([^"]+)"/g)) { let d; try { d = JSON.parse(krkDec(m[1])); } catch { continue; } const fl = d?.data?.flights?.[0]; if (!Array.isArray(fl)) continue;
+      for (const [x] of fl) { if (!x?.flight_no) continue; const iso = v => { const t = Array.isArray(v) ? v[0] : v; return t ? new Date(t).toISOString() : undefined; };
+        const rmk = x.remarks || (x.is_cancelled ? "CANCELLED" : "SCHEDULED"); const st = x.is_cancelled ? "cancelled" : genStatus(rmk, dir); const done = st === "departed" || st === "landed";
+        const ex = iso(x.expected_time) || iso(x.arrival_datetime_pl); const num = x.flight_no.replace(/\s+/g, "");
+        out.push(mkFlight(apt, dir, dir === "dep" ? x.destination_iata : x.origin_iata, dir === "dep" ? x.destination : x.origin, num, num.slice(0, 2), x.airline, { sched: iso(x.scheduled_datetime_pl), est: done ? undefined : ex, act: done ? ex : undefined, gate: x.gate_id || undefined, term: x.terminal || undefined }, rmk[0] + rmk.slice(1).toLowerCase(), st, "Kraków Airport official flight board (krakowairport.pl)")); } }
+    return out; });
+  return all.filter(f => inDay((dir === "dep" ? f.dep : f.arr).scheduled, ymd)); }
+if (AP.KRK) OFFICIAL.KRK = { fn: krkBoard, label: "Kraków Airport official flight board", provider: "Official airport feed", site: "krakowairport.pl" };
 const officialBoard = (apt, dir, ymd) => OFFICIAL[apt].fn(apt, dir, ymd);
 
 // ---------- AeroDataBox (optional key, RapidAPI) ----------
