@@ -3,6 +3,7 @@ import { Livery, PLANE_CREDITS, useFlightPhoto, photoLabel } from "./livery";
 import { usePoll, Refreshed, TRACK_MS, markTracked, LiveLine } from "./refresh";
 import { ToolsHub, FeatureList, TOOLS, BOARD_FEATURES } from "./tools";
 import { TerminalBoard, status as boardStatus } from "./terminal";
+import { mark, toast, Boundary } from "./guard";
 import { AssistantFeed, TodayCard, NLSearch, CompCard, shareImage, exportIcs as icsOf, AirportGuide } from "./assist";
 import { NextHero, PlaneHere, Facts, GlobalSearch, DayOf, phaseOf } from "./big";
 import { useRef, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -75,7 +76,7 @@ export default function App() {
     {!ov.length && <nav className="tabbar"><div className="pill"><i className="tabind" style={{ transform: `translateX(${["mine","friends","tracked","passport"].indexOf(tab) * 100}%)` }} />
       {([["mine", "My Flights", I.plane], ["friends", "Friends", I.friends], ["tracked", "Tracked", I.clock], ["passport", "Passport", I.passport]] as const).map(([k, l, ic]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{ic}<span>{l}</span></button>)}
     </div><button className="searchbtn" onClick={() => push({ t: "search" })}>{I.search}</button></nav>}
-    {ov.map((o, i) => <Overlay key={i + o.t} o={o} z={20 + i} close={pop} push={push} flights={flights} setFlights={setFlights} upd={upd} live={live} theme={theme} setTheme={setTheme} tab={tab} />)}
+    {ov.map((o, i) => <Boundary key={i + o.t} label="screen"><Overlay o={o} z={20 + i} close={pop} push={push} flights={flights} setFlights={setFlights} upd={upd} live={live} theme={theme} setTheme={setTheme} tab={tab} /></Boundary>)}
   </div>;
 }
 
@@ -208,7 +209,8 @@ function SearchView({ x, push, setFlights, close }: any) {
   const [mode, setMode] = useState<"flight" | "route" | "airport">("flight"); const [to, setTo] = useState("");
   useEffect(() => { if (mode !== "flight" && q.length >= 2) api("/airports/search?q=" + q).then(setAps).catch(() => {}); else setAps([]); }, [q, mode]);
   const go = async () => { setBusy(true); setRes(null); try { if (mode === "flight") setRes(await api(`/flight/${q.replace(/\s/g, "")}?date=${date}`)); else if (mode === "route") setRes({ list: (await api(`/route?from=${q}&to=${to}&date=${date}`)).flights }); } catch (e: any) { setRes({ error: e.message, needsKey: e.needsKey }); } setBusy(false); };
-  const add = (f: Flight, friend?: boolean) => { const n = { ...f, id: f.id || `${f.number}-${date}`, date }; setFlights((l: Flight[]) => [...l.filter(y => !(y.id === n.id && !!y.friend === !!friend)), friend ? { ...n, friend: "Friend" } : n]); close(); };
+  const add = (f: Flight, friend?: boolean) => { const n = { ...f, id: f.id || `${f.number}-${date}`, date }; mark("add " + n.number); const up = (l: Flight[]) => [...l.filter(y => !(y.id === n.id && !!y.friend === !!friend)), friend ? { ...n, friend: "Friend" } : n];
+    try { save(up(load())); } catch { /* quota */ } setFlights(up); close(); toast(`${n.number} added to ${friend ? "Friends" : "My Flights"}`, 2500); };
   return <><Head title="Search" right={x} />
     <div className="segs">{(["flight", "route", "airport"] as const).map(m => <button key={m} className={mode === m ? "on" : ""} onClick={() => { setMode(m); setRes(null); }}>{m === "flight" ? "Flight #" : m === "route" ? "Route" : "Airport"}</button>)}</div>
     <div className="px col g8"><input className="field" autoFocus placeholder={mode === "flight" ? "e.g. LS965, FR2141, BA1393" : "From airport (e.g. MAN)"} value={q} onChange={e => setQ(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && go()} />

@@ -27,7 +27,7 @@ const planeSvg = (rot: number, color = "#fff") => `<div style="transform:rotate(
 
 export default function MapView({ flights, live, style, radar, focus, locate, onPlane }: { flights: Flight[]; live: Record<string, any>; style: string; radar: boolean; focus?: Flight | null; locate: number; onPlane?: (id: string) => void }) {
   const el = useRef<HTMLDivElement>(null), map = useRef<maplibregl.Map | undefined>(undefined), marks = useRef<maplibregl.Marker[]>([]);
-  useEffect(() => { map.current = new maplibregl.Map({ container: el.current!, style: STYLES[style], center: [-2.27, 53.35], zoom: 7.5, attributionControl: { compact: true } }); return () => map.current?.remove(); }, []);
+  useEffect(() => { map.current = new maplibregl.Map({ container: el.current!, style: STYLES[style], center: [-2.27, 53.35], zoom: 7.5, attributionControl: { compact: true }, pixelRatio: Math.min(window.devicePixelRatio || 1, /iPhone|iPad/.test(navigator.userAgent) ? 2 : 3), maxTileCacheSize: 120, fadeDuration: 0 } as any); return () => map.current?.remove(); }, []);
   useEffect(() => { map.current?.setStyle(STYLES[style]); }, [style]);
   const draw = () => {
     const m = map.current; if (!m || !m.isStyleLoaded()) return;
