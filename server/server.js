@@ -1298,6 +1298,72 @@ api.get("/airlines/search", (req, res) => { const q = String(req.query.q || "").
   res.json(Object.values(AL_ICAO).filter(a => (a.iata || "").toLowerCase() === q || (a.icao || "").toLowerCase() === q || (a.callsign || "").toLowerCase().includes(q) || (a.name || "").toLowerCase().includes(q)).slice(0, 30)); });
 api.get("/fx", wrap(async (req, res) => { const b = String(req.query.base || "GBP").toUpperCase().replace(/[^A-Z]/g, ""); res.json({ ...(await cached("fx:" + b, 3600, () => getJ("https://api.frankfurter.dev/v1/latest?base=" + b))), source: "Frankfurter (ECB reference rates)" }); }));
 
+// ---------- v19: natural-language search (rules, no LLM), observed on-time stats, airport guide ----------
+const NL_COUNTRY_ALIAS = { uk: "United Kingdom", britain: "United Kingdom", england: "United Kingdom", usa: "United States", us: "United States", america: "United States", holland: "Netherlands", czechia: "Czech Republic", turkiye: "Turkey", "canary islands": "Spain", canaries: "Spain", tenerife: "Spain", mallorca: "Spain", majorca: "Spain", ibiza: "Spain" };
+const NL_COUNTRIES = () => (NL_COUNTRIES.c ||= [...new Set(Object.values(AP).map(a => a.country).filter(Boolean))]);
+function nlFind(word) { const w = word.trim().toLowerCase(); if (!w) return null;
+  if (/^[a-z]{3}$/.test(w) && AP[w.toUpperCase()]) return { kind: "airport", iata: w.toUpperCase(), label: AP[w.toUpperCase()].city || AP[w.toUpperCase()].name };
+  const alias = NL_COUNTRY_ALIAS[w]; const cn = alias || NL_COUNTRIES().find(c => c.toLowerCase() === w); if (cn && !["tenerife", "mallorca", "majorca", "ibiza"].includes(w)) return { kind: "country", country: cn, label: cn };
+  const cities = Object.values(AP).filter(a => a.iata && (a.city || "").toLowerCase() === w); if (cities.length) { const big = cities.sort((a, b) => (OFFICIAL[b.iata] ? 1 : 0) - (OFFICIAL[a.iata] ? 1 : 0))[0]; return { kind: "city", city: big.city, iatas: cities.map(a => a.iata), iata: big.iata, label: big.city }; }
+  if (alias) return { kind: "country", country: alias, label: alias };
+  const nm = Object.values(AP).find(a => a.iata && (a.name || "").toLowerCase().includes(w) && w.length > 4); if (nm) return { kind: "airport", iata: nm.iata, label: nm.name };
+  return null; }
+function nlParse(q) { const s = " " + String(q).toLowerCase().replace(/[^a-z0-9: ]/g, " ").replace(/\s+/g, " ") + " "; const out = { q, dir: "dep", day: 0, from: null, to: null, win: null, airline: null, notes: [] };
+  if (/ tomorrow /.test(s)) out.day = 1; if (/ yesterday /.test(s)) out.day = -1;
+  const W = { "early morning": [4, 8], morning: [5, 12], afternoon: [12, 17], evening: [17, 22], night: [20, 24], tonight: [17, 24] }; for (const k in W) if (s.includes(" " + k + " ")) { out.win = W[k]; out.winLabel = k; break; }
+  const am = s.match(/ (?:after|from) (\d{1,2})(?::(\d\d))? ?(am|pm)? /); if (am && !out.win) { let h = +am[1] + (am[3] === "pm" && +am[1] < 12 ? 12 : 0); out.win = [h, 24]; out.winLabel = "after " + h + ":00"; }
+  const bm = s.match(/ before (\d{1,2})(?::(\d\d))? ?(am|pm)? /); if (bm) { let h = +bm[1] + (bm[3] === "pm" && +bm[1] < 12 ? 12 : 0); out.win = [out.win?.[0] ?? 0, h]; out.winLabel = (out.winLabel ? out.winLabel + ", " : "") + "before " + h + ":00"; }
+  if (/ (arrivals?|arriving|landing) /.test(s)) out.dir = "arr";
+  const tok = (re) => { const m = s.match(re); return m ? m[1].trim() : null; };
+  const stop = "(?= tomorrow | today | yesterday | this | morning | afternoon | evening | night | tonight | after | before | on | with | by | from | to | into | $)";
+  let fr = tok(new RegExp(" from ([a-z ]+?)" + stop)), to = tok(new RegExp(" (?:to|into) ([a-z ]+?)" + stop));
+  if (!fr && !to) { const m = s.match(/^ ([a-z]{3}) ([a-z]{3}) /); if (m) { fr = m[1]; to = m[2]; } }
+  if (fr) out.from = nlFind(fr) || (out.notes.push(`Didn't recognise "${fr}"`), null); if (to) out.to = nlFind(to) || (out.notes.push(`Didn't recognise "${to}"`), null);
+  const al = Object.values(AL).find(a => a.active && a.name && a.name.length > 3 && s.includes(" " + a.name.toLowerCase() + " ")); if (al) out.airline = { iata: al.iata, name: al.name };
+  return out; }
+api.get("/nlsearch", wrap(async (req, res) => { const p = nlParse(String(req.query.q || "").slice(0, 200));
+  // need a board to read from: origin airport for departures, destination airport for arrivals
+  let base = p.dir === "dep" ? p.from : p.to, other = p.dir === "dep" ? p.to : p.from;
+  if ((!base || base.kind === "country") && other && other.kind !== "country") { p.dir = p.dir === "dep" ? "arr" : "dep"; [base, other] = [other, base]; p.notes.push("Read from the " + (p.dir === "arr" ? "arrivals" : "departures") + " board at " + base.label); }
+  if (!base || base.kind === "country") return res.json({ parsed: p, flights: [], note: "Name a departure airport or city, e.g. \"flights from MAN to Spain tomorrow morning\"." });
+  const iata = base.iata, a = AP[iata]; const d = new Date(Date.now() + p.day * 86400e3).toLocaleDateString("en-CA", { timeZone: a?.tz || "Europe/London" });
+  let b; try { b = await board(iata, p.dir, d); } catch (e) { return res.json({ parsed: p, flights: [], board: iata, note: "The " + iata + " board is unavailable right now (" + String(e.message || e).slice(0, 80) + ")." }); }
+  const hour = iso => iso ? +new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", hour12: false, timeZone: a?.tz || "Europe/London" }) : null;
+  let L = b.flights.filter(f => (p.dir === "dep" ? f.dep.scheduled : f.arr.scheduled || "").slice(0, 10) === d || true);
+  L = L.filter(f => { const t = p.dir === "dep" ? f.dep.scheduled : f.arr.scheduled; if (t && new Date(t).toLocaleDateString("en-CA", { timeZone: a?.tz || "Europe/London" }) !== d) return false;
+    const o = p.dir === "dep" ? f.destination : f.origin; const oa = AP[o?.iata] || o || {};
+    if (other) { if (other.kind === "country" && oa.country !== other.country) return false; if (other.kind === "airport" && o?.iata !== other.iata) return false; if (other.kind === "city" && !other.iatas.includes(o?.iata) && (oa.city || "") !== other.city) return false; }
+    if (p.win) { const h = hour(t); if (h == null || h < p.win[0] || h >= p.win[1]) return false; }
+    if (p.airline && f.airline?.iata !== p.airline.iata) return false; return true; });
+  res.json({ parsed: p, board: iata, date: d, flights: L.slice(0, 60), total: L.length, source: b.source || null, note: "Parsed with Skyline's own rules (no AI service); results are real flights from the " + iata + " board." }); }));
+
+// Observed on-time stats: only from flights Skyline itself logged (history.json, 60 days, MAG airports). Hidden below MIN_N.
+const MIN_N = 20;
+api.get("/ontime", (req, res) => { const al = String(req.query.airline || "").toUpperCase().slice(0, 3), o = String(req.query.o || "").toUpperCase().slice(0, 3), t = String(req.query.t || "").toUpperCase().slice(0, 3), num = String(req.query.number || "").toUpperCase().replace(/\s/g, "");
+  const sum = a => { const n = a.length; if (n < MIN_N) return { n, enough: false }; const late = a.filter(d => d >= 15).length; const s = [...a].sort((x, y) => x - y);
+    return { n, enough: true, onTime: Math.round((n - late) / n * 100), median: s[Math.floor(n / 2)], p90: s[Math.floor(n * 0.9)] }; };
+  const fl = [], route = [], airline = [];
+  for (const k in HIST) for (const x of Object.values(HIST[k])) { if (x.d == null || x.s === "cancelled") continue;
+    if (num && k === num) fl.push(x.d); if (o && t && x.o === o && x.t === t) route.push(x.d); if (al && k.startsWith(al)) airline.push(x.d); }
+  res.json({ minN: MIN_N, flight: num ? sum(fl) : null, route: o && t ? sum(route) : null, airline: al ? sum(airline) : null, scope: "Flights Skyline observed on Manchester, Stansted and East Midlands boards over the last 60 days. On time = under 15 min late.", source: "Skyline observed log" }); });
+
+// Airport guide: OSM facilities (Overpass), live security where Skyline has a feed, official map links
+api.get("/guide/:iata", wrap(async (req, res) => { const c = req.params.iata.toUpperCase(); const a = AP[c]; if (!a) return res.status(404).json({ error: "unknown airport" });
+  let fac = null, facErr = null;
+  const OS = (globalThis.__OSMF ||= {}); const ent = OS[c];
+  if (ent?.data && Date.now() - ent.at < 86400e3) fac = ent.data; else if (ent?.loading) facErr = "loading"; else if (ent?.err && Date.now() - ent.at < 300e3) facErr = ent.err; else { OS[c] = { loading: true, at: Date.now() }; facErr = "loading";
+  (async () => {
+    const qq = `[out:json][timeout:55];(nwr(around:2000,${a.lat},${a.lon})[amenity];nwr(around:2000,${a.lat},${a.lon})[shop];nwr(around:2500,${a.lat},${a.lon})[aeroway~"^(gate|terminal)$"];);out tags 900;`;
+    let r = null, last; for (const host of ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"]) { try { const x = await fetch(host, { method: "POST", body: "data=" + encodeURIComponent(qq), headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": UA }, signal: AbortSignal.timeout(70000) }); if (!x.ok) throw new Error(new URL(host).host + " " + x.status); r = await x.json(); break; } catch (e) { last = e; } }
+    if (!r) throw last; const KEEP = /^(restaurant|cafe|fast_food|bar|pub|pharmacy|atm|bureau_de_change|toilets|drinking_water|charging_station|lounge|baby_changing|prayer_room|place_of_worship|left_luggage|luggage_locker|car_rental|taxi|bus_station|parking)$/; const cnt = {}, named = {}; let gates = 0, terms = [];
+    for (const e of r.elements || []) { const tg = e.tags || {}; if (tg.aeroway === "gate") { gates++; continue; } if (tg.aeroway === "terminal") { if (tg.name) terms.push(tg.name); continue; }
+      const k = tg.shop ? "shop" : KEEP.test(tg.amenity || "") ? tg.amenity : null; if (!k) continue; cnt[k] = (cnt[k] || 0) + 1; if (tg.name) (named[k] ||= new Set()).add(tg.name); }
+    return { counts: cnt, examples: Object.fromEntries(Object.entries(named).map(([k, v]) => [k, [...v].slice(0, 8)])), gates, terminals: [...new Set(terms)].slice(0, 8), radiusM: 2000 }; })()
+    .then(d => OS[c] = { data: d, at: Date.now() }).catch(e => OS[c] = { err: String(e.message || e).slice(0, 120), at: Date.now() }); }
+  let sec = null; if (SECURITY[c]) { try { sec = await cached("sec:" + c, 120, SECURITY[c]); } catch {} }
+  res.json({ airport: airportOut(a), facilities: fac, facilitiesError: facErr, security: sec, securityAvailable: !!SECURITY[c], maps: { osm: `https://www.openstreetmap.org/#map=16/${a.lat}/${a.lon}`, google: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.name + " airport terminal map")}`, official: OFFICIAL[c]?.site || null },
+    source: "OpenStreetMap (Overpass) — community data, may be incomplete" }); }));
+
 app.use("/api", api);
 const dist = path.join(__dir, "../web/dist");
 app.use(express.static(dist, { setHeaders: (r, p) => { if (p.endsWith("sw.js") || p.endsWith(".html") || p.endsWith("version.json")) r.setHeader("cache-control", "no-cache"); } }));
