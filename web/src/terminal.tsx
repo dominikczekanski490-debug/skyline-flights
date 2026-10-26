@@ -6,7 +6,7 @@ import { AirlineTile, BRAND } from "./brand";
 
 // Original CSS recreations inspired by reference photos of each airport's screens (see refs/). Not official designs.
 type Col = "time" | "dest" | "fl" | "logo" | "tag" | "gate" | "term" | "st" | "icon" | "est" | "tile";
-type Th = { name: string; cls: string; cols: Col[]; title: (dir: string) => [string, string]; panels?: number; clock: "top" | "bottom" | "box"; heads?: Partial<Record<Col, string>> };
+type Th = { name: string; cls: string; tr?: Record<string, string>; cols: Col[]; title: (dir: string) => [string, string]; panels?: number; clock: "top" | "bottom" | "box"; heads?: Partial<Record<Col, string>> };
 export const THEMES: Record<string, Th> = {
   mag: { name: "MAG (MAN/STN/EMA)", cls: "tb-mag", cols: ["tile", "time", "dest", "fl", "st", "gate"], clock: "bottom", title: d => [d === "dep" ? "Airside Departures" : "Arrivals", ""], heads: { tile: "", time: "Time", dest: "Destination", fl: "Flight", st: "Remark", gate: "Gate" } },
   lhr: { name: "Heathrow", cls: "tb-lhr", cols: ["time", "dest", "fl", "st"], panels: 2, clock: "box", title: d => [d === "dep" ? "Departures" : "Arrivals", ""] },
@@ -24,11 +24,32 @@ export const THEMES: Record<string, Th> = {
   bel: { name: "Belfast", cls: "tb-bel", cols: ["logo", "time", "dest", "fl", "st"], clock: "top", title: d => [d === "dep" ? "Departures" : "Arrivals", ""] },
   isl: { name: "Islands (JER/GCI/IOM)", cls: "tb-isl", cols: ["time", "dest", "fl", "st"], clock: "top", title: d => [d === "dep" ? "Departures" : "Arrivals", ""] },
   regional: { name: "UK regional", cls: "tb-reg", cols: ["tile", "time", "dest", "fl", "gate", "st"], clock: "top", title: d => [d === "dep" ? "Departures" : "Arrivals", ""] },
-  led: { name: "Amber LED", cls: "tb-led", cols: ["time", "fl", "dest", "gate", "st"], panels: 2, clock: "bottom", title: d => d === "dep" ? ["Départs", "Departures"] : ["Arrivées", "Arrivals"] },
+  // v18: more airport/operator recreations (CSS only, from public photos/descriptions; not official designs).
+  muc: { name: "Munich", cls: "tb-muc", cols: ["time", "dest", "fl", "term", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Abflug", "Departures"] : ["Ankunft", "Arrivals"], heads: { time: "Zeit Time", dest: "Ziel Destination", fl: "Flug Flight", term: "Terminal", gate: "Gate", st: "Bemerkung Remarks" } },
+  ber: { name: "Berlin BER", cls: "tb-ber", cols: ["time", "dest", "fl", "term", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Abflug", "Departures"] : ["Ankunft", "Arrivals"], heads: { time: "Zeit", dest: "Ziel / Destination", fl: "Flug", term: "Terminal", gate: "Gate", st: "Status" } },
+  ger: { name: "German airports (ADV)", cls: "tb-ger", cols: ["time", "fl", "dest", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Abflug", "Departures"] : ["Ankunft", "Arrivals"], heads: { time: "Zeit", fl: "Flug", dest: "Ziel", gate: "Gate", st: "Bemerkung" } },
+  zrh: { name: "Zurich", cls: "tb-zrh dotmx", cols: ["time", "dest", "fl", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Abflug", "Departure"] : ["Ankunft", "Arrival"], heads: { time: "Zeit", dest: "Nach / To", fl: "Flug", gate: "Gate", st: "Bemerkung" } },
+  vie: { name: "Vienna", cls: "tb-vie", cols: ["time", "dest", "fl", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Abflug", "Departure"] : ["Ankunft", "Arrival"], heads: { time: "Zeit Time", dest: "Nach Destination", fl: "Flug Flight", gate: "Gate", st: "Info" } },
+  prg: { name: "Prague", cls: "tb-prg", cols: ["time", "dest", "fl", "term", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Odlety", "Departures"] : ["Přílety", "Arrivals"], heads: { time: "Čas Time", dest: "Destinace", fl: "Let Flight", term: "Term.", gate: "Gate", st: "Poznámka" } },
+  waw: { name: "Warsaw Chopin", cls: "tb-waw", cols: ["time", "dest", "fl", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Odloty", "Departures"] : ["Przyloty", "Arrivals"], heads: { time: "Czas", dest: "Kierunek", fl: "Lot", gate: "Wyjście", st: "Uwagi" } },
+  bud: { name: "Budapest", cls: "tb-bud", cols: ["time", "dest", "fl", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Indulás", "Departures"] : ["Érkezés", "Arrivals"] },
+  aena: { name: "Aena (Spain)", cls: "tb-aena", cols: ["time", "dest", "fl", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Salidas", "Departures"] : ["Llegadas", "Arrivals"], heads: { time: "Hora", dest: "Destino", fl: "Vuelo", gate: "Puerta", st: "Observaciones" },
+    tr: { "Boarding": "Embarcando", "Go to gate": "Puerta", "Gate open": "Puerta abierta", "Final call": "Último aviso", "Gate closed": "Cerrado", "Departed": "Despegado", "Landed": "Aterrizado", "Delayed": "Retrasado", "Cancelled": "Cancelado", "Expected": "Estimado", "Scheduled": "Programado", "On time": "En hora" } },
+  swedavia: { name: "Swedavia (ARN/GOT)", cls: "tb-swe", cols: ["time", "dest", "fl", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Avgångar", "Departures"] : ["Ankomster", "Arrivals"], heads: { time: "Tid", dest: "Till", fl: "Flyg", gate: "Gate", st: "Info" } },
+  finavia: { name: "Finavia (HEL)", cls: "tb-fin", cols: ["time", "dest", "fl", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Lähtevät", "Departures"] : ["Saapuvat", "Arrivals"], heads: { time: "Aika", dest: "Kohde", fl: "Lento", gate: "Portti", st: "Tila" } },
+  cph: { name: "Copenhagen (light LCD)", cls: "tb-cph", cols: ["time", "dest", "fl", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Afgange", "Departures"] : ["Ankomster", "Arrivals"] },
+  bru: { name: "Brussels", cls: "tb-bru", cols: ["time", "dest", "fl", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Departures", "Vertrek · Départs"] : ["Arrivals", "Aankomst · Arrivées"] },
+  ana: { name: "Portugal (ANA)", cls: "tb-ana", cols: ["time", "dest", "fl", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Partidas", "Departures"] : ["Chegadas", "Arrivals"] },
+  ita: { name: "Italy (split-flap)", cls: "tb-solari tb-ita", cols: ["fl", "dest", "time", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Partenze", "Departures"] : ["Arrivi", "Arrivals"] },
+  adria: { name: "Adriatic (HR/SI)", cls: "tb-adria", cols: ["time", "dest", "fl", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Odlasci", "Departures"] : ["Dolasci", "Arrivals"] },
+  kef: { name: "Keflavik", cls: "tb-kef", cols: ["time", "dest", "fl", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Brottfarir", "Departures"] : ["Komur", "Arrivals"] },
+  led: { name: "Classic amber LED", cls: "tb-led", cols: ["time", "fl", "dest", "gate", "st"], panels: 2, clock: "bottom", title: d => d === "dep" ? ["Départs", "Departures"] : ["Arrivées", "Arrivals"] },
 };
 const NORDIC = /^(OSL|BGO|TRD|SVG|TOS|BOO|AES|KRS|HAU|EVE|ALF|BDU|MOL|KSU|LKL|HFT|VDS|KKN|ANX|SSJ|MQN|FRO|SOG|HOV|ORW|SDN|FDE|RRS|BNN|MJF|RVK|VAW|BVG|SKN|SVJ|LKN|VRY|RET|NVK|HAA|BJF|MEH|OSY|NTB|SOJ)$/;
 const UKREG = /^(LTN|LCY|SEN|BRS|NCL|LBA|LPL|BOH|EXT|NQY|NWI|MME|HUY|DSA|BLK|CAX|ISC|LEQ|BZZ|OXF|BQH|FAB|ESH|LYX|QUG|CWL|VLY|INV|PIK|DND|SYY|KOI|LSI|BRR|BEB|TRE|ILY|CAL|WIC|LWK|NRL|PPW|SOY|WRY|EOI|FIE|FOA|COL|CSA|OUK|SNN|NOC|KIR|WAT|SXL|IOR|CFN|LDY)$/;
-export const autoTheme = (iata: string) => iata === "LGW" ? "lgw" : iata === "EDI" ? "edi" : /^(GLA|ABZ|SOU)$/.test(iata) ? "ags" : iata === "BHX" ? "bhx" : /^(DUB|ORK)$/.test(iata) ? "daa" : /^(BFS|BHD)$/.test(iata) ? "bel" : /^(JER|GCI|IOM|ACI)$/.test(iata) ? "isl" : UKREG.test(iata) ? "regional" : /^(MAN|STN|EMA)$/.test(iata) ? "mag" : iata === "LHR" ? "lhr" : iata === "FRA" ? "fra" : NORDIC.test(iata) ? "avinor" : /^(SYD|MEL|BNE)$/.test(iata) ? "syd" : iata === "AMS" ? "ams" : /^(CDG|ORY)$/.test(iata) ? "cdg" : "led";
+const BYC: Record<string, string> = { Germany: "ger", Austria: "vie", Switzerland: "zrh", Liechtenstein: "zrh", Poland: "waw", Czechia: "prg", "Czech Republic": "prg", Slovakia: "prg", Hungary: "bud", Slovenia: "adria", Croatia: "adria", Spain: "aena", Sweden: "swedavia", Finland: "finavia", Norway: "avinor", Denmark: "cph", Belgium: "bru", Portugal: "ana", Italy: "ita", Iceland: "kef", France: "cdg", Netherlands: "ams", Ireland: "daa", "United Kingdom": "regional", Australia: "syd" };
+export const autoTheme = (iata: string, country?: string) => iata === "MUC" ? "muc" : iata === "BER" ? "ber" : iata === "ZRH" || iata === "GVA" || iata === "BSL" ? "zrh" : iata === "VIE" ? "vie" : iata === "PRG" ? "prg" : iata === "WAW" ? "waw" : iata === "BUD" ? "bud" : iata === "CPH" ? "cph" : iata === "BRU" ? "bru" : iata === "KEF" ? "kef" : /^(ARN|GOT)$/.test(iata) ? "swedavia" : iata === "HEL" ? "finavia" :
+  iata === "LGW" ? "lgw" : iata === "EDI" ? "edi" : /^(GLA|ABZ|SOU)$/.test(iata) ? "ags" : iata === "BHX" ? "bhx" : /^(DUB|ORK)$/.test(iata) ? "daa" : /^(BFS|BHD)$/.test(iata) ? "bel" : /^(JER|GCI|IOM|ACI)$/.test(iata) ? "isl" : UKREG.test(iata) ? "regional" : /^(MAN|STN|EMA)$/.test(iata) ? "mag" : iata === "LHR" ? "lhr" : iata === "FRA" ? "fra" : NORDIC.test(iata) ? "avinor" : /^(SYD|MEL|BNE)$/.test(iata) ? "syd" : iata === "AMS" ? "ams" : /^(CDG|ORY)$/.test(iata) ? "cdg" : BYC[country || ""] || "led";
 const Tile = ({ a }: { a: any }) => <AirlineTile a={a} className="tb-tile" mode={BRAND[a?.iata] ? "white" : "colour"} />;
 const HEAD: Record<Col, string> = { tile: "", time: "Time", dest: "Destination", fl: "Flight", logo: "", tag: "Flight", gate: "Gate", term: "Term", st: "Remarks", icon: "", est: "Est" };
 const tagColor = (c = "") => { if (BRAND[c]) return BRAND[c]; let h = 0; for (const x of c) h = (h * 31 + x.charCodeAt(0)) % 360; return `hsl(${h} 45% 32%)`; };
@@ -96,7 +117,7 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen }:
   useEffect(() => { const f = () => setVp({ w: innerWidth, h: innerHeight }); addEventListener("resize", f); return () => removeEventListener("resize", f); }, []);
   const setZ = (z: number) => { z = Math.round(Math.max(0.6, Math.min(1.8, z)) * 100) / 100; setZoom(z); localStorage.setItem("sk.tb.zoom", String(z)); };
   useEffect(() => { api(`/security/${iata}`).then(setSec).catch(() => setSec(null)); }, [iata]);
-  const ref = useRef<HTMLDivElement>(null); const th = theme === "auto" || !THEMES[theme] ? autoTheme(iata) : theme;
+  const ref = useRef<HTMLDivElement>(null); const th = theme === "auto" || !THEMES[theme] ? autoTheme(iata, d?.airport?.country) : theme;
   const poll = usePoll(() => api(`/board/${iata}?dir=${dir}&date=${date}`).then(r => { setD(r); setUpd(Date.now()); }).catch(e => setD((p: any) => p || { error: e.message })), [iata, dir, date]);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => { localStorage.setItem("sk.tb." + iata, theme); }, [theme]);
@@ -109,11 +130,12 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen }:
   const designW = panels > 1 ? 1500 : portrait ? 720 : 1100; const s = Math.min(1, vp.w / designW) * zoom; const BAR = 66; const stageH = (vp.h - BAR) / s;
   const rowH = th === "mag" ? 50 : 40; const per = Math.max(6, Math.min(30, Math.floor((stageH - (th === "mag" ? 150 : 110)) / rowH))); const pages = Math.max(1, Math.ceil(rows.length / (per * panels)));
   useEffect(() => { if (paused) return; const t = setInterval(() => setPage(p => (p + 1) % pages), 9000); return () => clearInterval(t); }, [paused, pages]);
-  const pg = Math.min(page, pages - 1); void 0; const vis = rows.slice(pg * per, pg * per + per); const solari = th === "solari";
+  const pg = Math.min(page, pages - 1); void 0; const vis = rows.slice(pg * per, pg * per + per); const solari = th === "solari" || th === "ita";
   const clock = new Date(now).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: th === "led" ? "2-digit" : undefined, timeZone: tz });
   const tt0 = THEMES[th]; const tt: Th = th === "mag" ? { ...tt0, title: d => [d === "dep" ? `${side} Departures` : "Arrivals", ""], heads: { ...tt0.heads, gate: dir === "arr" ? "Belt" : "Gate", dest: dir === "arr" ? "From" : "Destination" } } : tt0;
   const show = vis.length ? rows.slice(pg * per * panels, pg * per * panels + per * panels) : [];
-  const cellOf = (f: any, c: Col, st: any) => { const t = dir === "dep" ? f.dep : f.arr; const ap = dir === "dep" ? f.destination : f.origin; const ltz = (dir === "dep" ? f.origin?.tz : f.destination?.tz) || tz;
+  const trS = (x: string) => { const m = tt.tr; if (!m) return x; for (const k of Object.keys(m).sort((a, b) => b.length - a.length)) if (x.startsWith(k)) return m[k] + x.slice(k.length); return x; };
+  const cellOf = (f: any, c: Col, st0: any) => { const st = { ...st0, txt: trS(st0.txt) }; const t = dir === "dep" ? f.dep : f.arr; const ap = dir === "dep" ? f.destination : f.origin; const ltz = (dir === "dep" ? f.origin?.tz : f.destination?.tz) || tz;
     const txt = (v: string, w: number) => solari ? <Flap text={v} w={w} /> : v;
     switch (c) {
       case "time": return f.liveOnly ? txt(f.observedAt ? fmtT(f.observedAt, ltz) : "LIVE", 5) : txt(fmtT(t.scheduled, ltz), 5);
@@ -149,7 +171,7 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen }:
       <span className="tb-ctl" onClick={e => e.stopPropagation()}>
         <select value={dir} onChange={e => { setDir(e.target.value); setPage(0); }}><option value="dep">Departures</option><option value="arr">Arrivals</option></select>
         {th === "mag" && dir === "dep" && <select value={side} onChange={e => { setSide(e.target.value); localStorage.setItem("sk.tb.side", e.target.value); }}><option>Airside</option><option>Landside</option></select>}
-        <select value={theme} onChange={e => setTheme(e.target.value)}><option value="auto">Auto ({THEMES[autoTheme(iata)].name})</option>{Object.entries(THEMES).map(([k, v]) => <option key={k} value={k}>{v.name}</option>)}</select>
+        <select value={theme} onChange={e => setTheme(e.target.value)}><option value="auto">Authentic ({THEMES[autoTheme(iata, d?.airport?.country)].name})</option><option value="led">Classic</option>{Object.entries(THEMES).filter(([k]) => k !== "led").map(([k, v]) => <option key={k} value={k}>{v.name}</option>)}</select>
         <span className="tb-zoom"><button onClick={() => setZ(zoom - 0.1)} aria-label="Zoom out">A-</button><button className={zoom === 1 ? "on" : ""} onClick={() => setZ(1)}>Fit</button><button onClick={() => setZ(zoom + 0.1)} aria-label="Zoom in">A+</button></span>
         <button onClick={close}>Close</button></span></div>
   </div></div>, document.body);

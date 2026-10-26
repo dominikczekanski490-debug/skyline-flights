@@ -509,3 +509,27 @@ h1,h2,h3,.froute,.big,.iata{letter-spacing:-.025em}.ftime,.big,.iata,.brow,.boar
 [data-theme=light] .gsin{background:rgba(255,255,255,.85)!important;border-color:rgba(15,23,42,.08)!important;box-shadow:0 6px 18px -12px rgba(15,23,42,.35)}
 .h16-logo{background:#fff!important}
 .h16 .pcard *,.h16 [class*=reason]{color:rgba(255,255,255,.88)}.h16 .pcard{background:rgba(255,255,255,.12)!important;border-color:rgba(255,255,255,.18)!important}
+/* v18 airport board recreations */
+.dotmx .tb-rows{position:relative}.dotmx .tb-rows::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle,transparent 55%,rgba(0,0,0,.55) 60%) 0 0/3px 3px}
+.dotmx .tb-row{font-family:"Courier New",monospace;font-weight:700;letter-spacing:1px;text-shadow:0 0 4px currentColor}
+.tb-muc{--bg:#0b2a55;--hd:#fff;--fg:#fff;--alt:#0e3266;--ok:#7fd8ff;--warn:#ffd23f;--bad:#ff6b6b;--acc:#0b2a55;font-family:"Helvetica Neue",Arial,sans-serif}
+.tb-muc .tb-top{color:#0b2a55}.tb-muc .tb-top .tb-ap{color:#0b2a55}.tb-muc .tb-head{background:#1f5aa6;color:#fff;opacity:1}.tb-muc .tb-row{border-bottom:1px solid #2b5c9c}.tb-muc .c-time{color:#ffd23f}
+.tb-ber{--bg:#141414;--hd:#000;--fg:#fff;--alt:#1d1d1d;--ok:#9be15d;--warn:#ffb81c;--bad:#e4002b;--acc:#e4002b;font-family:"Helvetica Neue",Arial,sans-serif}
+.tb-ber .tb-top{border-bottom:4px solid #e4002b}.tb-ber .tb-head{color:#aaa;text-transform:uppercase}
+.tb-ger{--bg:#00204e;--hd:#001534;--fg:#fff;--alt:#002a63;--ok:#ffde00;--warn:#ffde00;--bad:#ff5a5a;--acc:#ffde00}.tb-ger .c-time{color:#ffde00}
+.tb-zrh{--bg:#000;--hd:#da291c;--fg:#ffb000;--alt:#0a0a0a;--ok:#ffb000;--warn:#fff;--bad:#ff3b30;--acc:#fff}.tb-zrh .tb-top{color:#fff}.tb-zrh .tb-ptitle b{color:#fff}
+.tb-vie{--bg:#000;--hd:#000;--fg:#fff;--alt:#111;--ok:#fff;--warn:#ffcc00;--bad:#e2001a;--acc:#e2001a;font-family:"Helvetica Neue",Arial,sans-serif}
+.tb-vie .tb-top{border-bottom:3px solid #e2001a}.tb-vie .tb-ptitle b{color:#e2001a}.tb-vie .tb-head{border-bottom:1px solid #555}.tb-vie .tb-row{border-bottom:1px solid #222}
+.tb-prg{--bg:#06215b;--hd:#041845;--fg:#ffd400;--alt:#0a2a6e;--ok:#fff;--warn:#fff;--bad:#ff6060;--acc:#fff}.tb-prg .c-dest{color:#fff}
+.tb-waw{--bg:#001d3d;--hd:#003a78;--fg:#fff;--alt:#00284f;--ok:#ffc20e;--warn:#ffc20e;--bad:#ff5050;--acc:#ffc20e}.tb-waw .tb-head{color:#ffc20e}
+.tb-bud{--bg:#000;--hd:#0d3b85;--fg:#fff;--alt:#0b0b0b;--ok:#47e38a;--warn:#ffd000;--bad:#ff4d4d;--acc:#fff}.tb-bud .c-time{color:#7fb3ff}
+.tb-aena{--bg:#0a1f4d;--hd:#06163a;--fg:#ffde00;--alt:#0d2760;--ok:#3ccf4e;--warn:#ffffff;--bad:#ff4040;--acc:#fff;font-family:"Arial Narrow",Arial,sans-serif}
+.tb-aena .c-dest{color:#fff}.tb-aena .tb-head{background:#ffde00;color:#0a1f4d;opacity:1;font-weight:700}.tb-aena .tb-st{text-transform:uppercase}
+.tb-swe{--bg:#000;--hd:#000;--fg:#fff;--alt:#121212;--ok:#ffe000;--warn:#ffe000;--bad:#ff4f4f;--acc:#ffe000;font-family:"Helvetica Neue",Arial,sans-serif}.tb-swe .tb-ptitle b{color:#ffe000}.tb-swe .c-time{color:#ffe000}
+.tb-fin{--bg:#f4f6f8;--hd:#003580;--fg:#0b1d3a;--alt:#e6ebf1;--ok:#00843d;--warn:#b25e00;--bad:#c8102e;--acc:#fff;font-family:"Helvetica Neue",Arial,sans-serif}.tb-fin .tb-top{color:#fff}.tb-fin .tb-ptitle b{color:#003580}
+.tb-cph{--bg:#e9ecdf;--hd:#2a2f2a;--fg:#1a1d1a;--alt:#dde1d2;--ok:#1d6b2f;--warn:#9a5b00;--bad:#b3121c;--acc:#e9ecdf;font-family:"Helvetica Neue",Arial,sans-serif}.tb-cph .tb-top{color:#e9ecdf}.tb-cph .tb-row{border-bottom:1px solid #c4c9b6}
+.tb-bru{--bg:#00153d;--hd:#00153d;--fg:#fff;--alt:#001f55;--ok:#ffd100;--warn:#ffd100;--bad:#ff4040;--acc:#ffd100}.tb-bru .tb-ptitle b{color:#ffd100}
+.tb-ana{--bg:#000;--hd:#111;--fg:#ffcc00;--alt:#0c0c0c;--ok:#5ee35e;--warn:#fff;--bad:#ff3b30;--acc:#ffcc00}
+.tb-ita{--bg:#111;--fg:#f5f5f0}.tb-ita .tb-top{border-bottom:3px solid #009246}
+.tb-adria{--bg:#0a2540;--hd:#c8102e;--fg:#fff;--alt:#0d2e50;--ok:#7be38a;--warn:#ffd23f;--bad:#ff6b6b;--acc:#fff}.tb-adria .tb-top{color:#fff}
+.tb-kef{--bg:#101820;--hd:#101820;--fg:#e8f1f8;--alt:#16222d;--ok:#5fd3c6;--warn:#ffc845;--bad:#ff6b6b;--acc:#5fd3c6}
