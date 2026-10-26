@@ -529,6 +529,7 @@ const AENA_CODES = (WEU.ES || []).map(a => a.iata || a).filter(c => AP[c]);
 for (const c of AENA_CODES) OFFICIAL[c] = { fn: aenaBoard, label: "Aena official flight information", provider: "Official airport feed (Aena)", site: "aena.es" };
 // ---------- v15: Central Europe (OurAirports: commercial airports with scheduled service) + official feeds ----------
 const CEU = JSON.parse(fs.readFileSync(path.join(__dir, "data/ceu.json"), "utf8"));
+const CE_SET = new Set(Object.values(CEU).flat().map(a => a.iata)); // v17: 400-row cap for every Central Europe official board (FRA ~530)
 const CEU_NAMES = { DE: "Germany", AT: "Austria", CH: "Switzerland", LI: "Liechtenstein", PL: "Poland", CZ: "Czechia", SK: "Slovakia", HU: "Hungary", SI: "Slovenia", HR: "Croatia", LT: "Lithuania", LV: "Latvia", EE: "Estonia" };
 for (const [cc, list] of Object.entries(CEU)) for (const a of list) { if (!AP[a.iata]) { AP[a.iata] = { name: a.name, city: a.city || a.name, country: CEU_NAMES[cc], iata: a.iata, icao: a.icao, lat: a.lat, lon: a.lon, elev: 0, tz: a.tz }; if (a.icao) AP_ICAO[a.icao] = AP[a.iata]; } }
 // City-name -> IATA for feeds that only print a (local-language) city name. Exact matches only; unknown names stay as text.
@@ -754,7 +755,7 @@ async function liveCounts(iata) { const o = await observe(iata); const cur = Obj
 // Sampler: top live airports + anything requested in the last 2h every ~60s; everything else round-robin (~1 every 12s).
 let rr = 0; setInterval(async () => { const hot = [...new Set([...TOP_LIVE, ...Object.keys(REQ).filter(c => Date.now() - REQ[c] < 2 * 3600e3)])].filter(c => AP[c] && !OFFICIAL[c]);
   for (const c of hot) { try { await observe(c); } catch {} await new Promise(r => setTimeout(r, 1200)); } }, 60e3);
-setInterval(async () => { const cold = Object.values(UKI).flat().filter(c => AP[c] && !OFFICIAL[c] && !TOP_LIVE.includes(c)); if (!cold.length) return; const c = cold[rr++ % cold.length]; try { await observe(c); } catch {} }, 12e3);
+setInterval(async () => { const cold = [...new Set([...Object.values(UKI).flat(), ...CE_SET])].filter(c => AP[c] && !OFFICIAL[c] && !TOP_LIVE.includes(c)); if (!cold.length) return; const c = cold[rr++ % cold.length]; try { await observe(c); } catch {} }, 12e3);
 
 // ---------- AeroDataBox budget (RapidAPI Basic: 400 units/month hard limit) ----------
 // Only the FIDS board for UK/Irish airports with no official feed may spend units; we stop at ADB_BUDGET (default 350).
@@ -781,7 +782,7 @@ async function adbFids(iata) { await adbReadyF(); const key = "skyline_adb_" + i
     finally { delete ADB_INF[iata]; } })(); }
 const adbStats = () => { adbLeft(); return { adbConfigured: !!cfg.aerodataboxKey, adbMonth: ADBU.month, adbUnitsUsed: ADBU.units, adbCalls: ADBU.calls, adbBudget: ADB_BUDGET, adbUnitsPerCall: ADB_UNITS, adbBudgetReached: ADBU.units + ADB_UNITS > ADB_BUDGET, adbLastCall: ADBU.last, adbAirports: ADB_GAP() }; };
 async function board(iata, dir, ymd) {
-  if (OFFICIAL[iata]) { try { return { flights: await officialBoard(iata, dir, ymd), source: OFFICIAL[iata].label, sourceKind: "official", provider: OFFICIAL[iata].provider, site: OFFICIAL[iata].site }; } catch (e) { console.warn("official feed failed", iata, e.message); } }
+  if (OFFICIAL[iata]) { try { const fl = await officialBoard(iata, dir, ymd); return { flights: CE_SET.has(iata) ? CE_KEEP(fl, ymd) : fl, source: OFFICIAL[iata].label, sourceKind: "official", provider: OFFICIAL[iata].provider, site: OFFICIAL[iata].site }; } catch (e) { console.warn("official feed failed", iata, e.message); } }
   const today = ymd === todayLondon();
   // never let the ADS-B fallback push a board past the request timeout (busy airports have hundreds of aircraft)
   const obs = today ? await Promise.race([liveBoard(iata, dir).catch(() => []), new Promise(r => setTimeout(() => r([]), OFFICIAL[iata] ? 8000 : 18000))]) : [];

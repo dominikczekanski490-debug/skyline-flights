@@ -2,6 +2,8 @@
 # Smoke test: hit /api/board for ~25+ airports, both directions. Reports non-200 / empty / slow.
 # Usage: scripts/smoke.sh [base-url]   (default http://localhost:8787)
 BASE="${1:-http://localhost:8787}"
+# CE=1 scripts/smoke.sh : every Central Europe airport (from /api/uk?region=ce), dep+arr, with source type, rows, terminal/gate/belt coverage.
+if [ "${CE:-}" = 1 ]; then exec node "$(dirname "$0")/smoke-ce.js" "$BASE"; fi
 APTS="${APTS:-MAN STN EMA LHR LGW EDI DUB LBA BFS ABZ OSL FRA MUC BER DUS VIE MAD BCN AMS ARN HEL KEF LUX WAW KRK PRG BUD ZRH GVA HAM}"
 fail=0
 for a in $APTS; do for d in dep arr; do
