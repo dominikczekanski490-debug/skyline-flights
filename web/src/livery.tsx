@@ -127,9 +127,9 @@ export function assetFor(type?: string, code?: string): Ast & { known: boolean }
   return { k, name: "", known: false };
 }
 export const PLANE_CREDITS = "Aircraft photos: Planespotters.net photo API (each photo © its photographer, linked to the original) and Wikimedia Commons (freely licensed; author and licence shown on each photo). No drawn or recoloured liveries.";
-type Photo = { kind: "exact" | "same-type" | "typical" | "type" | "none"; typeName?: string; src?: string; link?: string; author?: string; license?: string; licenseUrl?: string; source?: string; reg?: string };
+export type Photo = { kind: "exact" | "same-type" | "typical" | "type" | "none"; typeName?: string; src?: string; link?: string; author?: string; license?: string; licenseUrl?: string; source?: string; reg?: string };
 const PC = new Map<string, Promise<Photo>>();
-const getPhoto = (q: string) => { if (!PC.has(q)) PC.set(q, fetch("/api/photo?" + q).then(r => r.ok ? r.json() : { kind: "none" }).catch(() => { PC.delete(q); return { kind: "none" } as Photo; })); return PC.get(q)!; };
+export const getPhoto = (q: string) => { if (!PC.has(q)) PC.set(q, fetch("/api/photo?" + q).then(r => r.ok ? r.json() : { kind: "none" }).catch(() => { PC.delete(q); return { kind: "none" } as Photo; })); return PC.get(q)!; };
 export function Livery({ code, icao, name, type, reg, hex, small }: { code?: string; icao?: string; name?: string; type?: string; reg?: string; hex?: string; small?: boolean }) {
   const lv = liveryFor(code, icao); const a = assetFor(type, code); const aln = name || lv?.n || "";
   const t = (type || "").toUpperCase().trim(); const tc = /^[A-Z][A-Z0-9]{2,3}$/.test(t) ? t : "";
@@ -148,3 +148,10 @@ export function Livery({ code, icao, name, type, reg, hex, small }: { code?: str
     </div></div>;
 }
 export const LIVERY_COUNT = Object.keys(L).length;
+
+// v16: photo for a flight without rendering the full card (hero backdrop / list thumbnails).
+export function photoQuery(f: any, type?: string) { const lv = liveryFor(f.airline?.iata, f.airline?.icao); const t = String(type || f.aircraft?.model || "").toUpperCase().trim(); const a = assetFor(t, f.airline?.iata);
+  return new URLSearchParams({ reg: String(f.aircraft?.reg || f.live?.reg || "").toUpperCase(), hex: f.live?.hex || f.aircraft?.hex || "", al: String(f.airline?.icao || "").toUpperCase(), aln: f.airline?.name || lv?.n || "", type: /^[A-Z][A-Z0-9]{2,3}$/.test(t) ? t : "", tn: a.known ? a.name : "" }).toString(); }
+export function useFlightPhoto(f: any, on = true) { const q = photoQuery(f); const [p, setP] = useState<Photo | null>(null);
+  useEffect(() => { let ok = true; if (!on || f.example) return; getPhoto(q).then(r => ok && setP(r)); return () => { ok = false; }; }, [q, on]); return p; }
+export const photoLabel = (p: Photo | null, aln: string) => !p || !p.src ? "" : p.kind === "exact" ? "Photo of this aircraft" : p.kind === "typical" ? `Typical ${aln} aircraft` : p.kind === "type" ? `Illustrative ${p.typeName || "aircraft type"}` : `Photo of a ${aln} aircraft of this type`;

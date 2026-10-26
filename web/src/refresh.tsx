@@ -21,3 +21,5 @@ let TC = { upd: null as number | null, next: Date.now() + TRACK_MS };
 export function markTracked() { TC = { upd: Date.now(), next: Date.now() + TRACK_MS }; window.dispatchEvent(new Event("skyline-track")); }
 export function useTrackClock() { const [c, setC] = useState(TC); useEffect(() => { const f = () => setC(TC); window.addEventListener("skyline-track", f); return () => window.removeEventListener("skyline-track", f); }, []); return c; }
 export function TrackedRefreshed() { const c = useTrackClock(); return <Refreshed {...c} note="tracked flights every 2 min" />; }
+export function LiveLine() { const c = useTrackClock(); const hm = c.upd ? new Date(c.upd).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }) : "";
+  return <div className="liveline px"><i className={hm ? "" : "wait"} />{hm ? <>Live · updated {hm}</> : "Connecting…"}<span>tracked flights refresh every 2 min</span></div>; }

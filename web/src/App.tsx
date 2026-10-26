@@ -1,6 +1,6 @@
 import { PredictCard, FindMyPlane } from "./predict";
-import { Livery, PLANE_CREDITS } from "./livery";
-import { usePoll, Refreshed, TRACK_MS, markTracked, TrackedRefreshed } from "./refresh";
+import { Livery, PLANE_CREDITS, useFlightPhoto, photoLabel } from "./livery";
+import { usePoll, Refreshed, TRACK_MS, markTracked, LiveLine } from "./refresh";
 import { ToolsHub, FeatureList, TOOLS, BOARD_FEATURES } from "./tools";
 import { TerminalBoard, status as boardStatus } from "./terminal";
 import { NextHero, PlaneHere, Facts, GlobalSearch, DayOf, phaseOf } from "./big";
@@ -31,7 +31,9 @@ export default function App() {
   useEffect(() => save(flights), [flights]);
   useEffect(() => { navigator.storage?.persist?.(); if (new URLSearchParams(location.search).get("tab") === "friends") { setTab("friends"); history.replaceState(null, "", "/"); } }, []);
   useEffect(() => { const f = () => document.visibilityState === "visible" && syncPush(flights.filter(x => !x.friend)).catch(e => console.warn("push resync", e)); const t = setTimeout(f, 1500); const iv = setInterval(f, 10 * 60e3); document.addEventListener("visibilitychange", f); return () => { clearTimeout(t); clearInterval(iv); document.removeEventListener("visibilitychange", f); }; }, [flights.filter(f => !f.friend).map(f => f.id).join()]);
-  useEffect(() => { localStorage.setItem("sk.theme", theme); document.documentElement.dataset.theme = theme; }, [theme]);
+  useEffect(() => { localStorage.setItem("sk.theme", theme); const mq = matchMedia("(prefers-color-scheme: light)");
+    const apply = () => { const r = theme === "auto" ? (mq.matches ? "light" : "dark") : theme; document.documentElement.dataset.theme = r; document.documentElement.dataset.themePref = theme; document.querySelector('meta[name="theme-color"]')?.setAttribute("content", r === "light" ? "#f4f6fb" : "#0b1020"); };
+    apply(); mq.addEventListener("change", apply); return () => mq.removeEventListener("change", apply); }, [theme]);
   useEffect(() => { localStorage.setItem("sk.map2", mapStyle); }, [mapStyle]);
   // import a friend's shared flight from URL
   useEffect(() => { const p = new URLSearchParams(location.search).get("share"); if (p) { try { const f = JSON.parse(decodeURIComponent(escape(atob(p)))); f.friend = f.friend || "Friend"; setFlights(l => l.some(x => x.id === f.id && x.friend) ? l : [...l, { ...f, id: f.id }]); setTab("friends"); history.replaceState(null, "", "/"); } catch {} } }, []);
@@ -76,6 +78,14 @@ export default function App() {
 function Head({ title, sub, right }: { title: ReactNode; sub?: ReactNode; right?: ReactNode }) { return <div className="head"><div><h1>{title}</h1>{sub && <div className="sub">{sub}</div>}</div><div className="row g8">{right}</div></div>; }
 const Avatar = ({ onClick }: { onClick?: () => void }) => <button className="avatar" onClick={onClick}>D</button>;
 
+function Thumb({ f, type }: { f: Flight; type?: string }) {
+  const p = useFlightPhoto(type ? { ...f, aircraft: { ...f.aircraft, model: type } } : f); if (!p?.src) return null;
+  const cr = p.source === "Planespotters.net" ? `© ${p.author} / Planespotters.net` : `${p.author} / Wikimedia Commons, ${p.license}`;
+  return <div className="fthumb"><img src={p.src} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" /><span>{photoLabel(p, f.airline?.name || "")} · {cr}</span></div>;
+}
+function Greeting() { const n = (localStorage.getItem("sk.name") || "").trim().split(/\s+/)[0]; const h = +new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Europe/London" }).format(new Date());
+  const g = h < 5 ? "Good evening" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  return <div className="greet px"><span>{new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" })}</span><b>{g}{n ? `, ${n}` : ""}</b></div>; }
 function FlightCard({ f, onClick, pred }: { f: Flight; onClick: () => void; pred?: boolean }) {
   const g = withEstArr(f); const dd = delay(f.dep); const [p, setP] = useState<any>(null);
   useEffect(() => { if (pred && !f.example) api(`/predict/${f.number}?date=${f.date}`).then(setP).catch(() => {}); }, [f.id]);
@@ -90,7 +100,7 @@ function FlightCard({ f, onClick, pred }: { f: Flight; onClick: () => void; pred
     <div className="fbig"><div><div className="iata">{f.origin?.iata}</div><div className="ftime" style={{ color: lateColor(dd) }}>{fmtT(best(f.dep), f.origin?.tz)}</div></div>
       <div className="ftrack"><div className="fdur">{dm ? dur(dm) : ""}</div><div className="fline"><span style={{ width: `${prog}%` }} /><i style={{ left: `${prog}%` }}>{I.glyph}</i></div><div className="fdur">{lv && typeof lv.alt === "number" ? `${Math.round(lv.alt / 100) * 100} ft · ${Math.round(lv.gs || 0)} kt` : until != null && until > 0 && !["departed", "enroute", "landed", "cancelled"].includes(f.status || "") ? `departs in ${dur(until)}` : f.statusText || ""}</div></div>
       <div className="right"><div className="iata">{f.destination?.iata}</div><div className="ftime">{fmtT(best(g.arr), f.destination?.tz)}{(g.arr as any).estimatedOnly && <sup>est</sup>}</div></div></div>
-    {!f.example && <div className="mt8"><Livery small code={f.airline?.iata} icao={f.airline?.icao} name={f.airline?.name} type={lv?.type || f.aircraft?.model} reg={f.aircraft?.reg || (f as any).live?.reg} hex={(f as any).live?.hex || (f.aircraft as any)?.hex} /></div>}
+    {!f.example && <Thumb f={f} type={lv?.type} />}
     {p && <PredictCard compact f={f} p={p} onWhy={() => (window as any).__why?.(f)} />}
   </div>;
 }
@@ -98,13 +108,19 @@ function FlightCard({ f, onClick, pred }: { f: Flight; onClick: () => void; pred
 function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => void; push: (o: Ov) => void }) {
   return <>
     <Head title="My Flights" right={<><RoundBtn onClick={() => push({ t: "airports" })}>{I.share}</RoundBtn><Avatar onClick={() => push({ t: "settings" })} /></>} />
+    <Greeting />
     <GlobalSearch push={push} onFlight={f => push({ t: "flight", f })} />
     {(() => { const nx = list.filter(f => !f.example && phaseOf(f) !== "cancelled" && !(f.status === "landed" && Date.now() - +new Date(f.arr.actual || f.arr.scheduled || 0) > 3 * 3600e3)).sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1)[0];
       return nx ? <NextHero f={nx} open={() => open(nx)} dayof={() => push({ t: "dayof", f: nx })} /> : null; })()}
     <div className="qa">{([[I.alert, "Disruptions", "Live delay scores", () => push({ t: "airports", mode: "disruptions" }), "r"], [I.grid, "Tools", `${TOOLS.length} aviation tools`, () => push({ t: "tools" }), "b"], [I.spark, "What's new", "All features", () => push({ t: "features" }), "v"], [I.globe, "UK & Ireland", "Every airport board", () => push({ t: "airports", mode: "uk" }), "b"], [I.takeoff, "MAN board", "Departures now", () => push({ t: "board", iata: "MAN" }), "g"], [I.sliders, "Settings", "Keys & theme", () => push({ t: "settings" }), "v"]] as const).map(([ic, t, s, fn, c]) => <button key={t} className={"qtile press q" + c} onClick={fn}><span className="qic">{ic}</span><b>{t}</b><small>{s}</small></button>)}</div>
-    {!list.length ? <div className="empty"><b>Let's Fly Somewhere</b><span>Tap <span className="mini">{I.search}</span> Search to add your next flight</span>
-      <div className="row g8 mt16 wrap center"><button className="chip" onClick={() => push({ t: "board", iata: "MAN" })}>Manchester board</button><button className="chip" onClick={() => push({ t: "airports" })}>Airport delays</button></div></div>
-      : <><TrackedRefreshed />{list.sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1).map(f => <FlightCard key={f.id} f={f} onClick={() => open(f)} pred />)}</>}
+    {!list.length ? <div className="empty16 rise"><div className="e-ic">{I.plane}</div><b>Your next trip starts here</b><span>Search a flight number like BA1387 or a route to start tracking it live.</span>
+      <button className="primary mt16" onClick={() => push({ t: "search" })}>{I.search} Add a flight</button>
+      <div className="row g8 mt12 wrap center"><button className="chip" onClick={() => push({ t: "board", iata: "MAN" })}>Manchester board</button><button className="chip" onClick={() => push({ t: "airports" })}>Airport delays</button></div></div>
+      : <>{(() => { const srt = [...list].sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1);
+        const past = (f: Flight) => f.status === "landed" || f.status === "cancelled" || (f.date < today() && !["departed", "enroute"].includes(f.status || ""));
+        const up = srt.filter(f => !past(f)), pa = srt.filter(past).reverse();
+        return <><LiveLine />{up.length > 0 && <div className="sect">Upcoming</div>}{up.map(f => <FlightCard key={f.id} f={f} onClick={() => open(f)} pred />)}
+          {pa.length > 0 && <div className="sect">Past</div>}{pa.map(f => <FlightCard key={f.id} f={f} onClick={() => open(f)} />)}</>; })()}</>}
   </>;
 }
 

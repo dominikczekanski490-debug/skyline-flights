@@ -1,7 +1,9 @@
-import { Livery } from "./livery";
+import { Livery, useFlightPhoto, photoLabel } from "./livery";
+import { AirlineTile } from "./brand";
+import { PredictCard } from "./predict";
 // Day-of features: next-flight live card, "is my plane here", flight facts, global search, airport (day-of) mode.
 import { useEffect, useState } from "react";
-import { api, fmtT, best, delay, dur, dist, estDurMin, lateLabel, lateColor, today, withEstArr, wxIcon, type Flight } from "./lib";
+import { api, fmtT, best, delay, dur, dist, estDurMin, lateLabel, lateColor, today, withEstArr, wxIcon, liveOf, statusOf, type Flight } from "./lib";
 import { I } from "./ui";
 
 const zoneOf = (f: any) => (f.statusText || "").match(/(check-in )?zone\s+([A-Z0-9]+)/i)?.[2]?.toUpperCase() || null;
@@ -12,17 +14,33 @@ export function phaseOf(f: Flight) { const st = f.status || ""; if (st === "canc
 
 export function NextHero({ f, open, dayof, noMode }: { f: Flight; open: () => void; dayof: () => void; noMode?: boolean }) {
   const [, t] = useState(0); useEffect(() => { const i = setInterval(() => t(n => n + 1), 30e3); return () => clearInterval(i); }, []);
+  const [pr, setPr] = useState<any>(null); useEffect(() => { if (!f.example && phaseOf(f) === "pre") api(`/predict/${f.number}?date=${f.date}`).then(setPr).catch(() => {}); }, [f.id]);
+  const photo = useFlightPhoto(f); const lv = liveOf(f); const S = statusOf(f, lv);
   const g = withEstArr(f); const ph = phaseOf(f); const p = leavePlan(f); const tz = f.origin?.tz, atz = f.destination?.tz; const now = Date.now(); const dd = delay(f.dep);
   const depAt = best(f.dep) ? +new Date(best(f.dep)!) : 0, arrAt = best(g.arr) ? +new Date(best(g.arr)!) : 0;
-  const big = ph === "pre" ? (depAt > now ? "Departs in " + ago(depAt - now) : "Due to depart") : ph === "air" ? (arrAt > now ? "Lands in " + ago(arrAt - now) : "Landing now") : ph === "landed" ? "Landed " + fmtT(f.arr.actual || best(g.arr), atz) : ph === "cancelled" ? "Cancelled" : "Diverted";
+  const boarding = /board/i.test(f.statusText || "");
+  const big = ph === "pre" ? (boarding ? "Boarding" : depAt > now ? "Departs in " + ago(depAt - now) : "Due to depart") : ph === "air" ? (arrAt > now ? "Landing in " + ago(arrAt - now) : "Landing now") : ph === "landed" ? "Landed " + fmtT(f.arr.actual || best(g.arr), atz) : ph === "cancelled" ? "Cancelled" : "Diverted";
+  const prog = ph === "landed" ? 1 : ph === "air" ? (lv?.progress != null ? lv.progress / 100 : depAt && arrAt > depAt ? Math.min(.97, Math.max(.03, (now - depAt) / (arrAt - depAt))) : .5) : 0;
   const next = ph !== "pre" || !p ? null : now < p.leave ? ["Leave by", p.leave] : now < p.boarding ? ["Boarding about", p.boarding] : now < p.gateClose ? ["Gate closes about", p.gateClose] : null;
-  const cells: [string, string | null | undefined][] = ph === "landed" || ph === "air" ? [["Terminal", f.arr.terminal], ["Belt", f.arr.baggage], ["Arrives", fmtT(best(g.arr), atz)]] : [["Terminal", f.dep.terminal], ["Gate", f.dep.gate || (f.statusText || "").match(/gate\s+([A-Z]?\d+[A-Z]?)/i)?.[1]], ["Zone", zoneOf(f)], ["Departs", fmtT(best(f.dep), tz)]];
-  return <div className={"hero rise " + ph} onClick={open}>
-    <div className="row between"><span className="hk">NEXT FLIGHT · {f.number}</span><span className="hk" style={{ color: lateColor(dd) }}>{ph === "pre" ? (lateLabel(dd) || "On time") : f.statusText || ""}</span></div>
-    <div className="hbig">{big}</div><div className="hroute"><b>{f.origin?.iata}</b> {f.origin?.city} <span className="faint">→</span> <b>{f.destination?.iata}</b> {f.destination?.city}</div>
-    <div className="hcells">{cells.map(([k, v]) => <div key={k}><label>{k}</label><b>{v || "—"}</b></div>)}</div>
-    {next && <div className="hnext">{next[0]} <b>{fmtT(new Date(next[1] as number).toISOString(), tz)}</b><span className="faint"> · estimate</span></div>}
-    {ph === "pre" && !noMode && <button className="chip blue mt8" onClick={e => { e.stopPropagation(); dayof(); }}>{I.plane} Airport mode</button>}</div>;
+  const cells: [string, string | null | undefined][] = ph === "landed" || ph === "air" ? [["Departed", fmtT(f.dep.actual || best(f.dep), tz)], ["Terminal", f.arr.terminal], ["Belt", f.arr.baggage], ["Arrives", fmtT(best(g.arr), atz)]] : [["Terminal", f.dep.terminal], ["Gate", f.dep.gate || (f.statusText || "").match(/gate\s+([A-Z]?\d+[A-Z]?)/i)?.[1]], ["Zone", zoneOf(f)], ["Departs", fmtT(best(f.dep), tz)]];
+  // Route arc: quadratic curve; plane placed at progress t along it.
+  const P = (k: number) => { const x = (1 - k) * (1 - k) * 8 + 2 * (1 - k) * k * 150 + k * k * 292, y = (1 - k) * (1 - k) * 46 + 2 * (1 - k) * k * 2 + k * k * 46; return [x, y]; };
+  const [px, py] = P(prog); const [qx, qy] = P(Math.min(1, prog + .01)); const ang = Math.atan2(qy - py, qx - px) * 180 / Math.PI;
+  return <div className={"h16 rise " + ph} onClick={open}>
+    {photo?.src && <img className="h16-bg" src={photo.src} alt="" loading="eager" decoding="async" referrerPolicy="no-referrer" />}<div className="h16-shade" />
+    <div className="h16-in">
+      <div className="row between"><div className="row g8"><AirlineTile a={f.airline} className="card-tile h16-logo" mode="colour" /><span className="h16-k">Next flight · {f.number}</span></div><span className={"h16-pill " + S.cls}>{ph === "pre" ? (lateLabel(dd) || "On time") : S.label}</span></div>
+      <div className="h16-big">{big}</div>
+      <div className="h16-route"><div><b>{f.origin?.iata}</b><span>{f.origin?.city}</span></div>
+        <svg viewBox="0 0 300 52" className="h16-arc" aria-hidden><path d="M8 46 Q150 2 292 46" className="a0" /><path d="M8 46 Q150 2 292 46" className="a1" pathLength={1} strokeDasharray={`${prog} 1`} />
+          <circle cx="8" cy="46" r="3.5" /><circle cx="292" cy="46" r="3.5" /><g transform={`translate(${px} ${py}) rotate(${ang})`}><path d="M7 0 L-4 -6 L-2 0 L-4 6 Z" className="pl" /></g></svg>
+        <div className="r"><b>{f.destination?.iata}</b><span>{f.destination?.city}</span></div></div>
+      <div className="h16-cells">{cells.map(([k, v]) => <div key={k}><label>{k}</label><b>{v || "—"}</b></div>)}</div>
+      {next && <div className="h16-next">{next[0]} <b>{fmtT(new Date(next[1] as number).toISOString(), tz)}</b> · estimate</div>}
+      {pr && (pr.predictedDelay ?? 0) >= 5 && <PredictCard compact f={f} p={pr} />}
+      <div className="row between mt8">{ph === "pre" && !noMode ? <button className="h16-btn" onClick={e => { e.stopPropagation(); dayof(); }}>{I.plane} Airport mode</button> : <span />}
+        {photo?.src && <span className="h16-cr">{photoLabel(photo, f.airline?.name || "")} · {photo.source === "Planespotters.net" ? `© ${photo.author} / Planespotters.net` : `${photo.author} / Wikimedia Commons, ${photo.license}`}</span>}</div>
+    </div></div>;
 }
 
 export function PlaneHere({ f, hex, reg }: { f: Flight; hex?: string; reg?: string }) {
