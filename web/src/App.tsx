@@ -1,3 +1,4 @@
+import { PredictCard, FindMyPlane } from "./predict";
 import { Livery, PLANE_CREDITS } from "./livery";
 import { usePoll, Refreshed, TRACK_MS, markTracked, TrackedRefreshed } from "./refresh";
 import { ToolsHub, FeatureList, TOOLS, BOARD_FEATURES } from "./tools";
@@ -90,7 +91,7 @@ function FlightCard({ f, onClick, pred }: { f: Flight; onClick: () => void; pred
       <div className="ftrack"><div className="fdur">{dm ? dur(dm) : ""}</div><div className="fline"><span style={{ width: `${prog}%` }} /><i style={{ left: `${prog}%` }}>{I.glyph}</i></div><div className="fdur">{lv && typeof lv.alt === "number" ? `${Math.round(lv.alt / 100) * 100} ft · ${Math.round(lv.gs || 0)} kt` : until != null && until > 0 && !["departed", "enroute", "landed", "cancelled"].includes(f.status || "") ? `departs in ${dur(until)}` : f.statusText || ""}</div></div>
       <div className="right"><div className="iata">{f.destination?.iata}</div><div className="ftime">{fmtT(best(g.arr), f.destination?.tz)}{(g.arr as any).estimatedOnly && <sup>est</sup>}</div></div></div>
     {!f.example && <div className="mt8"><Livery small code={f.airline?.iata} icao={f.airline?.icao} name={f.airline?.name} type={lv?.type || f.aircraft?.model} reg={f.aircraft?.reg || (f as any).live?.reg} hex={(f as any).live?.hex || (f.aircraft as any)?.hex} /></div>}
-    {p && !p.cancelled && <div className="aiwrap"><span className="aichip press" onClick={e => { e.stopPropagation(); (window as any).__why?.(f); }}><b style={{ color: lateColor(p.predictedDelay) }}>AI {p.predictedDelay >= 5 ? `+${p.predictedDelay}m` : "on time"}</b></span>{p?.top && <span className="toprsn">{p.summary}</span>}</div>}
+    {p && <PredictCard compact f={f} p={p} onWhy={() => (window as any).__why?.(f)} />}
   </div>;
 }
 
@@ -234,14 +235,14 @@ function Prediction({ f }: { f: Flight }) {
   if (!p) return <div className="pcard"><div className="phead"><span className="ptitle">✦ Delay Forecast</span></div>{err ? <div className="muted sm">{err}</div> : <><div className="skel" style={{ height: 110, marginTop: 12 }} /><div className="skel" style={{ height: 60, marginTop: 10 }} /></>}</div>;
   const d = p.predictedDelay ?? 0; const c = p.cancelled ? "#ff453a" : d >= 45 ? "#ff453a" : d >= 15 ? "#ff9f0a" : "#30d158";
   const bars = [["On time", "under 15 min", p.probs.onTime, "#30d158"], ["15+ min late", "", p.probs.late15, "#ff9f0a"], ["45+ min late", "", p.probs.late45, "#ff453a"], ["Cancelled", "", p.probs.cancel, "#bf5af2"], ["Diverted", "", p.probs.divert, "#64d2ff"]];
-  return <div className="pcard" style={{ ["--pc" as any]: c }}>
+  return <><PredictCard f={f} p={p} /><div className="pcard" style={{ ["--pc" as any]: c }}>
     <div className="phead"><span className="ptitle">✦ Delay Forecast</span><span className={"pconf " + p.confidence}><i />{p.confidence[0].toUpperCase() + p.confidence.slice(1)} confidence</span></div>
     <div className="phero"><Gauge d={d} /><div className="pfig"><div className="pnum" style={{ color: c }}>{p.cancelled ? "Cancelled" : d >= 5 ? <>+<CountUp v={d} /><small>min</small></> : "On time"}</div>{p.range && !p.cancelled && <div className="prng">Likely {p.range[0] < 0 ? p.range[0] : "+" + p.range[0]} to +{p.range[1]} min</div>}</div></div>
     {p.summary && <div className="psum2">{p.summary}</div>}
     <div className="pglass"><div className="plab">Chances</div>{bars.map(([l, sub, v, col]: any, i) => <div key={l} className="pbar"><span>{l}{sub && <em> {sub}</em>}</span><div><motion.i initial={{ width: 0 }} animate={{ width: `${Math.max(v, v > 0 ? 1.5 : 0)}%` }} transition={{ duration: 0.9, delay: 0.08 * i, ease: [0.22, 1, 0.36, 1] }} style={{ background: `linear-gradient(90deg, ${col}aa, ${col})` }} /></div><b>{v}%</b></div>)}</div>
     <Factors list={p.factors || []} />
     {p.confidenceNote && <div className="pnote">ⓘ {p.confidenceNote}</div>}
-    <div className="pexp">{p.explanation?.text}<div className="pby">{p.explanation?.by === "llm" ? "Written by your LLM from the model's real inputs" : "Template summary · add an LLM key in Settings for AI-written text"} · Estimate, not observed data</div></div></div>;
+    <div className="pexp">{p.explanation?.text}<div className="pby">{p.explanation?.by === "llm" ? "Written by your LLM from the model's real inputs" : "Template summary · add an LLM key in Settings for AI-written text"} · Estimate, not observed data</div></div></div></>;
 }
 
 function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
@@ -262,7 +263,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   return <div className="fd">
     {f.example && <div className="exlabel">Example data — not a real flight record</div>}
     <div className={"banner " + banner[1]}><b>{banner[0]}</b><div className="sm">Total {dur(estDurMin(f.origin, f.destination))} est. • {dist(f.origin, f.destination).toLocaleString()} mi{lv ? ` • live ${Math.round(lv.alt || 0).toLocaleString()} ft, ${Math.round(lv.gs || 0)} kt` : ""}</div>{lv?.matched === "route" && <div className="sm">{lv.matchNote}. Probable match: the airline flies a different radio callsign from the flight number.</div>}</div>
-    <div className="px"><Livery code={f.airline?.iata} icao={f.airline?.icao} name={f.airline?.name} type={ac?.icaoType || lv?.type || ac?.type || f.aircraft?.model} reg={reg} hex={hex} /><div className="faint xs mt8">{PLANE_CREDITS}</div></div>
+    <div className="px"><FindMyPlane f={f} reg={reg} hex={hex} type={ac?.icaoType || lv?.type || ac?.type || f.aircraft?.model} flights={flights} inb={inb} /><div className="faint xs mt8">{PLANE_CREDITS}</div></div>
     <TimeBlock dir="dep" a={f.origin} t={f.dep} d={dd} badge={<Badge icon={<span>↗</span>} v={f.dep.gate} k={f.dep.terminal && `Terminal ${f.dep.terminal}`} />} />
     {f.diverted && <div className="divert">⑂ DIVERTED TO {f.diverted.iata}<span>Search for Recovery Flight ›</span></div>}
     <div className="sep"><span>◷ {dur(estDurMin(f.origin, f.destination))} • {dist(f.origin, f.destination).toLocaleString()} mi</span></div>

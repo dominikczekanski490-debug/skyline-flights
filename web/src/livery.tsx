@@ -127,7 +127,7 @@ export function assetFor(type?: string, code?: string): Ast & { known: boolean }
   return { k, name: "", known: false };
 }
 export const PLANE_CREDITS = "Aircraft photos: Planespotters.net photo API (each photo © its photographer, linked to the original) and Wikimedia Commons (freely licensed; author and licence shown on each photo). No drawn or recoloured liveries.";
-type Photo = { kind: "exact" | "same-type" | "none"; src?: string; link?: string; author?: string; license?: string; licenseUrl?: string; source?: string; reg?: string };
+type Photo = { kind: "exact" | "same-type" | "typical" | "type" | "none"; typeName?: string; src?: string; link?: string; author?: string; license?: string; licenseUrl?: string; source?: string; reg?: string };
 const PC = new Map<string, Promise<Photo>>();
 const getPhoto = (q: string) => { if (!PC.has(q)) PC.set(q, fetch("/api/photo?" + q).then(r => r.ok ? r.json() : { kind: "none" }).catch(() => { PC.delete(q); return { kind: "none" } as Photo; })); return PC.get(q)!; };
 export function Livery({ code, icao, name, type, reg, hex, small }: { code?: string; icao?: string; name?: string; type?: string; reg?: string; hex?: string; small?: boolean }) {
@@ -136,14 +136,14 @@ export function Livery({ code, icao, name, type, reg, hex, small }: { code?: str
   const alI = (icao || "").toUpperCase();
   const q = new URLSearchParams({ reg: (reg || "").toUpperCase(), hex: hex || "", al: alI, aln, type: tc, tn: a.known ? a.name : "" }).toString();
   const [p, setP] = useState<Photo | null>(null);
-  useEffect(() => { let on = true; setP(null); if (!reg && !hex && !(aln && a.known)) { setP({ kind: "none" }); return; } getPhoto(q).then(r => on && setP(r)); return () => { on = false; }; }, [q]);
-  const tname = a.known ? a.name : (type || "Type not reported");
+  useEffect(() => { let on = true; setP(null); if (!reg && !hex && !aln && !alI && !tc) { setP({ kind: "none" }); return; } getPhoto(q).then(r => on && setP(r)); return () => { on = false; }; }, [q]);
+  const tname = a.known ? a.name : (type || "Aircraft not assigned yet");
   return <div className={"pl-card" + (small ? " sm" : "")}>
     <div className="pl-sky">{!p ? <div className="pl-ph pl-wait" /> : p.kind === "none" || !p.src ? <div className="pl-ph pl-none">No photo available</div>
       : <a href={p.link} target="_blank" rel="noopener" onClick={e => e.stopPropagation()}><img className="pl-ph" src={p.src} loading="lazy" decoding="async" referrerPolicy="no-referrer" alt={`${aln} ${tname}`} /></a>}</div>
     <div className="pl-cap"><b>{tname}</b>
       <div className="faint sm">{[reg, aln].filter(Boolean).join(" · ")}</div>
-      {p && p.kind !== "none" && p.src && <div className="faint xs mt4">{p.kind === "exact" ? `Photo of this aircraft (${p.reg || reg || hex})` : `Photo of ${/^[aeiou]/i.test(aln) ? "an" : "a"} ${aln} ${tname} (not necessarily this exact aircraft${p.reg ? ", shows " + p.reg : ""})`}
+      {p && p.kind !== "none" && p.src && <div className="faint xs mt4">{p.kind === "exact" ? `Photo of this aircraft (${p.reg || reg || hex})` : p.kind === "typical" ? `Typical ${aln} aircraft (${p.typeName}${p.reg ? ", shows " + p.reg : ""}), type not yet assigned` : p.kind === "type" ? `Illustrative ${p.typeName}, other livery (not this aircraft)` : `Photo of ${/^[aeiou]/i.test(aln) ? "an" : "a"} ${aln} ${tname} (not necessarily this exact aircraft${p.reg ? ", shows " + p.reg : ""})`}
         <br /><a href={p.link} target="_blank" rel="noopener" onClick={e => e.stopPropagation()}>{p.source === "Planespotters.net" ? `Photo: ${p.author} / Planespotters.net` : <>Photo: {p.author} / Wikimedia Commons, {p.license}</>}</a></div>}
     </div></div>;
 }

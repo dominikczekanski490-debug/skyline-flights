@@ -821,7 +821,7 @@ api.get("/board/:iata", wrap(async (req, res) => { const iata = req.params.iata.
     const p = predictCore(f, dir === "dep" ? { wxDep: wxAt(wx, t), aptStats: st } : { wxArr: wxAt(wx, t) }); f.pred = { d: p.predictedDelay, on: p.probs.onTime, c: p.confidence, top: p.top, summary: p.summary, factors: p.factors.slice(0, 4) }; }
   // v12.1: only log flights with an outcome (actual time / departed / landed / cancelled); logging every scheduled row of big boards grew state to 7 MB+ and OOMed 512 MB hosts.
   for (const f of b.flights) if (!f.liveOnly && (f.dep?.actual || f.arr?.actual || ["landed", "departed", "cancelled"].includes(f.status))) flogPut(f);
-  res.json({ airport: airportOut(a), dir, ...b }); }));
+  warmPhotos(b.flights); res.json({ airport: airportOut(a), dir, ...b }); }));
 
 
 // ---- Route-based ADS-B match: many airlines (Jet2 EXS, easyJet EZY...) fly alphanumeric callsigns (EXS8KD), so EXS1747 isn't on ADS-B.
@@ -920,30 +920,55 @@ async function psPhoto(kind, id) { id = String(id || "").toUpperCase().trim(); i
 const FREE_LIC = /^(cc0|public domain|pd|cc by(-sa)? ?[0-9.]*( [a-z]+)?|cc-by(-sa)?-[0-9.]+)$/i;
 const BAD = /interior|cabin|cockpit|seat|model|toy|diecast|lego|galley|lavatory|livery drawing|logo|menu|ticket|boarding pass|meal|engine detail|tail fin only|crash|accident|wreck/i;
 const stripTags = s => String(s || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-async function commonsPhoto(airline, typeName) { if (!airline || !typeName) return null;
+async function commonsPhoto(airline, typeName) { if (!typeName) return null; const anyLivery = !airline; airline = airline || "";
   const words = airline.split(/\s+/).filter(w => w.length > 2 && !/^(air|airlines|airways|the)$/i.test(w)); const key = (words[0] || airline).toLowerCase();
   const model = (typeName.match(/(A\d{3}|\d{3}|E\d{3}|CRJ\d*|ATR ?\d\d|Q400|Dash 8|A220|ERJ)/i) || [typeName])[0].toLowerCase().replace(/\s/g, "");
-  const q = `${airline} ${typeName.replace(/^(Airbus|Boeing|Embraer|Bombardier|De Havilland)\s+/i, "")} filetype:bitmap -interior -cabin -cockpit -model`;
+  const q = `${airline} ${anyLivery ? typeName : typeName.replace(/^(Airbus|Boeing|Embraer|Bombardier|De Havilland)\s+/i, "")} filetype:bitmap -interior -cabin -cockpit -model`;
   const j = await getJSON(`https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=25&gsrsearch=${encodeURIComponent(q)}&prop=imageinfo|categories&cllimit=50&iiprop=url|extmetadata|size&iiurlwidth=960`);
   const pages = Object.values(j.query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
   for (const p of pages) { const ii = p.imageinfo?.[0]; if (!ii || !ii.thumburl) continue; const m = ii.extmetadata || {}; const lic = stripTags(m.LicenseShortName?.value);
     const blob = (p.title + " " + (p.categories || []).map(c => c.title).join(" ")).toLowerCase().replace(/_/g, " "); const flat = blob.replace(/[\s-]/g, "");
-    if (!FREE_LIC.test(lic) || BAD.test(p.title + " " + stripTags(m.ImageDescription?.value)) || !(blob.includes(airline.toLowerCase()) || (key.length > 4 && blob.includes(key))) || !flat.includes(model) || ii.width < ii.height) continue;
+    if (!FREE_LIC.test(lic) || BAD.test(p.title + " " + stripTags(m.ImageDescription?.value)) || !(anyLivery || blob.includes(airline.toLowerCase()) || (key.length > 4 && blob.includes(key))) || !flat.includes(model) || ii.width < ii.height) continue;
     return { src: ii.thumburl, link: ii.descriptionurl, author: stripTags(m.Artist?.value).slice(0, 80) || "Unknown", license: lic, licenseUrl: m.LicenseUrl?.value || null, source: "Wikimedia Commons", title: p.title.replace(/^File:/, "") }; }
   return null; }
+// v15: the airline's most common type in our observed ADS-B log (its "typical" aircraft) when the flight's own type is unknown.
+function typicalType(alIcao) { const n = {}; for (const o of Object.values(OBS)) for (const p of Object.values(o.ac || {})) if (p.type && (p.cs || "").startsWith(alIcao)) n[p.type] = (n[p.type] || 0) + 1; return Object.entries(n).sort((a, b) => b[1] - a[1])[0]?.[0] || null; }
+const TYPE_NAME = { A319: "Airbus A319", A320: "Airbus A320", A20N: "Airbus A320neo", A321: "Airbus A321", A21N: "Airbus A321neo", B738: "Boeing 737-800", B38M: "Boeing 737 MAX 8", B737: "Boeing 737-700", B789: "Boeing 787-9", B788: "Boeing 787-8", B77W: "Boeing 777-300ER", A333: "Airbus A330-300", A359: "Airbus A350-900", E190: "Embraer 190", E195: "Embraer 195", AT76: "ATR 72", DH8D: "Dash 8 Q400", BCS3: "Airbus A220-300", A388: "Airbus A380" };
+// v15: lazily warm exact-aircraft photos for registrations on boards (max 8 per call, each reg at most once per 24 h; psGate keeps 350 ms spacing).
+const WARMED = new Map(); function warmPhotos(list) { let n = 0; if (psQ.length > 20) return; for (const f of list || []) { const r = f.aircraft?.reg; if (!r || WARMED.has(r)) continue; WARMED.set(r, Date.now()); psPhoto("reg", r).catch(() => {}); if (++n >= 8) break; }
+  if (WARMED.size > 5000) for (const [k, t] of WARMED) if (Date.now() - t > 86400e3) WARMED.delete(k); }
 function seenRegs(alIcao, type) { const out = new Set(); for (const o of Object.values(OBS)) for (const p of Object.values(o.ac || {})) if (p.reg && (p.cs || "").startsWith(alIcao) && (!type || p.type === type)) out.add(p.reg); return [...out]; }
 async function fleetRegs(alIcao, type) { const a = seenRegs(alIcao, type); if (a.length >= 3 || !type) return a;
   try { const j = await cached(`type:${type}`, 1800, () => adsbGate(() => getJSON(`https://api.adsb.lol/v2/type/${type}`))); for (const x of j.ac || []) if (x.r && (x.flight || "").trim().startsWith(alIcao) && !a.includes(x.r)) a.push(x.r); } catch {}
   return a.slice(0, 6); }
 api.get("/photo", wrap(async (req, res) => { const reg = String(req.query.reg || "").toUpperCase(), hex = String(req.query.hex || ""), al = String(req.query.al || "").toUpperCase(), aln = String(req.query.aln || "").slice(0, 60), type = String(req.query.type || "").toUpperCase().slice(0, 4), tn = String(req.query.tn || "").slice(0, 40);
   if (reg || hex) { const p = (reg && await psPhoto("reg", reg)) || (hex && await psPhoto("hex", hex)); if (p) return res.json({ kind: "exact", reg: reg || p.reg, ...p }); }
-  if (!al && !aln) return res.json({ kind: "none" });
-  const v = await cached(`sel14:${al}:${type || tn}`, 7 * 86400, async () => {
+  if (!al && !aln && !type && !tn) return res.json({ kind: "none" });
+  const v = await cached(`sel15:${al}:${type || tn}`, 7 * 86400, async () => {
     if (al && type) for (const r of await fleetRegs(al, type)) { if (r === reg) continue; const p = await psPhoto("reg", r); if (p) return { kind: "same-type", ...p, reg: r }; }
-    try { const c = await commonsPhoto(aln, tn); if (c) return { kind: "same-type", ...c }; } catch {}
+    if (aln) try { const c = await commonsPhoto(aln, tn); if (c) return { kind: "same-type", ...c }; } catch {}
+    const tt = !type && al ? typicalType(al) : null; // typical aircraft of this airline
+    if (tt) { for (const r of (await fleetRegs(al, tt)).slice(0, 3)) { const p = await psPhoto("reg", r); if (p) return { kind: "typical", ...p, reg: r, typeName: TYPE_NAME[tt] || tt }; } }
+    const anyT = tn || TYPE_NAME[type || tt] || null; // a real freely licensed photo of the type in any livery
+    if (anyT) try { const c = await commonsPhoto("", anyT); if (c) return { kind: "type", ...c, typeName: anyT }; } catch {}
     return { kind: "none" }; });
-  if (v.kind === "none") C.set(`sel14:${al}:${type || tn}`, { v, exp: Date.now() + 6 * 3600e3 });
+  if (v.kind === "none") C.set(`sel15:${al}:${type || tn}`, { v, exp: Date.now() + 6 * 3600e3 });
+  res.set("cache-control", "public, max-age=86400");
   res.json(v); }));
+// v15: where this aircraft has been. Free sources only: our own ADS-B take-off/landing log (OBS events) and the 72 h completed-flight log.
+// Public trace files (adsb.lol / airplanes.live / adsb.fi globe traces) are behind a browser check or not public, and OpenSky history needs an account, so they are not used.
+api.get("/aircraft/:reg/history", wrap(async (req, res) => { const reg = String(req.params.reg || "").toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 10); const hex = String(req.query.hex || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 6);
+  if (!reg && !hex) return res.status(400).json({ error: "registration required" });
+  const out = await cached(`achist:${reg}:${hex}`, 900, async () => { const legs = new Map(); const same = x => (reg && String(x || "").toUpperCase().replace(/[^A-Z0-9-]/g, "") === reg);
+    for (const e of Object.values(STATE.flog || {})) { const a = e.aircraft || {}; if (!(same(a.reg) || (hex && String(a.hex || "").toLowerCase() === hex))) continue;
+      const t = e.dep?.actual || e.dep?.estimated || e.dep?.scheduled; legs.set(e.number + "|" + String(t).slice(0, 10), { number: e.number, airline: e.airline?.name, from: e.origin?.iata, fromCity: e.origin?.city, to: e.destination?.iata, toCity: e.destination?.city,
+        dep: e.dep?.actual || null, depSched: e.dep?.scheduled || null, arr: e.arr?.actual || null, arrSched: e.arr?.scheduled || null, status: e.status, source: "Airport boards (Skyline flight log)" }); }
+    for (const [ap, o] of Object.entries(OBS)) for (const ev of o.events || []) { if (!(same(ev.reg) || (hex && ev.hex === hex))) continue;
+      const k = (ev.cs || "") + "|" + ap + "|" + ev.kind; if ([...legs.values()].some(l => (ev.kind === "dep" ? l.from : l.to) === ap && Math.abs(+new Date(ev.kind === "dep" ? l.dep || l.depSched : l.arr || l.arrSched) - ev.t) < 3 * 3600e3)) continue;
+      legs.set(k + ev.t, { number: ev.cs, from: ev.kind === "dep" ? ap : null, to: ev.kind === "arr" ? ap : null, dep: ev.kind === "dep" ? new Date(ev.t).toISOString() : null, arr: ev.kind === "arr" ? new Date(ev.t).toISOString() : null, observed: true, approx: ev.approx, source: "ADS-B (" + (o.src || "adsb.lol") + "), observed " + (ev.kind === "dep" ? "take-off" : "landing") }); }
+    const list = [...legs.values()].sort((a, b) => +new Date(b.dep || b.depSched || b.arr || b.arrSched) - +new Date(a.dep || a.depSched || a.arr || a.arrSched)).slice(0, 12);
+    return { reg, hex: hex || null, legs: list, window: "last 72 h", note: list.length ? null : "No recent flight history available" }; });
+  res.json(out); }));
 api.get("/aircraft", wrap(async (req, res) => {
   let hex = String(req.query.hex || ""), reg = String(req.query.reg || ""); const out = {};
   if (hex) { try { const h = await cached("hexdb:" + hex, 86400 * 7, () => getJSON(`https://hexdb.io/api/v1/aircraft/${hex}`)); Object.assign(out, { reg: h.Registration, type: h.Type, icaoType: h.ICAOTypeCode, manufacturer: h.Manufacturer, owner: h.RegisteredOwners }); reg = reg || h.Registration; } catch {} }
