@@ -1,4 +1,4 @@
-const C = "skyline-v19"; const IMG = "skyline-img-v17"; const IMG_MAX = 200;
+const C = "skyline-v20"; const IMG = "skyline-img-v17"; const IMG_MAX = 200;
 self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(C).then(c => c.addAll(["/", "/manifest.webmanifest", "/icon-192.png"]))); });
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 // Navigations are network-first (15 s budget for a sleeping free server) so the phone never stays on an old build;

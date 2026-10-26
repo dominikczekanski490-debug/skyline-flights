@@ -17,6 +17,7 @@ export function PlaneFrom({ f, compact }: { f: Flight; compact?: boolean }) {
   const st = inb ? (inb.arr?.actual ? `landed ${fmtT(inb.arr.actual, tz)}` : inb.live?.alt ? `in the air · lands ~${fmtT(eta, tz)}` : `due ${fmtT(eta, tz)}`) : "";
   const line = inb ? <>Your plane is coming from <b>{inb.from}</b> as <b>{inb.number}</b> · {st}{d != null && d >= 5 ? <span className="lt-bad"> · {d} min late</span> : d != null && !inb.arr?.actual ? " · on time" : ""}</>
     : <>{reg ? `Inbound leg for ${reg} not known yet.` : "Aircraft not assigned yet."} <span className="faint">Usually assigned 2–3 h before departure — Skyline keeps checking.</span></>;
+  if (compact && ["departed", "enroute", "landed"].includes(f.status || "")) return null;
   if (compact) return <div className="pf-line">✈︎ {line}</div>;
   return <div className="card pf"><div className="row between"><h3>Where your plane comes from</h3>{a?.how === "rotation" && <span className="est-tag">Skyline estimate</span>}</div>
     <div className="pf-chain"><div className={"pf-n " + (inb ? "" : "dim")}><b>{inb?.from || "?"}</b><small>{inb ? inb.number : "inbound"}</small></div><i className={inb?.live?.alt ? "fly" : ""} /><div className="pf-n me"><b>{f.origin?.iata}</b><small>{f.number}</small></div><i /><div className="pf-n"><b>{f.destination?.iata}</b><small>destination</small></div></div>
