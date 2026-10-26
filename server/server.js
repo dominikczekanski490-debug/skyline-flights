@@ -460,11 +460,12 @@ OFFICIAL.IST = { fn: istBoard, label: "Istanbul Airport official flight board", 
 for (const c of ["LCA", "PFO"]) OFFICIAL[c] = { fn: hermesBoard, label: "Hermes Airports official flight board", provider: "Official airport feed (Hermes Airports)", site: "hermesairports.com" };
 OFFICIAL.MLA = { fn: mlaBoard, label: "Malta Airport official flight board", provider: "Official airport feed (Malta International)", site: "maltairport.com" };
 // Budapest Airport (bud.hu public flight-search JSON, 2-hour windows)
+let BUD_Q = Promise.resolve(); const budSerial = fn => { const p = BUD_Q.then(fn, fn); BUD_Q = p.catch(() => {}); return p; };
 async function budBoard(apt, dir, ymd) { const tz = "Europe/Budapest"; const D = dir === "dep" ? "departures" : "arrivals";
   // polite: sequential, per-window cache (past windows kept 6h), stop on WAF block
-  const rows = []; const now = Date.now();
+  const rows = []; const now = Date.now(); let fails = 0;
   for (const h of ["00", "02", "04", "06", "08", "10", "12", "14", "16", "18", "20", "22"]) { const end = Date.parse(localToUtc(tz, ymd, `${h}:00`)) + 2 * 3600e3; const ttl = end < now - 3 * 3600e3 ? 6 * 3600 : 600;
-    let L; try { L = await cached(`bud:${dir}:${ymd}:${h}`, ttl, async () => { await new Promise(z => setTimeout(z, 400)); const r = await getJSON(`https://www.bud.hu/ajax/flight-search?locale=en&query=&date=${ymd}&time=${h}:00&direction=${D}`, { headers: { "x-requested-with": "XMLHttpRequest" } }); if (!Array.isArray(r)) throw new Error("bad"); return r; }); } catch { break; }
+    let L; try { L = await cached(`bud:${dir}:${ymd}:${h}`, ttl, () => budSerial(async () => { await new Promise(z => setTimeout(z, 600)); const r = await getJSON(`https://www.bud.hu/ajax/flight-search?locale=en&query=&date=${ymd}&time=${h}:00&direction=${D}`, { headers: { "x-requested-with": "XMLHttpRequest" } }); if (!Array.isArray(r)) throw new Error("bad"); return r; })); fails = 0; } catch (e) { console.warn("bud window", h, e.message); if (++fails >= 2) break; continue; }
     rows.push(...L); }
   { const u = new Map(); for (const x of rows) u.set(x.uniqueAutoId, x); rows.splice(0, rows.length, ...u.values()); }
   if (!rows.length) throw new Error("bud.hu returned nothing (possibly rate-limited)");
@@ -628,7 +629,7 @@ function resolveCity(raw) { if (!raw) return null; const m = raw.match(/\(([A-Z]
 const ceStatus = s => { s = fold(s); if (/CANCEL|ODWOL|ZRUS|ANUL|TOROLV|ODPOV/.test(s)) return "cancelled"; if (/DIVERT|PRZEKIER|ODKLON/.test(s)) return "diverted";
   if (/LANDED|WYLADOW|PRISTAL|PRILET|LANDOL|ARRIVED/.test(s)) return "landed"; if (/DEPART|WYSTART|ODLET|ODL |AIRBORNE|FELSZALL|ODLETELO/.test(s)) return "departed";
   if (/BOARD|NASTUP/.test(s)) return "boarding"; if (/GATE|BRAMKA|ZAMKN|CLOSED/.test(s)) return "gate"; if (/DELAY|OPOZN|ZPOZD|MESKAS|KESIK/.test(s)) return "delayed"; return "scheduled"; };
-const CE_KEEP = (list, ymd) => { if (ymd !== todayLondon()) return list.slice(0, 400); const lo = Date.now() - 3 * 3600e3, hi = Date.now() + 12 * 3600e3;
+const CE_KEEP = (list, ymd) => { if (list.length <= 400 || ymd !== todayLondon()) return list.slice(0, 400); // v23: whole day when it fits const lo = Date.now() - 3 * 3600e3, hi = Date.now() + 12 * 3600e3;
   return list.filter(f => { const t = +new Date(f.dep.scheduled || f.arr.scheduled); return t >= lo && t <= hi; }).slice(0, 400); };
 const ceGet = (url, opt = {}) => getText(url, { ...opt, headers: { accept: "*/*", ...(opt.headers || {}) } });
 const htmlDec = s => s.replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#039;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
