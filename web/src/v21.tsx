@@ -5,7 +5,7 @@ import { connections } from "./assist";
 import { localNotify } from "./extras";
 
 const mine = (L: Flight[]) => L.filter(f => !f.example && !f.friend);
-const nextOf = (L: Flight[]) => mine(L).filter(f => f.status !== "landed" && f.status !== "cancelled").sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1)[0];
+const nextOf = (L: Flight[]) => mine(L).filter(f => !["landed", "cancelled", "departed", "enroute", "diverted"].includes(f.status || "") && (!best(f.dep) || +new Date(best(f.dep)!) > Date.now() - 30 * 60e3)).sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1)[0] || mine(L).filter(f => f.status !== "landed" && f.status !== "cancelled").sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1)[0];
 const ago = (iso?: string) => iso ? Math.round((Date.now() - +new Date(iso)) / 60000) : null;
 
 // ---------- weather (METAR now + TAF summary) at both ends, and SIGMETs crossing the route ----------
@@ -32,18 +32,19 @@ export function RouteWeather({ f }: { f: Flight }) {
 
 // ---------- Ask Skyline (rules over real data) ----------
 type Msg = { me?: boolean; text?: string; card?: ReactNode; src?: string };
-const SUG = ["Is my flight late?", "Where is my plane?", "What gate?", "When do I need to leave?", "Weather in Dublin?", "Will I make my connection?", "Other flights to my destination today?"];
+const SUG = ["Is my flight late?", "Why is it late?", "What plane is it?", "Where has my plane been today?", "Am I owed compensation?", "When do I need to leave?", "How long is the flight?", "CO2 for my flight?", "Jet lag tips", "Weather at my destination?", "Will I make my connection?", "Other flights to my destination today?", "How many flights this year?"];
 async function answer(q: string, L: Flight[], ctx: { resolve: (f: Flight) => Promise<any> }): Promise<Msg[]> {
   const s = q.toLowerCase(); const num = q.toUpperCase().match(/\b([A-Z0-9]{2}\s?\d{1,4}[A-Z]?)\b/)?.[1]?.replace(/\s/g, "");
   const f = (num && mine(L).find(x => x.number === num)) || nextOf(L);
   const need = () => [{ text: "You don't have an upcoming flight saved. Add one with the search button and I can answer about it." }];
   if (/weather|rain|wind|snow|fog|temperature/.test(s)) { const m = s.match(/(?:in|at|for)\s+([a-z .'-]{3,})\??$/); let iata = f?.destination?.iata, name = f?.destination?.city;
-    if (m) { const a = await api("/airports/search?q=" + encodeURIComponent(m[1].trim())).catch(() => []); if (a?.[0]) { iata = a[0].iata; name = a[0].city || a[0].name; } else return [{ text: `I couldn't find an airport for “${m[1].trim()}”.` }]; }
+    if (m && !/\bmy\b|destination|there/.test(m[1])) { const a = await api("/airports/search?q=" + encodeURIComponent(m[1].trim())).catch(() => []); if (a?.[0]) { iata = a[0].iata; name = a[0].city || a[0].name; } else return [{ text: `I couldn't find an airport for “${m[1].trim()}”.` }]; }
     if (!iata) return need(); const w = await api("/wx/" + iata).catch(() => null); const mt = w?.metar?.[0];
     if (!mt) return [{ text: `I don't have a current METAR for ${name} (${iata}).` }];
     const hz = tafHaz(w.taf?.[0]?.rawTAF); return [{ text: `${name} (${iata}) right now: ${wxLine(mt)}.${hz.length ? " Forecast: " + hz.join(", ") + "." : " No significant hazards in the TAF."}`, src: `METAR ${mt.icaoId}, ${ago(mt.reportTime)} min old · aviationweather.gov` }]; }
   if (/connect|connection|transfer|make it/.test(s)) { const C = connections(mine(L)); if (!C.length) return [{ text: "I don't see two of your saved flights that connect (one landing where the next leaves within 24 h)." }];
     return C.map(c => ({ text: `${c.a.number} → ${c.b.number} at ${c.a.destination?.iata}: ${Math.round(c.buf)} min between landing and departure (Skyline uses ${c.mct} min as a minimum). ${c.risk === "ok" ? "Looks comfortable." : c.risk === "tight" ? "Tight — move quickly." : c.risk === "high" ? "High risk of missing it — speak to your airline." : "On current times you'd miss it."}`, src: "Estimated arrival + scheduled/estimated departure · Skyline estimate" })); }
+  { const r = await extra(q, s, num, f, L); if (r) return r; }
   if (!f) return need();
   if (/other flights|alternative|another flight|flights to/.test(s)) { const to = (s.match(/to\s+([a-z .'-]{3,})\??$/)?.[1] || "").trim(); let dest = f.destination?.iata;
     if (to && !/my destination/.test(to)) { const a = await api("/airports/search?q=" + encodeURIComponent(to)).catch(() => []); dest = a?.[0]?.iata || dest; }
@@ -55,8 +56,9 @@ async function answer(q: string, L: Flight[], ctx: { resolve: (f: Flight) => Pro
   if (/leave|get to the airport|set off/.test(s)) { const p = leavePlan(f); return [{ text: p ? `Leave by ${fmtT(new Date(p.leave).toISOString(), f.origin?.tz)} to reach ${f.origin?.iata} around ${fmtT(new Date(p.at).toISOString(), f.origin?.tz)} (${p.travel} min travel as set in the Leave card, arriving ${p.long ? 3 : 2} h before departure). I can't see live traffic — add margin at rush hour.` : "I don't have a departure time to plan from.", src: "Skyline estimate" }]; }
   if (/late|delay|on time|status|when.*(land|arrive)/.test(s)) { const d = delay(f.dep), g = withEstArr(f);
     return [{ text: `${f.number} ${f.origin?.iata}→${f.destination?.iata}: ${f.statusText || f.status || "scheduled"}. Departure ${fmtT(best(f.dep), f.origin?.tz)}${d != null && d >= 5 ? ` (${d} min late)` : d != null ? " (on time)" : " (no estimate published yet)"}, arrival ~${fmtT(best(g.arr), f.destination?.tz)}.`, src: (f.source || "Airport board") }]; }
-  return [{ text: "I don't know how to answer that yet. I can tell you about delays, your plane, gates, when to leave, weather, connections and other flights." }];
+  return [{ text: `I'm not sure what you mean. I can answer about ${f.number}: delays and why, the aircraft and where it has been today, gate, when to leave, flight time, CO2, jet lag, weather, compensation, connections and other flights. Try one of the suggestions below.` }];
 }
+import { extra } from "./brain";
 export function AskSkyline({ flights, x }: { flights: Flight[]; x: ReactNode }) {
   const [M, setM] = useState<Msg[]>([{ text: "Hi! Ask me about your flights — I only answer from real data and say when I don't know." }]); const [q, setQ] = useState(""); const [busy, setBusy] = useState(false); const end = useRef<HTMLDivElement>(null);
   const resolve = (f: Flight) => api(`/aircraft-for?number=${f.number}&date=${f.date}&o=${f.origin?.iata}&d=${f.destination?.iata || ""}`).catch(() => null);
