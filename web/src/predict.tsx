@@ -18,7 +18,7 @@ export function PredictCard({ f, p, compact, onWhy }: { f: any; p: any; compact?
   const late = p.cancelled ? null : d >= 1 ? <span className={"pk-min " + cls}>({d}m late)</span> : d <= -1 ? <span className="pk-min green">({-d}m early)</span> : <span className="pk-min green">(on time)</span>;
   return <div className={"pk " + cls + (compact ? " pk-c" : "")} onClick={e => { if (onWhy) { e.stopPropagation(); onWhy(); } }}>
     <span className={"pk-pill " + cls}>{pl}</span>
-    {!p.cancelled && <div className="pk-line"><Spark s={compact ? 14 : 18} /><span className="pk-grad">Predicted departure</span> <b className="pk-t">{t}</b> {late}</div>}
+    {!p.cancelled && <div className="pk-line"><Spark s={compact ? 14 : 18} /><span className="pk-grad">Predicted departure</span> <span className={"pk-t pk-min " + (d <= -1 || d < 1 ? "green" : cls)}>{t}</span> {late}</div>}
     {r && <div className="pk-why">{r}</div>}
     {!compact && <div className="pk-note">Skyline estimate from live signals, not an official time</div>}
   </div>;
