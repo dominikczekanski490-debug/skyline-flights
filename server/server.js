@@ -127,7 +127,7 @@ async function magBoard(apt, dir, ymd) {
 // Frankfurt (FRA): JSON endpoint used by frankfurt-airport.com's own public departures/arrivals board
 // Sydney (SYD): JSON endpoint used by sydneyairport.com.au's own public flight board
 const AVINOR = "OSL BGO TRD SVG TOS BOO AES KRS EVE HAU MOL KSU ALF BDU BJF BNN BVG FDE FRO HAA HFT HOV HVG KKN LKL LKN MEH MJF MQN OSY RET RRS RVK SDN SKN SOG SOJ SSJ SVJ VAW VDS VRY LYR ANX TRF".split(" ");
-const getText = async (url, opt = {}) => { const r = await fetch(url, { ...opt, headers: { "user-agent": UA, ...(opt.headers || {}) }, signal: AbortSignal.timeout(20000) }); if (!r.ok) { const e = new Error(`${r.status} ${url.split("?")[0]}`); e.status = r.status; throw e; } return r.text(); };
+const getText = async (url, opt = {}) => { const r = await fetch(url, { ...opt, headers: { "user-agent": UA, ...(opt.headers || {}) }, signal: AbortSignal.timeout(opt.timeout || 14000) }); if (!r.ok) { const e = new Error(`${r.status} ${url.split("?")[0]}`); e.status = r.status; throw e; } return r.text(); };
 const DE_ST = { "Geplant": "Scheduled", "Gestartet": "Departed", "Check-In": "Check-in open", "Beendet": "Boarding closed", "Gepäck": "Baggage on belt", "Gelandet": "Landed", "Annulliert": "Cancelled", "Verspätet": "Delayed", "Erwartet": "Expected", "Annulliert/Cancelled": "Cancelled", "BOR": "Boarding" };
 const mkFlight = (apt, dir, otherIata, otherName, num, alCode, alName, t, statusText, status, source, extra = {}) => {
   statusText = DE_ST[statusText] || statusText;
@@ -527,6 +527,91 @@ async function kefBoard(apt, dir, ymd) {
 
 const AENA_CODES = (WEU.ES || []).map(a => a.iata || a).filter(c => AP[c]);
 for (const c of AENA_CODES) OFFICIAL[c] = { fn: aenaBoard, label: "Aena official flight information", provider: "Official airport feed (Aena)", site: "aena.es" };
+// ---------- v15: Central Europe (OurAirports: commercial airports with scheduled service) + official feeds ----------
+const CEU = JSON.parse(fs.readFileSync(path.join(__dir, "data/ceu.json"), "utf8"));
+const CEU_NAMES = { DE: "Germany", AT: "Austria", CH: "Switzerland", LI: "Liechtenstein", PL: "Poland", CZ: "Czechia", SK: "Slovakia", HU: "Hungary", SI: "Slovenia", HR: "Croatia", LT: "Lithuania", LV: "Latvia", EE: "Estonia" };
+for (const [cc, list] of Object.entries(CEU)) for (const a of list) { if (!AP[a.iata]) { AP[a.iata] = { name: a.name, city: a.city || a.name, country: CEU_NAMES[cc], iata: a.iata, icao: a.icao, lat: a.lat, lon: a.lon, elev: 0, tz: a.tz }; if (a.icao) AP_ICAO[a.icao] = AP[a.iata]; } }
+// City-name -> IATA for feeds that only print a (local-language) city name. Exact matches only; unknown names stay as text.
+const fold = s => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ł/g, "l").replace(/Ł/g, "L").toUpperCase().replace(/[^A-Z ]/g, " ").replace(/\s+/g, " ").trim();
+const EXONYM = { LARNAKA: "Larnaca", BUDAPESZT: "Budapest", GOTEBORG: "Gothenburg", CRACOW: "Krakow", LONDYN: "London", HURGADA: "Hurghada", RIM: "Rome", KISINOV: "Chisinau", BAZILEJ: "Basel", MALLORCA: "Palma de Mallorca", MUENCHEN: "Munich", MUNCHEN: "Munich", KOELN: "Cologne", NUERNBERG: "Nuremberg", WIEN: "Vienna", ZUERICH: "Zurich", MAILAND: "Milan", ROM: "Rome", LISSABON: "Lisbon", KOPENHAGEN: "Copenhagen", BRUESSEL: "Brussels", ISTANBUL: "Istanbul", ANTALYA: "Antalya", "PALMA": "Palma de Mallorca", "PALMA DE MALLORCA": "Palma de Mallorca", "GRAN CANARIA": "Gran Canaria", "LAS PALMAS": "Gran Canaria", "FUERTEVENTURA": "Fuerteventura", HURGHADA: "Hurghada", LONDYN: "London", MADRYT: "Madrid", KOPENHAGA: "Copenhagen", NEAPOL: "Naples", KATANIA: "Catania", BRUKSELA: "Brussels", SZTOKHOLM: "Stockholm", WILNO: "Vilnius", PRAGA: "Prague", ANTALIA: "Antalya", MADERA: "Funchal", WARSZAWA: "Warsaw", KRAKOW: "Krakow", GOTEBORG: "Gothenburg", MONACHIUM: "Munich", RZYM: "Rome", MEDIOLAN: "Milan", PARYZ: "Paris", WIEDEN: "Vienna", ATENY: "Athens", LIZBONA: "Lisbon", ZURYCH: "Zurich", GENEWA: "Geneva", BAZYLEA: "Basel", KOLONIA: "Cologne", HAMBURG: "Hamburg", RYGA: "Riga", TALLIN: "Tallinn", HELSINKI: "Helsinki", TELAWIW: "Tel Aviv", "TEL AWIW": "Tel Aviv", STAMBUL: "Istanbul", SEWILLA: "Seville", WALENCJA: "Valencia", MALAGA: "Malaga", TENERYFA: "Tenerife", REYKJAVIK: "Reykjavik", DUBAJ: "Dubai", KAIR: "Cairo", "BIRMINGHAM": "Birmingham", EDYNBURG: "Edinburgh", "NEAPOL": "Naples", ALGIER: "Algiers", "PALMA DE MALLORCA": "Palma de Mallorca", MNICHOV: "Munich", VIDEN: "Vienna", "SOLUN": "Thessaloniki", LONDYN_: "", BELEHRAD: "Belgrade", BELGRAD: "Belgrade", WENECJA: "Venice", BOLONIA: "Bologna", FLORENCJA: "Florence", PIZA: "Pisa", KORFU: "Corfu", HERAKLION: "Heraklion", RODOS: "Rhodes" };
+const PREF = { London: null, Paris: "CDG", Milan: "MXP", Rome: "FCO", Stockholm: "ARN", Oslo: "OSL", Istanbul: "IST", Moscow: "SVO", Brussels: "BRU", Berlin: "BER", Tenerife: "TFS" };
+let CITY_IX = null; const cityIx = () => { if (CITY_IX) return CITY_IX; CITY_IX = {}; for (const a of Object.values(AP)) { if (!a.iata) continue; for (const k of [fold(a.city), fold(a.name), fold((a.name || "").replace(/\b(International|Airport|Airfield)\b/gi, ""))]) if (k && !CITY_IX[k]) CITY_IX[k] = a.iata; } return CITY_IX; };
+function resolveCity(raw) { if (!raw) return null; const m = raw.match(/\(([A-Z]{3})\)/); if (m && AP[m[1]]) return m[1];
+  const parts = raw.split(/[\/]| - /).map(x => x.replace(/^([^-]+)-(STANSTED|LUTON|GATWICK|HEATHROW|CIAMPINO|FIUMICINO|BERGAMO|MALPENSA|BEAUVAIS|ORLY)$/i, "$1 $2").replace(/-(?=[A-ZÀ-Ž])/g, " ")).map(fold).filter(Boolean); const ix = cityIx();
+  for (const p of [...parts].reverse()) { const words = p.split(" "); for (let n = words.length; n >= 1; n--) { const k = words.slice(0, n).join(" "); const ex = EXONYM[k] || EXONYM[k.replace(/ /g, "")];
+      const name = ex || k; const sub = p.slice(k.length).trim(); // "LONDYN STANSTED" -> London + Stansted
+      if (sub) { const s = ix[fold(sub)] || ix[fold(name + " " + sub)]; if (s) return s; }
+      if (name in PREF) return PREF[name]; const hit = ix[fold(name)]; if (hit) return hit; } }
+  return null; }
+const ceStatus = s => { s = fold(s); if (/CANCEL|ODWOL|ZRUS|ANUL|TOROLV|ODPOV/.test(s)) return "cancelled"; if (/DIVERT|PRZEKIER|ODKLON/.test(s)) return "diverted";
+  if (/LANDED|WYLADOW|PRISTAL|PRILET|LANDOL|ARRIVED/.test(s)) return "landed"; if (/DEPART|WYSTART|ODLET|ODL |AIRBORNE|FELSZALL|ODLETELO/.test(s)) return "departed";
+  if (/BOARD|NASTUP/.test(s)) return "boarding"; if (/GATE|BRAMKA|ZAMKN|CLOSED/.test(s)) return "gate"; if (/DELAY|OPOZN|ZPOZD|MESKAS|KESIK/.test(s)) return "delayed"; return "scheduled"; };
+const CE_KEEP = (list, ymd) => { if (ymd !== todayLondon()) return list.slice(0, 400); const lo = Date.now() - 3 * 3600e3, hi = Date.now() + 12 * 3600e3;
+  return list.filter(f => { const t = +new Date(f.dep.scheduled || f.arr.scheduled); return t >= lo && t <= hi; }).slice(0, 400); };
+const ceGet = (url, opt = {}) => getText(url, { ...opt, headers: { accept: "*/*", ...(opt.headers || {}) } });
+const htmlDec = s => s.replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#039;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+// Gdańsk: the airport's own board page embeds the full JSON schedule in a React props attribute.
+async function gdnBoard(apt, dir, ymd) { return cached(`gdn:${dir}:${ymd}`, 180, async () => {
+  const h = await ceGet(`https://www.airport.gdansk.pl/en/flights/current-${dir === "dep" ? "departures" : "arrivals"}`);
+  const key = dir === "dep" ? "departures" : "arrivals"; const m = [...h.matchAll(/react-props-value="([^"]+)"/g)].find(x => x[1].includes("&quot;" + key + "&quot;:&quot;")); if (!m) throw new Error("GDN board data not found"); const props = JSON.parse(htmlDec(m[1]));
+  const raw = props[dir === "dep" ? "departures" : "arrivals"]; const rows = typeof raw === "string" ? JSON.parse(raw) : raw || [];
+  const out = rows.map(x => { const other = x.destination || x.origin || x.from; const num = (x.flight || "").replace(/\s+/g, ""); const sched = x.dateTime && new Date(x.dateTime).toISOString(); const st = ceStatus(x.remarks);
+    const est = x.expectedDateTime ? new Date(x.expectedDateTime).toISOString() : undefined; const act = x.landingTime ? new Date(x.landingTime).toISOString() : undefined;
+    return mkFlight(apt, dir, resolveCity(other), other, num, num.slice(0, 2), x.carrierName, { sched, est, act, gate: x.gate, term: x.terminal }, x.remarks || "Scheduled", st, "Gdańsk Airport official flight board (airport.gdansk.pl)", { otherName: other }); });
+  return CE_KEEP(out, ymd); }); }
+// Prague: the JSON API behind prg.aero's own departures/arrivals app (paged, 150 per page, UTC times, IATA codes).
+async function prgBoard(apt, dir, ymd) { return cached(`prg:${dir}:${ymd}`, 180, async () => { const rows = []; const hi = Date.now() + 12 * 3600e3;
+  for (let off = 0; off < 600; off += 150) { const r = JSON.parse(await ceGet(`https://api.prg.aero/${dir === "dep" ? "departures" : "arrivals"}-shorttime?offset=${off}&limit=150`, { headers: { origin: "https://www.prg.aero", referer: "https://www.prg.aero/" } }));
+    if (!Array.isArray(r) || !r.length) break; rows.push(...r); if (+new Date(r.at(-1).time) > hi) break; }
+  const z = t => t ? new Date(t.replace(/\+0000$/, "Z")).toISOString() : undefined;
+  const out = rows.filter(x => x.isMainFlight !== false).map(x => { const st = ceStatus(x.state); const done = ["departed", "landed"].includes(st); const nt = z(x["time-new"]);
+    return mkFlight(apt, dir, x["destination-id"], (x.destination || "").replace(/\s*\([A-Z]{3}\)$/, ""), (x.flyNumber || "").replace(/^([A-Z0-9]{2})0+(\d)/, "$1$2"), x["company-id"] ? null : (x.flyNumber || "").slice(0, 2), x.company,
+      { sched: z(x.time), est: done ? undefined : nt, act: done ? nt : undefined, gate: x.gates || undefined, term: x.terminal }, x.state || "Scheduled", st, "Prague Airport official flight info (prg.aero)"); });
+  out.forEach(f => { if (!f.airline?.iata) f.airline = { ...airlineOut(f.number.slice(0, 2)), name: f.airline?.name }; });
+  return CE_KEEP(out, ymd); }); }
+// Poznań: the WordPress REST endpoint used by poznanairport.pl's own board (local times, IATA codes).
+async function pozBoard(apt, dir, ymd) { return cached(`poz:${dir}:${ymd}`, 180, async () => {
+  const r = JSON.parse(await ceGet(`https://poznanairport.pl/wp-json/api/v1/board/?type=${dir === "dep" ? "departures" : "arrivals"}&timeFrom=00:00&timeTo=23:59&lang=en`));
+  const rows = Array.isArray(r) ? r : r.data || []; const tz = "Europe/Warsaw";
+  const out = rows.map(x => { const [d, t] = (x.date?.value || "").split(" "); const sched = localToUtc(tz, d, (t || "").slice(0, 5)); const lab = x.status?.label || "Scheduled"; const st = ceStatus(lab + " " + (x.status?.code || ""));
+    const m = (x.status?.value || "").match(/(\d{1,2}):(\d{2})/); const tt = m ? localToUtc(tz, d, m[1].padStart(2, "0") + ":" + m[2]) : undefined; const done = ["departed", "landed"].includes(st);
+    return mkFlight(apt, dir, x.airport?.value, x.airport?.label, (x.flight_id || "").replace(/\s+/g, ""), (x.flight_id || "").slice(0, 2), x.airline?.label, { sched, est: done ? undefined : tt, act: done ? tt : undefined, gate: x.gate?.value, belt: x.belt?.value }, lab, st, "Poznań Airport official flight board (poznanairport.pl)"); });
+  return CE_KEEP(out, ymd); }); }
+// Bratislava: server-rendered board table on bts.aero.
+async function btsBoard(apt, dir, ymd) { return cached(`bts:${dir}:${ymd}`, 180, async () => {
+  const h = await ceGet(`https://www.bts.aero/lety/prilety-odlety/${dir === "dep" ? "odlety" : "prilety"}/`); const tz = "Europe/Bratislava"; const out = [];
+  for (const row of h.split(/<tr class="flights-list-row/).slice(1)) { const td = c => { const m = row.match(new RegExp(`flights-list-td--${c}[^>]*>([\\s\\S]*?)</td>`)); return m ? m[1].replace(/<span class="flights-list-airline-name[\s\S]*?<\/span>/, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : ""; };
+    const dm = row.match(/data-flight-date="(\d+)\. (\d+)\. (\d{4})"/); if (!dm) continue; const d = `${dm[3]}-${dm[2].padStart(2, "0")}-${dm[1].padStart(2, "0")}`;
+    const num = td("fid").replace(/\s+/g, ""); const other = td("destination") || td("origin"); const stx = td("status"); const st = ceStatus(stx); const ct = td("ct"); const done = ["departed", "landed"].includes(st);
+    const am = stx.match(/(\d{1,2})\.(\d{1,2})\.\s*(\d{1,2}):(\d{2})/); const actual = am ? localToUtc(tz, `${dm[3]}-${am[2].padStart(2, "0")}-${am[1].padStart(2, "0")}`, `${am[3].padStart(2, "0")}:${am[4]}`) : undefined;
+    out.push(mkFlight(apt, dir, resolveCity(other), other, num, num.slice(0, 2), td("airline"), { sched: localToUtc(tz, d, td("pt")), est: !done && /^\d{1,2}:\d{2}$/.test(ct) ? localToUtc(tz, d, ct) : undefined, act: done ? actual : undefined }, stx || "Scheduled", st, "Bratislava Airport official flight board (bts.aero)", { otherName: other })); }
+  return CE_KEEP(out, ymd); }); }
+// Bremen: server-rendered daily flight plan (tagesflugplan) on bremen-airport.com; both directions on one page.
+async function breBoard(apt, dir, ymd) { const all = await cached(`bre:${ymd}`, 180, async () => {
+  const h = await ceGet("https://www.bremen-airport.com/fluginfo/fluege/tagesflugplan"); const tz = "Europe/Berlin"; const day = new Date().toLocaleDateString("en-CA", { timeZone: tz }); const out = { dep: [], arr: [] };
+  for (const row of h.split('class="flight-info_number">').slice(1)) { const cell = c => { const m = row.match(new RegExp(`class="flight-info_${c}"[^>]*>([\\s\\S]*?)</div>`)); return m ? m[1].replace(/<span class="c-heading-mobile">[\s\S]*?<\/span>/g, "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim() : ""; };
+    const num = row.slice(0, row.indexOf("<")).replace(/\s+/g, ""); const d = /class="flight-info_arrival"/.test(row) ? "arr" : "dep"; const other = cell("destination") || cell("origin");
+    const t = cell(d === "dep" ? "departure" : "arrival"), e = cell("expected"), stx = cell("status") || "Scheduled"; const st = ceStatus(DE_ST[stx[0].toUpperCase() + stx.slice(1)] || stx); const done = ["departed", "landed"].includes(st);
+    if (!/^\d{2}:\d{2}$/.test(t)) continue; const et = /^\d{2}:\d{2}$/.test(e) ? localToUtc(tz, day, e) : undefined;
+    out[d].push(mkFlight(apt, d, resolveCity(other), other, num, num.slice(0, 2), null, { sched: localToUtc(tz, day, t), est: done ? undefined : et, act: done ? et : undefined, gate: cell("gate") || undefined, term: cell("terminal") || undefined }, stx[0].toUpperCase() + stx.slice(1), st, "Bremen Airport official daily flight plan (bremen-airport.com)", { otherName: other })); }
+  return out; }); return CE_KEEP(all[dir] || [], ymd); }
+OFFICIAL.BRE = { fn: breBoard, label: "Bremen Airport official daily flight plan", provider: "Official airport feed", site: "bremen-airport.com" };
+const CE_BLOCKED = {
+  HAM: "Blocked by airport site: connection closed to server requests", STR: "Blocked by airport site: Access Denied (bot protection)", CGN: "No public flight-data endpoint found on the airport site (board rendered client-side behind bot protection)",
+  HAJ: "No public flight-data endpoint found on the airport site", LEJ: "No public flight-data endpoint found on the airport site", DRS: "No public flight-data endpoint found on the airport site",
+  ZRH: "Blocked by airport site: captcha on flight-data API", GVA: "Blocked by airport site: captcha widget, no public data endpoint", BSL: "No public flight-data endpoint found on the airport site",
+  SZG: "No public flight-data endpoint found on the airport site (board loaded client-side)", INN: "No public flight-data endpoint found on the airport site", GRZ: "Airport site did not respond to server requests", KLU: "No public flight-data endpoint found on the airport site", LNZ: "No public flight-data endpoint found on the airport site",
+  WAW: "No public flight-data endpoint found on the airport site (board loaded client-side)", KRK: "Blocked by airport site: reCAPTCHA-protected board", KTW: "No public flight-data endpoint found on the airport site (CSRF-protected API)", WRO: "No public flight-data endpoint found on the airport site",
+  BUD: "No public flight-data endpoint found on the airport site (session-bound API)", BRQ: "No public flight-data endpoint found on the airport site", OSR: "Airport site did not respond to server requests", LJU: "No public flight-data endpoint found on the airport site",
+  ZAG: "No public flight-data endpoint found on the airport site", SPU: "Airport site did not respond to server requests", DBV: "No public flight-data endpoint found on the airport site", ZAD: "Airport site publishes a seasonal timetable only (no day-of board)",
+  PUY: "No public flight-data endpoint found on the airport site", RJK: "No public flight-data endpoint found on the airport site", FMM: "Airport site did not respond to server requests", FMO: "No public flight-data endpoint found on the airport site",
+  HHN: "No public flight-data endpoint found on the airport site", PAD: "No public flight-data endpoint found on the airport site", FKB: "No public flight-data endpoint found on the airport site", SCN: "No public flight-data endpoint found on the airport site",
+  FDH: "No public flight-data endpoint found on the airport site", ERF: "No public flight-data endpoint found on the airport site", RLG: "Airport site did not respond to server requests", GWT: "No public flight-data endpoint found on the airport site" };
+OFFICIAL.GDN = { fn: gdnBoard, label: "Gdańsk Airport official flight board", provider: "Official airport feed", site: "airport.gdansk.pl" };
+OFFICIAL.PRG = { fn: prgBoard, label: "Prague Airport official flight info", provider: "Official airport feed", site: "prg.aero" };
+OFFICIAL.POZ = { fn: pozBoard, label: "Poznań Airport official flight board", provider: "Official airport feed", site: "poznanairport.pl" };
+OFFICIAL.BTS = { fn: btsBoard, label: "Bratislava Airport official flight board", provider: "Official airport feed", site: "bts.aero" };
+
 OFFICIAL.BER = { fn: berBoard, label: "BER official flight board", provider: "Official airport feed", site: "berlin-airport.de" };
 OFFICIAL.MUC = { fn: mucBoard, label: "Munich Airport official flight search", provider: "Official airport feed", site: "munich-airport.com" };
 OFFICIAL.DTM = { fn: dtmBoard, label: "Dortmund Airport official flight schedule", provider: "Official airport feed", site: "dortmund-airport.com" };
@@ -982,8 +1067,9 @@ const UKC = {}; async function ukCount(c) { const h = UKC[c]; if (h && Date.now(
   if (!v) { try { const l = await liveCounts(c); v = { ...l, kind: "live" }; } catch { v = null; } } UKC[c] = { t: Date.now(), v }; return v; }
 const REGION_SUB = { "ES-CN": "Canary Islands", "ES-IB": "Balearic Islands", "PT-20": "Azores", "PT-30": "Madeira", "FR-20R": "Corsica", "FR-COR": "Corsica", "IT-88": "Sardinia", "IT-82": "Sicily" };
 api.get("/uk", wrap(async (req, res) => { const out = []; const eu = req.query.region === "eu";
-  const groups = eu ? (() => { const g = {}; for (const [cc, l] of Object.entries(WEU)) for (const a of l) { const k = WEU_NAMES[cc] + (REGION_SUB[a.region] ? " – " + REGION_SUB[a.region] : ""); (g[k] ||= []).push(a.iata); } g["Norway"] = AVINOR; return g; })() : UKI;
-  for (const [country, codes] of Object.entries(groups)) for (const c of codes) { const a = AP[c]; if (!a) continue; out.push({ ...airportOut(a), country, feed: OFFICIAL[c] ? "official" : cfg.aerodataboxKey && !eu ? "aerodatabox" : "live", source: OFFICIAL[c]?.site || null, blocked: EU_BLOCKED[c] || null }); }
+  const ce = req.query.region === "ce";
+  const groups = ce ? (() => { const g = {}; for (const [cc, l] of Object.entries(CEU)) for (const a of l) (g[CEU_NAMES[cc]] ||= []).push(a.iata); return g; })() : eu ? (() => { const g = {}; for (const [cc, l] of Object.entries(WEU)) for (const a of l) { const k = WEU_NAMES[cc] + (REGION_SUB[a.region] ? " – " + REGION_SUB[a.region] : ""); (g[k] ||= []).push(a.iata); } g["Norway"] = AVINOR; return g; })() : UKI;
+  for (const [country, codes] of Object.entries(groups)) for (const c of codes) { const a = AP[c]; if (!a) continue; out.push({ ...airportOut(a), country, feed: OFFICIAL[c] ? "official" : cfg.aerodataboxKey && !eu && !ce ? "aerodatabox" : "live", source: OFFICIAL[c]?.site || null, blocked: (OFFICIAL[c] ? null : EU_BLOCKED[c] || CE_BLOCKED[c]) || null }); }
   res.json({ airports: out.map(a => { const lc = a.feed === "official" ? null : obsCounts(a.iata); return { ...a, counts: lc || UKC[a.iata]?.v || null, countsAt: lc ? lc.sampledAt : UKC[a.iata] ? new Date(UKC[a.iata].t).toISOString() : null, lastSeen: lc?.lastSeen || null }; }), at: new Date().toISOString() }); }));
 (async function warmUk() { for (const c of Object.values(UKI).flat()) { if (!AP[c] || !OFFICIAL[c]) continue; try { await ukCount(c); } catch {} await new Promise(r => setTimeout(r, 1500)); } setTimeout(warmUk, 5 * 60e3); })();
 function obsCounts(c) { const o = OBS[c]; if (!o?.sampledAt) return null; const cur = Object.values(o.ac).map(p => current(o, p)).filter(Boolean); const h3 = Date.now() - 3 * 3600e3;
