@@ -407,13 +407,13 @@ const grT = (s) => s && !s.startsWith("-") ? s.replace(" ", "T").slice(0, 16) : 
 async function fraportGrBoard(apt, dir, ymd) { const host = `https://www.${FRAPORT_GR[apt]}-airport.gr`; const tz = AP[apt]?.tz || "Europe/Athens";
   const rows = await cached(`fgr:${apt}:${dir}:${ymd}`, 120, async () => { const seen = new Map(); const nx = new Date(Date.parse(ymd + "T12:00:00Z") + 86400e3).toISOString().slice(0, 10);
     for (const [d, h] of [[ymd, "00"], [ymd, "06"], [ymd, "12"], [ymd, "18"], [nx, "00"]]) { const r = await getJSON(`${host}/en/_jcr_content.${dir === "dep" ? "departures" : "arrivals"}.json?time=${d}%20${h}:00:00&perpage=300`, { headers: { referer: host + "/en/flight-list", "x-requested-with": "XMLHttpRequest" } });
-      for (const x of r.data || []) seen.set(x.id, x); } return [...seen.values()]; });
+      for (const x of r.data || []) seen.set(`${x.fnr}|${x.sched}`, x); } return [...seen.values()]; });
   return rows.map(x => { const [d, tm] = grT(x.sched).split("T"); const sched = localToUtc(tz, d, tm); const stx = String(x.status || "").replace(/&nbsp;/g, "").trim(); const st = stx ? genStatus(stx, dir) : "scheduled";
       const hhmm = stx.match(/(\d\d):(\d\d)/); let at = hhmm ? localToUtc(tz, d, hhmm[0]) : undefined; if (at && sched && +new Date(at) < +new Date(sched) - 12 * 3600e3) at = new Date(+new Date(at) + 86400e3).toISOString();
       const e = grT(x.esti); const est = st === "departed" || st === "landed" ? undefined : at || (e ? localToUtc(tz, ...e.split("T")) : undefined);
       const num = (x.fnr || "").replace(/\s+/g, ""); const alI = (/^[A-Z0-9]{2}\d/.test(num) ? num.slice(0, 2) : null) || AL_ICAO[x.al]?.iata; const number = /^[A-Z]{3}\d/.test(num) && alI ? alI + num.slice(3) : num;
       return mkFlight(apt, dir, apByName(x.apname), x.apname, number, alI, x.alname, { sched, est, act: st === "departed" || st === "landed" ? at : undefined, gate: x.gate || undefined, term: x.terminal || undefined, belt: x.ausgang || undefined }, stx || "Scheduled", st, `${AP[apt]?.name || apt} official flight board (${FRAPORT_GR[apt]}-airport.gr, Fraport Greece)`, { codeshares: x.cs || undefined, checkin: x.schalter || undefined }); })
-    .filter(f => inDay(f.dep?.scheduled || f.arr?.scheduled, ymd)); }
+    .filter(f => inLocalDay(f.dep?.scheduled || f.arr?.scheduled, apt, ymd)); }
 for (const c of Object.keys(FRAPORT_GR)) if (AP[c]) OFFICIAL[c] = { fn: fraportGrBoard, label: "Fraport Greece official flight board", provider: "Official airport feed (Fraport Greece)", site: FRAPORT_GR[c] + "-airport.gr" };
 // ---------- v23: Eastern Europe / Turkey / Cyprus / Malta official airport sites ----------
 const htx = s => String(s || "").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
