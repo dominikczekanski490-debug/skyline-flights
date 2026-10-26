@@ -1,0 +1,115 @@
+// v22: aircraft card for any flight, home widgets, plane overhead, Wrapped, connection checker, What's new.
+import { useEffect, useMemo, useState } from "react";
+import { api, best, delay, dist, estDurMin, fmtT, fmtD, load, withEstArr, type Flight } from "./lib";
+import { connections } from "./assist";
+
+const buzz = (ms = 8) => { try { navigator.vibrate?.(ms); } catch { /* */ } };
+const ago = (iso: string) => { const m = Math.round((Date.now() - +new Date(iso)) / 60000); return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+const HOW: Record<string, string> = { given: "from the flight feed", "observed-arr": "seen landing on ADS-B", "observed-dep": "seen taking off on ADS-B", "adsb-callsign": "matched by its transponder callsign", "adsb-route": "transponder matched by route", "adsb-geometry": "the only matching aircraft on this route (Skyline estimate)", rotation: "flew the inbound leg (Skyline estimate)", board: "from the airline/airport" };
+
+export function AircraftCard({ f, hex, reg }: { f: Flight; hex?: string; reg?: string }) {
+  const [d, setD] = useState<any>(null); const [err, setErr] = useState("");
+  useEffect(() => { let on = true; const go = () => api(`/plane-card?number=${encodeURIComponent(f.number)}&date=${f.date}&o=${f.origin?.iata || ""}&d=${f.destination?.iata || ""}&dep=${f.dep?.actual || f.dep?.scheduled || ""}&arr=${f.arr?.actual || f.arr?.estimated || f.arr?.scheduled || ""}&status=${f.status || ""}&hex=${hex || ""}&reg=${reg || ""}`).then(r => on && setD(r)).catch(e => on && setErr(e.message));
+    go(); const t = setInterval(go, 90e3); return () => { on = false; clearInterval(t); }; }, [f.id, hex, reg]);
+  const lv = d?.live; const air = lv && lv.alt !== "ground" && lv.alt > 0;
+  return <section className="v22-sec ac22"><div className="v22-sh"><span>Aircraft</span>{d?.confidence && <em className={"conf " + d.confidence}>{d.confidence === "likely" ? "Likely · Skyline estimate" : "Confirmed"}</em>}</div>
+    <div className="ac22-card">
+      {d?.photo?.src ? <a className="ac22-ph" href={d.photo.link} target="_blank" rel="noreferrer"><img src={d.photo.src.replace("_280.", "_1000.")} onError={e => { (e.target as HTMLImageElement).src = d.photo.src; }} alt="" referrerPolicy="no-referrer" /><span>{d.photo.credit}</span></a>
+        : <div className="ac22-ph none"><span>{!d ? "Looking up the aircraft…" : d.reg ? "No photo of this airframe found" : "Aircraft not assigned yet"}</span></div>}
+      <div className="ac22-main"><div className="ac22-reg">{d?.reg || (d ? "—" : "…")}</div><div className="ac22-type">{d?.type || d?.icaoType || ((f as any).aircraft?.model ? `${(f as any).aircraft.model} (flight feed)` : "") || (d?.typicalType ? `Usually a ${d.typicalType}` : d ? "Type not known yet" : "")}{d?.typicalType && !d?.reg && <small> · typical for this airline (Skyline estimate)</small>}</div>
+        {d?.how && <div className="ac22-how">Identified: {HOW[d.how] || d.how}</div>}
+        <div className="ac22-grid">
+          <div><label>Operator / owner</label><b>{d?.owner || "Not available"}</b></div>
+          <div><label>Mode-S hex</label><b>{d?.hex ? d.hex.toUpperCase() : "Not available"}</b></div>
+          <div><label>Manufacturer</label><b>{d?.manufacturer || "Not available"}</b></div>
+          <div><label>Registered in</label><b>{d?.ownerCountry || "Not available"}</b></div>
+          <div><label>Age</label><b className="na">Not available</b></div>
+          <div><label>Cabin / seats</label><b className="na">Not available</b></div>
+        </div>
+        {lv?.other ? <div className="ac22-live off"><i /><span>Live: this airframe is flying as {lv.flight} right now (another flight). See the note below.</span></div> : lv ? <div className={"ac22-live " + (air ? "air" : "gnd")}><i />{air ? <><b>{Math.round(lv.alt).toLocaleString()} ft</b><b>{Math.round(lv.gs || 0)} kt</b><b>{Math.round(lv.track || 0)}°</b><span>live ADS-B · {lv.flight || ""}</span></> : <><b>On the ground</b><span>live ADS-B{lv.gs ? ` · ${Math.round(lv.gs)} kt taxiing` : ""}</span></>}</div>
+          : d?.reg && <div className="ac22-live off"><i /><span>Not broadcasting on ADS-B right now</span></div>}
+        {d?.legs?.length > 0 && <div className="ac22-legs"><label>Where this plane has been (Skyline's ADS-B log)</label>{d.legs.slice(0, 5).map((l: any) => <div key={l.t + l.kind}><span className={"dot " + l.kind} /><b>{l.kind === "arr" ? "Landed" : "Took off"} {l.ap}</b><span>{l.cs} · {fmtT(l.at)} · {ago(l.at)}</span></div>)}</div>}
+        {(d?.gaps || []).length > 0 && <ul className="ac22-gaps">{d.gaps.map((g: string) => <li key={g}>{g}</li>)}</ul>}
+        {err && <div className="ac22-gaps">Couldn't reach the aircraft service: {err}</div>}
+        {d?.sources?.length > 0 && <div className="faint xs mt8">Sources: {d.sources.join(" · ")}</div>}
+      </div></div></section>;
+}
+
+export function WhatsNew22() {
+  const [show, setShow] = useState(() => !localStorage.getItem("sk.seen.v22")); if (!show) return null;
+  const done = () => { buzz(); localStorage.setItem("sk.seen.v22", "1"); setShow(false); };
+  return <div className="wn22" onClick={done}><div className="wn22-card" onClick={e => e.stopPropagation()}>
+    <div className="wn22-badge">Skyline v22</div><h2>A whole new Skyline</h2><p>Redesigned from top to bottom, plus new features. Everything uses real data, and estimates are labelled.</p>
+    {[["✦", "New design", "Bigger type, glass cards, a new tab bar and a new home screen"], ["✈︎", "Aircraft card", "Registration, type, photo and live position for any flight, with reasons when something isn't known"], ["◎", "What's overhead", "Point at the sky. Skyline lists the planes near you from live ADS-B"], ["⇄", "Connection checker", "Checks your layovers against typical minimum connection times"], ["★", "Your year in flights", "A Wrapped-style recap of your flights"]].map(([i, t, s]) => <div key={t} className="wn22-row"><span>{i}</span><div><b>{t}</b><small>{s}</small></div></div>)}
+    <button className="primary" onClick={done}>Let's go</button></div></div>;
+}
+
+export function HomeWidgets({ flights, push }: { flights: Flight[]; push: (o: any) => void }) {
+  const mine = flights.filter(f => !f.friend && !f.example); const yr = String(new Date().getFullYear()); const ys = mine.filter(f => f.date.startsWith(yr));
+  const nx = mine.filter(f => best(f.dep) && +new Date(best(f.dep)!) > Date.now()).sort((a, b) => +new Date(best(a.dep)!) - +new Date(best(b.dep)!))[0];
+  const [, t] = useState(0); useEffect(() => { const i = setInterval(() => t(x => x + 1), 30e3); return () => clearInterval(i); }, []);
+  const mins = nx ? Math.max(0, Math.round((+new Date(best(nx.dep)!) - Date.now()) / 60000)) : 0; const cx = connections(mine);
+  const W = (k: string, cls: string, ic: string, title: string, val: any, sub: string, on: () => void) => <button key={k} className={"w22 " + cls} onClick={() => { buzz(); on(); }}><span className="w22-ic">{ic}</span><b>{val}</b><span className="w22-t">{title}</span><small>{sub}</small></button>;
+  return <div className="w22-grid">
+    {W("cd", "wide grad1", "⏱", nx ? `${nx.number} · ${nx.origin?.iata} → ${nx.destination?.iata}` : "No upcoming flight", nx ? (mins >= 1440 ? `${Math.floor(mins / 1440)}d ${Math.floor(mins % 1440 / 60)}h` : `${Math.floor(mins / 60)}h ${mins % 60}m`) : "—", nx ? "until departure · tap for the countdown screen" : "Add a flight to start a countdown", () => push({ t: "lock" }))}
+    {W("ask", "grad2", "✦", "Ask Skyline", "Ask", "Ask about your flights", () => push({ t: "ask" }))}
+    {W("oh", "grad3", "◎", "What's overhead", "Sky", "Live planes near you", () => push({ t: "overhead" }))}
+    {W("cx", cx.some(c => c.risk !== "ok") ? "grad4 alert" : "grad4", "⇄", "Connections", cx.length ? `${cx.length}` : "0", cx.length ? `${cx.filter(c => c.risk !== "ok").length} need attention` : "Check a layover", () => push({ t: "conn" }))}
+    {W("wr", "grad5", "★", `${yr} Wrapped`, `${ys.length}`, `${ys.length === 1 ? "flight" : "flights"} · ${Math.round(ys.reduce((s, f) => s + dist(f.origin, f.destination), 0)).toLocaleString()} mi`, () => push({ t: "wrapped" }))}
+  </div>;
+}
+
+export function Overhead22({ x }: { x: any }) {
+  const [pos, setPos] = useState<{ lat: number; lon: number } | null>(null); const [err, setErr] = useState(""); const [d, setD] = useState<any>(null); const [routes, setRoutes] = useState<Record<string, any>>({});
+  const locate = () => { setErr(""); navigator.geolocation ? navigator.geolocation.getCurrentPosition(p => setPos({ lat: p.coords.latitude, lon: p.coords.longitude }), e => setErr(e.message || "Location permission denied"), { timeout: 12000 }) : setErr("This device has no location"); };
+  useEffect(locate, []);
+  useEffect(() => { if (!pos) return; let on = true; const go = () => api(`/overhead?lat=${pos.lat}&lon=${pos.lon}&r=30`).then(r => { if (!on) return; setD(r); r.list.slice(0, 8).forEach((a: any) => a.flight && !routes[a.flight] && api("/callsign/" + a.flight).then(c => setRoutes(m => ({ ...m, [a.flight]: c.route || null }))).catch(() => {})); }).catch(e => on && setErr(e.message));
+    go(); const t = setInterval(go, 20e3); return () => { on = false; clearInterval(t); }; }, [pos?.lat, pos?.lon]);
+  const L = (d?.list || []).filter((a: any) => a.alt !== "ground").slice(0, 25);
+  return <div className="v22-page"><div className="v22-top"><div><h1>What's overhead</h1><span>Live ADS-B within 30 nm of you · refreshes every 20 s</span></div>{x}</div>
+    {err && <div className="v22-empty">{err}<button className="chip mt8" onClick={locate}>Try again</button></div>}
+    {!pos && !err && <div className="v22-empty">Finding your location…</div>}
+    {pos && !d && !err && <div className="v22-empty">Scanning the sky…</div>}
+    {L[0] && <div className="oh-hero"><div className="oh-radar"><i />{L.slice(0, 12).map((a: any) => { const b = Math.atan2(a.lon - pos!.lon, a.lat - pos!.lat); const r = Math.min(1, a.nm / 30) * 46; return <s key={a.hex} style={{ left: `${50 + Math.sin(b) * r}%`, top: `${50 - Math.cos(b) * r}%`, transform: `rotate(${a.track || 0}deg)` }}>✈︎</s>; })}</div>
+      <div><small>Nearest</small><b>{L[0].flight || L[0].reg || L[0].hex}</b><span>{L[0].desc || L[0].type || "Unknown type"}</span><span>{L[0].nm} nm · {Math.round(+L[0].alt || 0).toLocaleString()} ft</span>{routes[L[0].flight] && <span className="oh-rt">{routes[L[0].flight].origin?.iata_code} → {routes[L[0].flight].destination?.iata_code}*</span>}</div></div>}
+    <div className="oh-list">{L.map((a: any) => { const r = routes[a.flight]; return <div key={a.hex} className="oh-row"><span className="oh-ic" style={{ transform: `rotate(${(a.track || 0) - 45}deg)` }}>✈︎</span><div className="grow"><b>{a.flight || a.reg || a.hex.toUpperCase()}</b><small>{[a.type, a.reg].filter(Boolean).join(" · ")}{r ? ` · ${r.origin?.iata_code}→${r.destination?.iata_code}*` : ""}</small></div><div className="right"><b>{a.nm} nm</b><small>{Math.round(+a.alt || 0).toLocaleString()} ft · {Math.round(a.gs || 0)} kt</small></div></div>; })}</div>
+    {d && <div className="faint xs px mt8">Source: {d.source}. *The route comes from adsbdb.com's callsign database and can be wrong for some charter or alphanumeric callsigns. Military and blocked aircraft may not be shown.</div>}
+  </div>;
+}
+
+export function Wrapped22({ x }: { x: any }) {
+  const L = useMemo(() => load().filter(f => !f.friend && !f.example), []); const yrs = [...new Set(L.map(f => f.date.slice(0, 4)))].sort().reverse(); const [yr, setYr] = useState(yrs[0] || String(new Date().getFullYear()));
+  const Y = L.filter(f => f.date.startsWith(yr)); const mi = Y.reduce((s, f) => s + dist(f.origin, f.destination), 0); const mins = Y.reduce((s, f) => s + estDurMin(f.origin, f.destination), 0);
+  const top = (k: (f: Flight) => string | undefined) => { const m: Record<string, number> = {}; Y.forEach(f => { const v = k(f); if (v) m[v] = (m[v] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1])[0]; };
+  const aps: Record<string, number> = {}; Y.forEach(f => [f.origin?.iata, f.destination?.iata].forEach(c => c && (aps[c] = (aps[c] || 0) + 1))); const tAp = Object.entries(aps).sort((a, b) => b[1] - a[1])[0];
+  const known = Y.filter(f => f.arr.actual && f.arr.scheduled); const ot = known.length ? Math.round(known.filter(f => (delay(f.arr) || 0) < 15).length / known.length * 100) : null;
+  const lng = [...Y].sort((a, b) => dist(b.origin, b.destination) - dist(a.origin, a.destination))[0]; const ctry = new Set(Y.flatMap(f => [f.origin?.country, f.destination?.country]).filter(Boolean));
+  const C = (cls: string, k: string, big: any, sub: string) => <div className={"wr-card " + cls}><small>{k}</small><b>{big}</b><span>{sub}</span></div>;
+  return <div className="v22-page"><div className="v22-top"><div><h1>{yr} Wrapped</h1><span>Your year in flights · worked out on this device</span></div>{x}</div>
+    {yrs.length > 1 && <div className="row g8 px wrap">{yrs.map(y => <button key={y} className={"chip " + (y === yr ? "on" : "")} onClick={() => setYr(y)}>{y}</button>)}</div>}
+    {!Y.length ? <div className="v22-empty">No flights saved for {yr} yet. Track or import flights and your recap builds itself.</div> : <div className="wr-stack">
+      {C("g1", "You flew", Y.length, `${Y.length === 1 ? "flight" : "flights"} in ${yr}`)}
+      {C("g2", "Distance", `${Math.round(mi).toLocaleString()} mi`, `${(mi / 24901).toFixed(2)}× around the Earth`)}
+      {C("g3", "Time in the air", `${Math.floor(mins / 60)}h ${mins % 60}m`, "Skyline estimate, worked out from distance")}
+      {top(f => f.airline?.name) && C("g4", "Top airline", top(f => f.airline?.name)![0], `${top(f => f.airline?.name)![1]} flights`)}
+      {tAp && C("g5", "Home from home", tAp[0], `${tAp[1]} visits`)}
+      {lng && C("g6", "Longest flight", `${lng.origin?.iata} → ${lng.destination?.iata}`, `${Math.round(dist(lng.origin, lng.destination)).toLocaleString()} mi · ${lng.number} · ${fmtD(lng.date)}`)}
+      {C("g1", "Countries", ctry.size, [...ctry].slice(0, 6).join(", "))}
+      {C("g2", "On time", ot == null ? "—" : `${ot}%`, ot == null ? "No actual arrival times recorded" : `arrived <15 min late · ${known.length} flights with times`)}
+    </div>}</div>;
+}
+
+export function Connections22({ flights, x }: { flights: Flight[]; x: any }) {
+  const mine = flights.filter(f => !f.friend && !f.example); const auto = connections(mine); const [a, setA] = useState(""); const [b, setB] = useState("");
+  const A = mine.find(f => f.id === a), B = mine.find(f => f.id === b);
+  const man = A && B ? (() => { const arr = best(withEstArr(A).arr), dep = best(B.dep); if (!arr || !dep) return null; const buf = Math.round((+new Date(dep) - +new Date(arr)) / 60000); const intl = A.origin?.country !== B.destination?.country; const mct = intl ? 75 : 50; return { a: A, b: B, buf, mct, risk: buf < 0 ? "missed" : buf < mct ? "high" : buf < mct + 30 ? "tight" : "ok", same: A.destination?.iata === B.origin?.iata }; })() : null;
+  const Row = (c: any) => <div key={c.a.id + c.b.id} className={"cx-row " + c.risk}><div className="cx-legs"><b>{c.a.number}</b> {c.a.origin?.iata} → <b>{c.a.destination?.iata}</b> → {c.b.destination?.iata} <b>{c.b.number}</b></div>
+    <div className="cx-bar"><i style={{ width: `${Math.max(4, Math.min(100, c.buf / (c.mct * 2) * 100))}%` }} /><s style={{ left: `${50}%` }} /></div>
+    <div className="cx-meta"><b>{c.buf < 0 ? `Missed by ${-c.buf} min` : `${Math.floor(c.buf / 60)}h ${c.buf % 60}m layover`}</b><span>{c.risk === "ok" ? "Comfortable" : c.risk === "tight" ? "Tight, keep moving" : c.risk === "high" ? "High risk" : "Missed"} · typical minimum {c.mct} min (general guidance, not the airport's official MCT)</span>{c.same === false && <span className="bad">Different airports: allow a transfer</span>}</div></div>;
+  return <div className="v22-page"><div className="v22-top"><div><h1>Connections</h1><span>Uses live times: the estimated arrival vs the next departure</span></div>{x}</div>
+    <div className="v22-sh px"><span>Found in your flights</span></div>{auto.length ? auto.map(Row) : <div className="v22-empty">No connecting flights found. A connection is when one flight lands where the next one departs within 24h.</div>}
+    <div className="v22-sh px"><span>Check any two flights</span></div>
+    <div className="px cx-pick"><select value={a} onChange={e => setA(e.target.value)}><option value="">First flight…</option>{mine.map(f => <option key={f.id} value={f.id}>{f.number} {f.origin?.iata}→{f.destination?.iata} {f.date}</option>)}</select>
+      <select value={b} onChange={e => setB(e.target.value)}><option value="">Then…</option>{mine.map(f => <option key={f.id} value={f.id}>{f.number} {f.origin?.iata}→{f.destination?.iata} {f.date}</option>)}</select></div>
+    {man ? Row(man) : A && B && <div className="v22-empty">One of these flights has no times yet.</div>}</div>;
+}
