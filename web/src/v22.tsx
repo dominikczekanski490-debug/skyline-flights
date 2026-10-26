@@ -91,8 +91,8 @@ export function Wrapped22({ x }: { x: any }) {
       {C("g1", "You flew", Y.length, `${Y.length === 1 ? "flight" : "flights"} in ${yr}`)}
       {C("g2", "Distance", `${Math.round(mi).toLocaleString()} mi`, `${(mi / 24901).toFixed(2)}× around the Earth`)}
       {C("g3", "Time in the air", `${Math.floor(mins / 60)}h ${mins % 60}m`, "Skyline estimate, worked out from distance")}
-      {top(f => f.airline?.name) && C("g4", "Top airline", top(f => f.airline?.name)![0], `${top(f => f.airline?.name)![1]} flights`)}
-      {tAp && C("g5", "Home from home", tAp[0], `${tAp[1]} visits`)}
+      {top(f => f.airline?.name) && C("g4", "Top airline", top(f => f.airline?.name)![0], `${top(f => f.airline?.name)![1]} flight${top(f => f.airline?.name)![1] === 1 ? "" : "s"}`)}
+      {tAp && C("g5", "Home from home", tAp[0], `${tAp[1]} visit${tAp[1] === 1 ? "" : "s"}`)}
       {lng && C("g6", "Longest flight", `${lng.origin?.iata} → ${lng.destination?.iata}`, `${Math.round(dist(lng.origin, lng.destination)).toLocaleString()} mi · ${lng.number} · ${fmtD(lng.date)}`)}
       {C("g1", "Countries", ctry.size, [...ctry].slice(0, 6).join(", "))}
       {C("g2", "On time", ot == null ? "—" : `${ot}%`, ot == null ? "No actual arrival times recorded" : `arrived <15 min late · ${known.length} flights with times`)}
