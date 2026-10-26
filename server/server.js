@@ -1437,6 +1437,35 @@ api.get("/acresolve/:iata", async (req, res) => { try { const iata = req.params.
   const R = []; for (const f of L) R.push({ number: f.number, to: f.destination?.iata, before: f.aircraft?.reg || null, ...(await resolveAircraft(f, ctx)) });
   const by = {}; R.forEach(r => r.how && (by[r.how] = (by[r.how] || 0) + 1));
   res.json({ iata, near: ctx.near.length, mapped: Object.keys(ctx.byNum).length, sample: Object.keys(ctx.byNum).slice(0, 12), flights: R.length, regBefore: R.filter(r => r.before).length, regAfter: R.filter(r => r.reg).length, typeKnown: R.filter(r => r.type || r.typicalType).length, by, rows: req.query.rows ? R : undefined }); } catch (e) { res.status(500).json({ error: e.message }); } });
+
+// ---------- v22: one aircraft card for ANY flight. Every field says where it came from; gaps carry a reason. ----------
+api.get("/plane-card", async (req, res) => { try {
+  const q = req.query; const number = String(q.number || "").toUpperCase().replace(/\s/g, ""); const o = String(q.o || "").toUpperCase(), d = String(q.d || "").toUpperCase(); const ymd = String(q.date || todayLondon());
+  const [, al, digits] = acNum(number); const icao = AL[al]?.icao || (/^[A-Z]{3}/.test(number) ? number.slice(0, 3) : null); const cs = icao && digits ? icao + digits : null;
+  let hex = String(q.hex || "").toLowerCase().replace(/[^0-9a-f]/g, ""), reg = String(q.reg || "").toUpperCase(); let how = hex || reg ? "given" : null, conf = hex || reg ? "confirmed" : null, typical = null; const gaps = [];
+  const status = String(q.status || ""); const arrT = +new Date(q.arr || 0), depT = +new Date(q.dep || 0);
+  // 1) ADS-B observed take-off/landing log (covers landed flights)
+  if (!hex && !reg) { for (const [ap, kind, t] of [[d, "arr", arrT], [o, "dep", depT]]) { const ev = (OBS[ap]?.events || []).filter(e => e.kind === kind);
+      let m = cs && ev.filter(e => e.cs === cs && (!t || Math.abs(e.t - t) < 4 * 3600e3)); if (!m?.length && icao && t) m = ev.filter(e => (e.cs || "").startsWith(icao) && Math.abs(e.t - t) < 25 * 60e3);
+      if (m?.length === 1 || (m?.length && m.every(x => x.hex === m[0].hex))) { hex = m[0].hex; reg = m[0].reg || ""; how = "observed-" + kind; conf = m[0].cs === cs ? "confirmed" : "likely"; break; } } }
+  // 2) live ADS-B by callsign
+  if (!hex && !reg && cs) { const l = await adsb("callsign/" + cs).catch(() => []); if (l[0]) { hex = l[0].hex; reg = l[0].reg || ""; how = "adsb-callsign"; conf = "confirmed"; } }
+  // 3) the existing resolver (board, ADS-B route/geometry, rotation)
+  if (!hex && !reg && o && status !== "landed") { try { const ctx = await acContext(o, ymd); const f = ctx.dep.find(x => (x.number || "").replace(/\s/g, "") === number) || { number, origin: AP[o], dep: { scheduled: q.dep }, destination: { iata: d } };
+      const r = await resolveAircraft(f, ctx); if (r?.reg || r?.live?.hex) { reg = r.reg || ""; hex = r.live?.hex || ""; how = r.how; conf = /geometry|rotation/.test(r.how || "") ? "likely" : "confirmed"; } typical = r?.typicalType || null; } catch {} }
+  const out = { number, callsign: cs, how, confidence: conf, hex: hex || null, reg: reg || null, sources: [] };
+  if (!hex && !reg) { out.typicalType = typical || (icao ? typicalType(icao) : null); gaps.push(status === "landed" ? "This flight has landed and Skyline didn't see it touch down on ADS-B, so its exact aircraft isn't known." : depT && depT - Date.now() > 3 * 3600e3 ? "Airlines usually assign the exact aircraft 2–3 hours before departure. Skyline keeps checking." : "No transponder matched this flight yet (it may be outside volunteer ADS-B coverage)."); out.gaps = gaps; return res.json(out); }
+  const key = hex || reg; const db = await cached("adsbdb:" + key.toUpperCase(), 86400, () => getJ("https://api.adsbdb.com/v0/aircraft/" + key.toUpperCase()).then(j => j.response?.aircraft || null).catch(() => null));
+  if (db) { Object.assign(out, { reg: out.reg || db.registration, hex: out.hex || (db.mode_s || "").toLowerCase(), type: db.type, icaoType: db.icao_type, manufacturer: db.manufacturer, owner: db.registered_owner, ownerCountry: db.registered_owner_country_name }); out.sources.push("adsbdb.com"); if (db.url_photo) out.photo = { src: db.url_photo_thumbnail || db.url_photo, credit: "airport-data.com", link: db.url_photo }; }
+  if (!out.type && out.hex) { try { const h = await cached("hexdb:" + out.hex, 86400 * 7, () => getJSON(`https://hexdb.io/api/v1/aircraft/${out.hex}`)); Object.assign(out, { reg: out.reg || h.Registration, type: h.Type, icaoType: h.ICAOTypeCode, manufacturer: h.Manufacturer, owner: out.owner || h.RegisteredOwners }); out.sources.push("hexdb.io"); } catch {} }
+  try { const p = await cached("ps:" + (out.hex || out.reg), 86400, () => getJSON(out.hex ? `https://api.planespotters.net/pub/photos/hex/${out.hex}` : `https://api.planespotters.net/pub/photos/reg/${out.reg}`, { headers: { "user-agent": UA } })); const ph = p.photos?.[0]; if (ph) out.photo = { src: ph.thumbnail_large?.src, link: ph.link, credit: "© " + ph.photographer + " / planespotters.net" }; } catch {}
+  if (out.hex) { const l = (await adsb("hex/" + out.hex).catch(() => []))[0]; if (l?.lat) { out.live = { lat: l.lat, lon: l.lon, alt: l.alt, gs: l.gs, track: l.track, flight: l.flight, vs: l.vs, seen: l.seen }; out.sources.push("ADS-B (adsb.lol/airplanes.live/adsb.fi)"); } }
+  // previous / next legs: Skyline's own observed log (ADS-B take-offs/landings + feeds)
+  const legs = []; for (const [ap, ob] of Object.entries(OBS)) for (const e of ob.events) if ((out.hex && e.hex === out.hex) || (out.reg && e.reg === out.reg)) legs.push({ ap, kind: e.kind, t: e.t, cs: e.cs });
+  legs.sort((a, b) => b.t - a.t); out.legs = legs.slice(0, 10).map(l => ({ ...l, at: new Date(l.t).toISOString() })); if (!legs.length) gaps.push("Skyline hasn't logged this aircraft's earlier take-offs or landings (it only logs ADS-B at the airports it watches).");
+  if (!out.live) gaps.push(status === "landed" ? "Not broadcasting now (parked or switched off)." : "Not visible on ADS-B right now.");
+  gaps.push("Build year / age and cabin layout aren't in any free aircraft database Skyline uses."); out.gaps = gaps; res.json(out);
+} catch (e) { res.status(500).json({ error: e.message }); } });
 app.use("/api", api);
 const dist = path.join(__dir, "../web/dist");
 app.use(express.static(dist, { setHeaders: (r, p) => { if (p.endsWith("sw.js") || p.endsWith(".html") || p.endsWith("version.json")) r.setHeader("cache-control", "no-cache"); } }));
