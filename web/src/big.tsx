@@ -1,3 +1,4 @@
+import { Livery } from "./livery";
 // Day-of features: next-flight live card, "is my plane here", flight facts, global search, airport (day-of) mode.
 import { useEffect, useState } from "react";
 import { api, fmtT, best, delay, dur, dist, estDurMin, lateLabel, lateColor, today, withEstArr, wxIcon, type Flight } from "./lib";
@@ -31,6 +32,7 @@ export function PlaneHere({ f, hex, reg }: { f: Flight; hex?: string; reg?: stri
   const pre = phaseOf(f) === "pre";
   return <div className="card"><div className="row between"><h3 className="m0">Is my plane here yet?</h3><span className="srcb live">ADS-B</span></div>
     <div className="muted sm">{reg || hex}{d?.type ? " · " + d.type : ""}</div>
+    <div className="mt8"><Livery small code={f.airline?.iata} icao={f.airline?.icao} name={f.airline?.name} type={d?.type || f.aircraft?.model} reg={reg} /></div>
     {err ? <div className="note warn">{err}</div> : !d ? <div className="faint sm mt8">Looking for the aircraft…</div> : !d.seen ? <div className="mt8"><b>Not visible right now</b><div className="faint sm">{d.note}</div></div>
       : <div className="mt8"><b className={d.here ? "green" : ""}>{d.here ? `Yes. It is on the ground at ${f.origin?.iata}.` : d.onGround ? `On the ground ${d.km} km from ${f.origin?.iata}` : `Airborne, ${d.km?.toLocaleString()} km from ${f.origin?.iata}`}</b>
         <div className="faint sm">{d.callsign ? `Currently flying as ${d.callsign}` : ""}{typeof d.alt === "number" ? ` · ${Math.round(d.alt / 100) * 100} ft · ${Math.round(d.gs || 0)} kt` : ""} · {d.src}{d.seenSec != null ? `, seen ${Math.round(d.seenSec)} s ago` : ""}</div>

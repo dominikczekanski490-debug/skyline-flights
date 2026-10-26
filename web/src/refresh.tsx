@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 // Live data refreshes every 4 minutes while the app is open, and immediately when it comes back to the foreground.
 export const POLL_MS = 4 * 60e3;
+export const TRACK_MS = 2 * 60e3; // tracked flights + open flight detail
 export function usePoll(fn: () => Promise<any> | void, deps: any[], ms = POLL_MS) {
   const [upd, setUpd] = useState<number | null>(null); const [next, setNext] = useState(Date.now() + ms); const f = useRef(fn); f.current = fn;
   useEffect(() => { let on = true; let t: any; let last = 0;
@@ -15,3 +16,8 @@ export function Refreshed({ upd, next, note }: { upd: number | null; next: numbe
   const s = Math.max(0, Math.round((next - now) / 1000)); const hm = upd ? new Date(upd).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : null;
   return <div className="refreshed faint sm px">{hm ? `Updated ${hm}` : "Checking…"} · next in {Math.floor(s / 60)}:{String(s % 60).padStart(2, "0")}{note ? ` · ${note}` : ""}</div>;
 }
+// v13: shared clock for the tracked-flights batch poll (every 2 min, plus on app resume).
+let TC = { upd: null as number | null, next: Date.now() + TRACK_MS };
+export function markTracked() { TC = { upd: Date.now(), next: Date.now() + TRACK_MS }; window.dispatchEvent(new Event("skyline-track")); }
+export function useTrackClock() { const [c, setC] = useState(TC); useEffect(() => { const f = () => setC(TC); window.addEventListener("skyline-track", f); return () => window.removeEventListener("skyline-track", f); }, []); return c; }
+export function TrackedRefreshed() { const c = useTrackClock(); return <Refreshed {...c} note="tracked flights every 2 min" />; }

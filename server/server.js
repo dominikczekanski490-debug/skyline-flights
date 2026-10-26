@@ -780,6 +780,11 @@ async function findFlight(number, ymd) {
   if (result.flight && !result.flight.date) result.flight.date = ymd;
   return result;
 }
+// v13: batched status for tracked flights, polled every 2 min by the app. Per-flight result cached <= 110 s; AeroDataBox calls keep their own quota guard.
+api.get("/flights", wrap(async (req, res) => { const ids = String(req.query.ids || "").split(",").map(x => x.trim()).filter(Boolean).slice(0, 20); const out = {};
+  for (const id of ids) { const [n, d] = id.split("@"); if (!/^[A-Z0-9]{2,8}$/i.test(n || "")) continue; const ymd = /^\d{4}-\d{2}-\d{2}$/.test(d || "") ? d : todayLondon();
+    try { out[id] = await Promise.race([cached(`ff:${n.toUpperCase()}:${ymd}`, 110, () => findFlight(n, ymd)), new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 14e3))]); } catch (e) { out[id] = { error: String(e.message || e) }; } }
+  res.json({ at: new Date().toISOString(), ttl: 120, flights: out }); }));
 api.get("/flight/:number", wrap(async (req, res) => res.json(await findFlight(req.params.number, String(req.query.date || todayLondon())))));
 api.get("/route", wrap(async (req, res) => { const from = String(req.query.from || "").toUpperCase(), to = String(req.query.to || "").toUpperCase(), ymd = String(req.query.date || todayLondon());
   let list = [], source = "";

@@ -1,4 +1,4 @@
-import { useId } from "react";
+import React from "react";
 // Illustrative 2D side-view aircraft drawn in an airline's livery colours. Original drawings, not photos.
 // Livery entries are a simplified colour scheme (fuselage, belly, tail, engine, accent, motif), not exact artwork.
 type Motif = "band" | "circle" | "chevron" | "split" | "stripes" | "disc" | "flag" | "plain";
@@ -11,7 +11,7 @@ const L: Record<string, Liv> = {
   VS: { n: "Virgin Atlantic", f: "#ffffff", t: "#da0530", e: "#5b2a86", a: "#5b2a86", m: "stripes", tx: "#da0530" },
   LH: { n: "Lufthansa", f: "#ffffff", b: "#ffffff", t: "#05164d", e: "#05164d", a: "#ffffff", m: "circle", tx: "#05164d" },
   AF: { n: "Air France", f: "#ffffff", t: "#ffffff", e: "#ffffff", a: "#002157", m: "stripes", tx: "#002157", ch: "#ed2939" },
-  KL: { n: "KLM", f: "#00a1de", b: "#ffffff", t: "#00a1de", e: "#00a1de", a: "#ffffff", m: "plain", tx: "#ffffff" },
+  KL: { n: "KLM", f: "#ffffff", b: "#00a1de", t: "#00a1de", e: "#00a1de", a: "#00a1de", m: "plain", tx: "#00a1de" },
   IB: { n: "Iberia", f: "#ffffff", t: "#d7192d", e: "#d7192d", a: "#fdc82f", m: "split", tx: "#d7192d" },
   VY: { n: "Vueling", f: "#ffffff", t: "#ffcc00", e: "#4d4d4d", a: "#4d4d4d", m: "plain", tx: "#4d4d4d" },
   TP: { n: "TAP Air Portugal", f: "#ffffff", t: "#00b259", e: "#e10b17", a: "#e10b17", m: "split", tx: "#00b259" },
@@ -92,7 +92,7 @@ const L: Record<string, Liv> = {
   FZ: { n: "flydubai", f: "#ffffff", t: "#e84f1c", e: "#004b87", a: "#004b87", m: "split", tx: "#004b87" },
   G9: { n: "Air Arabia", f: "#ffffff", t: "#e2231a", e: "#7d7d7d", a: "#e2231a", m: "stripes", tx: "#7d7d7d" },
 };
-const ICAO: Record<string, string> = { BAW: "BA", SHT: "BA", CFE: "BA", EZY: "EZY", EJU: "EZY", EZS: "EZY", RYR: "FR", RUK: "FR", WZZ: "W6", WUK: "W6", VIR: "VS", DLH: "LH", AFR: "AF", KLM: "KL", IBE: "IB", VLG: "VY", TAP: "TP", SAS: "SK", FIN: "AY", SWR: "LX", AUA: "OS", BEL: "SN", EIN: "EI", EUK: "EI", UAE: "EK", QTR: "QR", ETD: "EY", THY: "TK", AAL: "AA", DAL: "DL", UAL: "UA", QFA: "QF", SIA: "SQ", NAX: "DY", NSZ: "DY", EXS: "LS", TOM: "BY", LOG: "LM", AUR: "GR", EZE: "T3", TRA: "HV", TVF: "HV", EWG: "EW", CFG: "DE", ICE: "FI", WIF: "WF", ACA: "AC", ETH: "ET", LOT: "LO", AEE: "A3", ITY: "AZ", AEA: "UX", VOE: "V7", BTI: "BT", AMC: "KM", LGL: "LG", EDW: "WK", PGT: "PC", SXS: "XQ", CPA: "CX", JAL: "JL", ANA: "NH", AIC: "AI", PIA: "PK", MSR: "MS", RAM: "AT", SVA: "SV" };
+const ICAO: Record<string, string> = { W4: "W6", W9: "W6", "5W": "W6", WMT: "W6", WAZ: "W6", BAW: "BA", SHT: "BA", CFE: "BA", EZY: "EZY", EJU: "EZY", EZS: "EZY", RYR: "FR", RUK: "FR", WZZ: "W6", WUK: "W6", VIR: "VS", DLH: "LH", AFR: "AF", KLM: "KL", IBE: "IB", VLG: "VY", TAP: "TP", SAS: "SK", FIN: "AY", SWR: "LX", AUA: "OS", BEL: "SN", EIN: "EI", EUK: "EI", UAE: "EK", QTR: "QR", ETD: "EY", THY: "TK", AAL: "AA", DAL: "DL", UAL: "UA", QFA: "QF", SIA: "SQ", NAX: "DY", NSZ: "DY", EXS: "LS", TOM: "BY", LOG: "LM", AUR: "GR", EZE: "T3", TRA: "HV", TVF: "HV", EWG: "EW", CFG: "DE", ICE: "FI", WIF: "WF", ACA: "AC", ETH: "ET", LOT: "LO", AEE: "A3", ITY: "AZ", AEA: "UX", VOE: "V7", BTI: "BT", AMC: "KM", LGL: "LG", EDW: "WK", PGT: "PC", SXS: "XQ", CPA: "CX", JAL: "JL", ANA: "NH", AIC: "AI", PIA: "PK", MSR: "MS", RAM: "AT", SVA: "SV" };
 export function liveryFor(code?: string, icao?: string): Liv | null { const c = (code || "").toUpperCase(); return L[c] || L[ICAO[(icao || "").toUpperCase()] || ""] || L[ICAO[c] || ""] || null; }
 export type Fam = "narrow" | "wide" | "quad" | "prop" | "rj";
 export function familyOf(type?: string): Fam {
@@ -103,53 +103,44 @@ export function familyOf(type?: string): Fam {
   if (/A33|330|A35|350|A30[0-9]|A310|B76|767|B77|777|B78|787|B72|MD11|DC10/.test(t)) return "wide";
   return "narrow";
 }
-const SH: Record<Fam, { len: number; h: number; win: number; eng: number; tailH: number }> = {
-  narrow: { len: 300, h: 30, win: 26, eng: 2, tailH: 52 }, rj: { len: 250, h: 26, win: 18, eng: 2, tailH: 46 }, prop: { len: 250, h: 27, win: 16, eng: 2, tailH: 48 },
-  wide: { len: 340, h: 38, win: 36, eng: 2, tailH: 62 }, quad: { len: 350, h: 44, win: 40, eng: 4, tailH: 66 } };
+// v13: realistic side-view base images (AI-generated originals, see PLANE_CREDITS) with livery colour overlays.
+type Ast = { k: string; name: string };
+const T: [RegExp, Ast][] = [
+  [/A21N|A321NEO/, { k: "a321", name: "Airbus A321neo" }], [/A321|A21/, { k: "a321", name: "Airbus A321" }],
+  [/A20N|A320NEO/, { k: "a320", name: "Airbus A320neo" }], [/A19N|A319NEO/, { k: "a320", name: "Airbus A319neo" }], [/A320|A32[0-9]/, { k: "a320", name: "Airbus A320" }], [/A319|A318|A31[89]/, { k: "a320", name: "Airbus A319" }],
+  [/B38M|B39M|B37M|737MAX|MAX8|MAX9|7M8/, { k: "b38m", name: "Boeing 737 MAX 8" }], [/B738|737-800|7378|73H/, { k: "b738", name: "Boeing 737-800" }], [/B739|737-900/, { k: "b738", name: "Boeing 737-900" }], [/B737|B73|737/, { k: "b738", name: "Boeing 737-700" }],
+  [/B78X|787-10/, { k: "b789", name: "Boeing 787-10" }], [/B788|787-8/, { k: "b789", name: "Boeing 787-8" }], [/B789|B78|787/, { k: "b789", name: "Boeing 787-9" }],
+  [/B77W|777-300|B773|77W/, { k: "b77w", name: "Boeing 777-300ER" }], [/B772|B77L|777-200|B77|777/, { k: "b77w", name: "Boeing 777-200" }],
+  [/A388|A380|388/, { k: "a388", name: "Airbus A380" }], [/A35K|A350-1000/, { k: "a359", name: "Airbus A350-1000" }], [/A359|A35|350/, { k: "a359", name: "Airbus A350-900" }],
+  [/B744|B748|B74|747/, { k: "b744", name: "Boeing 747" }], [/A33|330/, { k: "a333", name: "Airbus A330" }], [/A34|340/, { k: "a346", name: "Airbus A340" }],
+  [/B75|757/, { k: "b752", name: "Boeing 757" }], [/B76|767/, { k: "b763", name: "Boeing 767" }],
+  [/AT7|ATR72|ATR 72/, { k: "at76", name: "ATR 72" }], [/AT4|ATR42/, { k: "at76", name: "ATR 42" }], [/DH8|DASH8|Q400|Q300|DHC8/, { k: "dh8d", name: "De Havilland Dash 8-400" }],
+  [/CRJ|CR[279K]/, { k: "crj9", name: "Bombardier CRJ900" }], [/BCS|A22|CS[13]00|A220/, { k: "bcs3", name: "Airbus A220" }],
+  [/E19|E29|E195|E190|E2/, { k: "e190", name: "Embraer E190/E195" }], [/E17|E75|E170|E175|EMB|ERJ|E1/, { k: "e190", name: "Embraer E170/E175" }],
+];
+const WIDE = new Set(["EK", "QR", "EY", "SQ", "CX", "QF", "JL", "NH", "VS"]);
+export function assetFor(type?: string, code?: string): Ast & { known: boolean } {
+  const t = (type || "").toUpperCase().replace(/\s+/g, "");
+  for (const [r, a] of T) if (r.test(t)) return { ...a, known: true };
+  // Unknown type: airline's typical aircraft, flagged as not reported.
+  const c = (code || "").toUpperCase(); const k = WIDE.has(c) ? "b77w" : ["FR", "RYR"].includes(c) ? "b738" : "a320";
+  return { k, name: "", known: false };
+}
+const TOP: Record<string, number> = {a320:0.516,a321:0.516,a333:0.5,a346:0.534,a359:0.502,a388:0.558,at76:0.549,b38m:0.575,b738:0.574,b744:0.471,b752:0.55,b763:0.558,b77w:0.534,b789:0.53,bcs3:0.54,crj9:0.493,dh8d:0.565,e190:0.469};
+export const PLANE_CREDITS = "Aircraft side views: original AI-generated illustrations made for Skyline (no third-party photos). Livery colours are simplified and illustrative, not official artwork.";
+const mk = (k: string, p: string): React.CSSProperties => ({ WebkitMaskImage: `url(/planes/${k}-${p}.png)`, maskImage: `url(/planes/${k}-${p}.png)`, WebkitMaskSize: "100% 100%", maskSize: "100% 100%" } as any);
 export function Livery({ code, icao, name, type, reg, small }: { code?: string; icao?: string; name?: string; type?: string; reg?: string; small?: boolean }) {
-  const id = useId().replace(/:/g, ""); const lv = liveryFor(code, icao); const fam = familyOf(type); const s = SH[fam];
-  const v = lv || { n: "", f: "#eef0f3", b: "#c7ccd3", t: "#9aa3ad", e: "#b8bfc8", a: "#7c8691", m: "plain" as Motif, tx: "#7c8691" };
-  const x0 = (400 - s.len) / 2, x1 = x0 + s.len, cy = 70, top = cy - s.h / 2, bot = cy + s.h / 2;
-  const body = `M${x0 + 18},${top + 4} L${x1 - 40},${top} Q${x1 - 6},${top + 2} ${x1},${cy + 4} Q${x1 - 4},${bot} ${x1 - 34},${bot} L${x0 + 40},${bot} Q${x0 + 10},${bot - 2} ${x0},${top + 6} Z`;
-  const tailX = x0 + 6, fin = `M${tailX},${top + 4} L${tailX + 10},${top - s.tailH} L${tailX + 34},${top - s.tailH} L${tailX + 64},${top + 2} Z`;
-  const wing = `M${x0 + s.len * 0.38},${cy + 6} L${x0 + s.len * 0.52},${cy + 6} L${x0 + s.len * 0.40},${bot + 18} L${x0 + s.len * 0.33},${bot + 18} Z`;
-  const engs = fam === "prop" ? [x0 + s.len * 0.42] : fam === "rj" && /CRJ|E145|E135|ERJ|F70|F100/.test((type || "").toUpperCase()) ? [] : Array.from({ length: s.eng / 2 }, (_, i) => x0 + s.len * (0.40 - i * 0.12));
-  const rear = fam === "rj" && engs.length === 0; const wins = Array.from({ length: s.win }, (_, i) => x0 + 50 + i * ((s.len - 100) / s.win));
-  const label = lv ? lv.n : name ? `${name}` : "";
-  const fx = tailX + 32, fy = top - s.tailH * 0.42;
-  const motif = () => { switch (v.m) {
-    case "circle": return <circle cx={fx} cy={fy} r={s.tailH * 0.22} fill="none" stroke={v.a} strokeWidth={3} />;
-    case "disc": return <circle cx={fx} cy={fy} r={s.tailH * 0.2} fill={v.a} />;
-    case "chevron": return <path d={`M${fx - 12},${fy + 12} L${fx},${fy - 6} L${fx + 12},${fy + 12}`} fill="none" stroke={v.a} strokeWidth={4} />;
-    case "split": return <path d={`M${tailX + 10},${top - s.tailH} L${tailX + 34},${top - s.tailH} L${tailX + 64},${top + 2} L${tailX + 40},${top + 2} Z`} fill={v.a} opacity={0.9} />;
-    case "stripes": return <>{[0, 1, 2].map(i => <path key={i} d={`M${tailX + 8 + i * 9},${top + 2} L${tailX + 20 + i * 9},${top - s.tailH + 6}`} stroke={i === 1 && v.ch ? v.ch : v.a} strokeWidth={4} />)}</>;
-    case "flag": return <><path d={`M${tailX + 14},${fy + 8} Q${fx},${fy - 12} ${tailX + 48},${fy}`} stroke={v.a} strokeWidth={5} fill="none" />{v.ch && <path d={`M${tailX + 16},${fy + 14} Q${fx},${fy - 4} ${tailX + 50},${fy + 6}`} stroke={v.ch} strokeWidth={3} fill="none" />}</>;
-    case "band": return <rect x={tailX + 12} y={fy - 4} width={36} height={8} fill={v.a} transform={`skewX(-20)`} style={{ transformBox: "fill-box", transformOrigin: "center" }} />;
-    default: return null; } };
-  return <div className={"livery" + (small ? " sm" : "")}>
-    <svg viewBox="0 0 400 130" role="img" aria-label={`${label || "Aircraft"} illustrative livery`}>
-      <defs><linearGradient id={"lvsh" + id} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".25" /><stop offset=".6" stopColor="#000" stopOpacity="0" /><stop offset="1" stopColor="#000" stopOpacity=".18" /></linearGradient>
-        <clipPath id={"lvbody" + id}><path d={body} /></clipPath></defs>
-      <ellipse cx="200" cy="122" rx={s.len / 2} ry="4" fill="#000" opacity=".35" />
-      <path d={fin} fill={v.t} stroke="rgba(0,0,0,.25)" />
-      <clipPath id={"lvfin" + id}><path d={fin} /></clipPath><g clipPath={`url(#lvfin${id})`}>{motif()}</g>
-      <path d={`M${x0 + 4},${top + 10} L${x0 - 6},${top + 2} L${x0 + 26},${top + 4} L${x0 + 38},${top + 10} Z`} fill={v.t} opacity=".9" />
-      <path d={body} fill={v.f} stroke="rgba(0,0,0,.3)" />
-      {v.b && <rect x={x0} y={cy + s.h * 0.2} width={s.len} height={s.h} fill={v.b} clipPath={`url(#lvbody${id})`} />}
-      <rect x={x0} y={top} width={s.len} height={s.h} fill={`url(#lvsh${id})`} clipPath={`url(#lvbody${id})`} />
-      {wins.map((x, i) => <rect key={i} x={x} y={cy - s.h * 0.3} width={3.2} height={4} rx={1.2} fill="#24303d" opacity=".75" />)}
-      <path d={`M${x1 - 26},${cy - s.h * 0.22} L${x1 - 12},${cy - s.h * 0.2} L${x1 - 9},${cy - s.h * 0.06} L${x1 - 24},${cy - s.h * 0.06} Z`} fill="#1c2733" />
-      <rect x={x0 + 70} y={cy - 4} width={8} height={s.h * 0.45} rx={1} fill="none" stroke="rgba(0,0,0,.25)" />
-      {label && <text x={x0 + s.len * (fam === "prop" ? 0.7 : 0.58)} y={cy + s.h * 0.1} textAnchor="middle" fontSize={fam === "rj" || fam === "prop" ? 9 : fam === "narrow" ? 10.5 : 12.5} fontWeight={700} fill={v.tx || "#333"} fontFamily="system-ui, -apple-system, sans-serif">{label}</text>}
-      {reg && <text x={x0 + 46} y={cy + s.h * 0.1} fontSize={7} fill="#333" fontFamily="system-ui, sans-serif">{reg}</text>}
-      <path d={wing} fill="#8b939c" stroke="rgba(0,0,0,.3)" />
-      {engs.map((x, i) => fam === "prop" ? <g key={i}><rect x={x - 6} y={cy - 6} width={36} height={12} rx={6} fill={v.e} stroke="rgba(0,0,0,.3)" /><ellipse cx={x + 32} cy={cy} rx={2.5} ry={16} fill="#555" opacity=".6" /></g>
-        : <g key={i}><rect x={x - 4} y={bot + (i ? 6 : 2)} width={fam === "quad" || fam === "wide" ? 40 : 32} height={fam === "quad" || fam === "wide" ? 15 : 12} rx={6} fill={v.e} stroke="rgba(0,0,0,.35)" /><rect x={x + (fam === "quad" || fam === "wide" ? 32 : 25)} y={bot + (i ? 7 : 3)} width={4} height={fam === "quad" || fam === "wide" ? 13 : 10} fill="#2a2f35" /></g>)}
-      {rear && <rect x={x0 + 34} y={top - 4} width={30} height={11} rx={5} fill={v.e} stroke="rgba(0,0,0,.35)" />}
-      <rect x={x0 + s.len * 0.42} y={bot} width={3} height={14} fill="#555" /><circle cx={x0 + s.len * 0.42 + 1.5} cy={bot + 16} r={4} fill="#222" />
-      <rect x={x1 - 40} y={bot} width={2.5} height={12} fill="#555" /><circle cx={x1 - 39} cy={bot + 14} r={3.2} fill="#222" />
-    </svg>
-    <div className="lvcap"><span>{lv ? lv.n : name || "Unknown airline"}{type ? ` · ${type}` : ""}{reg ? ` · ${reg}` : ""}</span><span className="faint">{lv ? "Illustrative livery" : "Livery not on file · neutral scheme"}</span></div>
+  const lv = liveryFor(code, icao); const a = assetFor(type, lv ? (code || "") : code);
+  const lay = (p: string, c?: string, op = 0.92) => c && !/^#f[0-9a-f]{5}$/i.test(c) ? <div className="pl-ov" style={{ ...mk(a.k, p), background: c, opacity: op }} /> : null;
+  return <div className={"pl-card" + (small ? " sm" : "")}>
+    <div className="pl-sky"><div className="pl-wrap">
+      <img src={`/planes/${a.k}.webp`} loading="lazy" decoding="async" alt="" className="pl-img" />
+      {lv && <>{lay("tail", lv.t)}{lv.b && lv.b !== lv.f && lay("belly", lv.b, 0.85)}{lay("line", lv.a, 0.8)}{lay("eng", lv.e, 0.75)}
+        {lv.f !== "#ffffff" && lay("belly", lv.f, 0.55)}
+        <div className="pl-name" style={{ top: `${(TOP[a.k] + 0.06) * 100}%`, color: lv.tx || lv.t }}>{lv.n}</div></>}
+    </div></div>
+    <div className="pl-cap"><b>{a.known ? a.name : "Type not reported"}</b>{!a.known && <span className="faint sm"> · showing typical aircraft</span>}
+      <div className="faint sm">{[reg, lv?.n || name].filter(Boolean).join(" · ")}{!lv && " · Livery not on file"} · Illustrative</div></div>
   </div>;
 }
 export const LIVERY_COUNT = Object.keys(L).length;

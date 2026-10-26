@@ -1,5 +1,5 @@
-import { Livery } from "./livery";
-import { usePoll, Refreshed, POLL_MS } from "./refresh";
+import { Livery, PLANE_CREDITS } from "./livery";
+import { usePoll, Refreshed, TRACK_MS, markTracked, TrackedRefreshed } from "./refresh";
 import { ToolsHub, FeatureList, TOOLS, BOARD_FEATURES } from "./tools";
 import { TerminalBoard, status as boardStatus } from "./terminal";
 import { NextHero, PlaneHere, Facts, GlobalSearch, DayOf, phaseOf } from "./big";
@@ -43,14 +43,15 @@ export default function App() {
   const flRef = useRef(flights); flRef.current = flights;
   useEffect(() => { let busy = false; const tick = async () => { if (busy || document.visibilityState !== "visible") return; busy = true;
     const now = flRef.current.filter(f => !f.example && f.date >= new Date(Date.now() - 86400e3).toISOString().slice(0, 10));
-    for (const f of now) { try { const r = await api(`/flight/${f.number}?date=${f.date}`); setLive(l => ({ ...l, [f.id]: r.live || null }));
+    let batch: any = {}; try { batch = (await api(`/flights?ids=${now.map(f => `${f.number}@${f.date}`).join(",")}`)).flights || {}; } catch (e) { console.warn("batch", e); }
+    for (const f of now) { try { const r = batch[`${f.number}@${f.date}`]; if (!r || r.error) continue; setLive(l => ({ ...l, [f.id]: r.live || null }));
       if (r.flight && !f.manual) { const keep = (a: any = {}, b: any = {}) => { const o = { ...a }; for (const k in b) if (b[k] != null && b[k] !== "") o[k] = b[k]; return o; };
         const n: Flight = { ...f, ...r.flight, dep: keep(f.dep, r.flight.dep), arr: keep(f.arr, r.flight.arr), id: f.id, date: f.date, notes: f.notes, friend: f.friend, checkedAt: Date.now(), live: r.live ? { ...r.live, at: Date.now() } : null, aircraft: { ...f.aircraft, ...r.flight.aircraft, ...(r.live ? { reg: r.live.reg, hex: r.live.hex, model: r.live.type } : {}) } } as any;
         const msg: string[] = []; if (n.statusText !== f.statusText && n.statusText) msg.push(n.statusText!); if (n.dep.gate !== f.dep.gate && n.dep.gate) msg.push(`Gate ${n.dep.gate}`);
         if (msg.length) { n.updates = [...(f.updates || []), { at: Date.now(), text: msg.join(" · ") }]; localNotify(`${n.number} ${n.origin?.iata}→${n.destination?.iata}`, msg.join(" · "), n.id); }
         upd(n); } } catch (e) { console.warn("refresh", f.number, e); } }
-    busy = false; };
-    tick(); const t = setInterval(tick, POLL_MS); const v = () => document.visibilityState === "visible" && tick(); document.addEventListener("visibilitychange", v); window.addEventListener("focus", v);
+    markTracked(); busy = false; };
+    tick(); const t = setInterval(tick, TRACK_MS); const v = () => document.visibilityState === "visible" && tick(); document.addEventListener("visibilitychange", v); window.addEventListener("focus", v);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", v); window.removeEventListener("focus", v); }; }, [active.map(f => f.id).join()]);
   const top = ov.at(-1); const focus = top?.t === "flight" ? top.f : null;
   const mapFlights = focus ? [focus] : tab === "passport" ? flights.filter(f => !f.friend) : tab === "friends" ? flights.filter(f => f.friend) : active.filter(f => !f.friend);
@@ -88,6 +89,7 @@ function FlightCard({ f, onClick, pred }: { f: Flight; onClick: () => void; pred
     <div className="fbig"><div><div className="iata">{f.origin?.iata}</div><div className="ftime" style={{ color: lateColor(dd) }}>{fmtT(best(f.dep), f.origin?.tz)}</div></div>
       <div className="ftrack"><div className="fdur">{dm ? dur(dm) : ""}</div><div className="fline"><span style={{ width: `${prog}%` }} /><i style={{ left: `${prog}%` }}>{I.glyph}</i></div><div className="fdur">{lv && typeof lv.alt === "number" ? `${Math.round(lv.alt / 100) * 100} ft · ${Math.round(lv.gs || 0)} kt` : until != null && until > 0 && !["departed", "enroute", "landed", "cancelled"].includes(f.status || "") ? `departs in ${dur(until)}` : f.statusText || ""}</div></div>
       <div className="right"><div className="iata">{f.destination?.iata}</div><div className="ftime">{fmtT(best(g.arr), f.destination?.tz)}{(g.arr as any).estimatedOnly && <sup>est</sup>}</div></div></div>
+    {!f.example && <div className="mt8"><Livery small code={f.airline?.iata} icao={f.airline?.icao} name={f.airline?.name} type={lv?.type || f.aircraft?.model} reg={f.aircraft?.reg} /></div>}
     {p && !p.cancelled && <div className="aiwrap"><span className="aichip press" onClick={e => { e.stopPropagation(); (window as any).__why?.(f); }}><b style={{ color: lateColor(p.predictedDelay) }}>AI {p.predictedDelay >= 5 ? `+${p.predictedDelay}m` : "on time"}</b></span>{p?.top && <span className="toprsn">{p.summary}</span>}</div>}
   </div>;
 }
@@ -101,7 +103,7 @@ function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => 
     <div className="qa">{([[I.alert, "Disruptions", "Live delay scores", () => push({ t: "airports", mode: "disruptions" }), "r"], [I.grid, "Tools", `${TOOLS.length} aviation tools`, () => push({ t: "tools" }), "b"], [I.spark, "What's new", "All features", () => push({ t: "features" }), "v"], [I.globe, "UK & Ireland", "Every airport board", () => push({ t: "airports", mode: "uk" }), "b"], [I.takeoff, "MAN board", "Departures now", () => push({ t: "board", iata: "MAN" }), "g"], [I.sliders, "Settings", "Keys & theme", () => push({ t: "settings" }), "v"]] as const).map(([ic, t, s, fn, c]) => <button key={t} className={"qtile press q" + c} onClick={fn}><span className="qic">{ic}</span><b>{t}</b><small>{s}</small></button>)}</div>
     {!list.length ? <div className="empty"><b>Let's Fly Somewhere</b><span>Tap <span className="mini">{I.search}</span> Search to add your next flight</span>
       <div className="row g8 mt16 wrap center"><button className="chip" onClick={() => push({ t: "board", iata: "MAN" })}>Manchester board</button><button className="chip" onClick={() => push({ t: "airports" })}>Airport delays</button></div></div>
-      : list.sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1).map(f => <FlightCard key={f.id} f={f} onClick={() => open(f)} pred />)}
+      : <><TrackedRefreshed />{list.sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1).map(f => <FlightCard key={f.id} f={f} onClick={() => open(f)} pred />)}</>}
   </>;
 }
 
@@ -251,7 +253,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   useEffect(() => { if (hex || reg) api(`/aircraft?hex=${hex || ""}&reg=${reg || ""}`).then(setAc).catch(() => {}); if (reg) api(`/inbound?reg=${reg}&date=${f.date}`).then(setInb).catch(e => setInb({ err: e.message, needsKey: e.needsKey })); }, [hex, reg]);
   const tracked = flights.some((x: Flight) => x.id === f.id);
   const [fresh, setFresh] = useState<any>(null);
-  const fpoll = usePoll(() => f.example || f.manual ? undefined : api(`/flight/${f.number}?date=${f.date}`).then(r => r.flight && setFresh(r.flight)).catch(() => {}), [f.id]);
+  const fpoll = usePoll(() => f.example || f.manual ? undefined : api(`/flight/${f.number}?date=${f.date}`).then(r => r.flight && setFresh(r.flight)).catch(() => {}), [f.id], TRACK_MS);
   const until = best(f.dep) ? (+new Date(best(f.dep)!) - Date.now()) / 60000 : 0;
   const banner = f.status === "cancelled" ? ["Cancelled", "red"] : f.status === "landed" ? [`Arrived ${da != null ? lateLabel(da) : ""}`, da && da > 14 ? "red" : "green"] : f.status === "enroute" ? [`En route${lv?.eta ? ", ETA " + fmtT(lv.eta, f.destination?.tz) : ""}`, "blue"] : f.status === "departed" ? ["Departed " + (f.dep.actual ? fmtT(f.dep.actual, f.origin?.tz) : ""), "blue"] : until > 0 ? [`Gate Departure in ${dur(until)}`, dd && dd > 14 ? "red" : "green"] : [f.statusText || "Scheduled", "green"];
   const tz = tzOffset(f.destination?.tz) - tzOffset(f.origin?.tz);
@@ -260,7 +262,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   return <div className="fd">
     {f.example && <div className="exlabel">Example data — not a real flight record</div>}
     <div className={"banner " + banner[1]}><b>{banner[0]}</b><div className="sm">Total {dur(estDurMin(f.origin, f.destination))} est. • {dist(f.origin, f.destination).toLocaleString()} mi{lv ? ` • live ${Math.round(lv.alt || 0).toLocaleString()} ft, ${Math.round(lv.gs || 0)} kt` : ""}</div>{lv?.matched === "route" && <div className="sm">{lv.matchNote}. Probable match: the airline flies a different radio callsign from the flight number.</div>}</div>
-    <div className="px"><Livery code={f.airline?.iata} icao={f.airline?.icao} name={f.airline?.name} type={ac?.type || lv?.type || f.aircraft?.model} reg={reg} /></div>
+    <div className="px"><Livery code={f.airline?.iata} icao={f.airline?.icao} name={f.airline?.name} type={ac?.type || lv?.type || f.aircraft?.model} reg={reg} /><div className="faint xs mt8">{PLANE_CREDITS}</div></div>
     <TimeBlock dir="dep" a={f.origin} t={f.dep} d={dd} badge={<Badge icon={<span>↗</span>} v={f.dep.gate} k={f.dep.terminal && `Terminal ${f.dep.terminal}`} />} />
     {f.diverted && <div className="divert">⑂ DIVERTED TO {f.diverted.iata}<span>Search for Recovery Flight ›</span></div>}
     <div className="sep"><span>◷ {dur(estDurMin(f.origin, f.destination))} • {dist(f.origin, f.destination).toLocaleString()} mi</span></div>

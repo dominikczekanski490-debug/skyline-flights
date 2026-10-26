@@ -439,3 +439,11 @@ h1,h2,h3,.froute,.big,.iata{letter-spacing:-.025em}.ftime,.big,.iata,.brow,.boar
 .refreshed{margin:4px 0 8px;font-variant-numeric:tabular-nums}
 .livery{background:linear-gradient(180deg,#1b2433,#121822);border-radius:16px;padding:8px 8px 10px;margin:8px 0}
 .livery svg{width:100%;height:auto;display:block}.livery .lvcap{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2px 6px;flex-wrap:wrap}
+.pl-card{border-radius:18px;overflow:hidden;background:#0f1622}
+.pl-sky{background:linear-gradient(180deg,#1f4f8f 0%,#5d93cf 55%,#a9c9ea 100%);padding:22px 14px}
+.pl-card.sm .pl-sky{padding:12px 10px}
+.pl-wrap{position:relative;width:100%}
+.pl-img{display:block;width:100%;height:auto;filter:drop-shadow(0 6px 10px rgba(0,0,0,.25))}
+.pl-ov{position:absolute;inset:0;mix-blend-mode:multiply;pointer-events:none}
+.pl-name{position:absolute;left:22%;top:calc(var(--t,52%) + 4%);font:800 clamp(8px,2.6vw,14px)/1 system-ui;letter-spacing:.02em;opacity:.9;white-space:nowrap}
+.pl-cap{padding:10px 14px 12px}
