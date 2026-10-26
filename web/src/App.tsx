@@ -1,3 +1,5 @@
+import { AircraftCard, WhatsNew22, HomeWidgets, Overhead22, Wrapped22, Connections22 } from "./v22";
+import "./v22.css";
 import { PredictCard, FindMyPlane } from "./predict";
 import { Livery, PLANE_CREDITS, useFlightPhoto, photoLabel } from "./livery";
 import { usePoll, Refreshed, TRACK_MS, markTracked, LiveLine } from "./refresh";
@@ -22,7 +24,7 @@ import { Timeline, Progress, WeatherCard, AirportInfo, PassportMore, PasteImport
 import { AskSkyline, LockView, RouteWeather, useInsights } from "./v21";
 import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras, DepartureDay, UpdateBanner, PushChecklist, BUILD, localNotify } from "./extras";
 
-type Ov = { t: "ask" } | { t: "lock" } | { t: "flight"; f: Flight } | { t: "board"; iata: string; term?: boolean; dir?: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" } | { t: "tools"; id?: string } | { t: "features" } | { t: "dayof"; f: Flight } | { t: "guide"; iata: string };
+type Ov = { t: "ask" } | { t: "lock" } | { t: "flight"; f: Flight } | { t: "board"; iata: string; term?: boolean; dir?: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" } | { t: "tools"; id?: string } | { t: "features" } | { t: "dayof"; f: Flight } | { t: "guide"; iata: string } | { t: "overhead" } | { t: "wrapped" } | { t: "conn" };
 const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <AirlineTile a={a} className="card-tile" mode="colour" style={{ width: Math.round(s * 2.4), height: s }} />;
 
 export default function App() {
@@ -32,6 +34,7 @@ export default function App() {
   const [live, setLive] = useState<Record<string, any>>({});
   const [mapStyle, setMapStyle] = useState(localStorage.getItem("sk.map2") || "dark");
   const [radar, setRadar] = useState(false); const [locate, setLocate] = useState(0);
+  useEffect(() => { const v = location.hash.match(/ov=(overhead|wrapped|conn|ask)/); if (v) setOv([{ t: v[1] } as Ov]); const fm = location.hash.match(/flight=([\w-]+)/); if (fm) { const f = load().find(x => x.id === fm[1]); if (f) setOv([{ t: "flight", f }]); } }, []);
   useEffect(() => { const m = location.hash.match(/board=([A-Za-z]{3})/); if (m) setOv([{ t: "board", iata: m[1].toUpperCase() }]); const a = location.hash.match(/airports=(\w+)/); if (a) setOv([{ t: "airports", mode: a[1] }]); }, []);
   const [why, setWhy] = useState<any>(null); (window as any).__why = (f: any) => { navigator.vibrate?.(8); setWhy(f); };
   const [theme, setTheme] = useState(localStorage.getItem("sk.theme") || "dark");
@@ -76,6 +79,7 @@ export default function App() {
       {tab === "passport" && <Passport flights={flights.filter(f => !f.friend)} setFlights={setFlights} open={f => push({ t: "flight", f })} push={push} />}
       <div style={{ height: 120 }} />
     </Sheet>
+    <WhatsNew22 />
     {!ov.length && <nav className="tabbar"><div className="pill"><i className="tabind" style={{ transform: `translateX(${["mine","friends","tracked","passport"].indexOf(tab) * 100}%)` }} />
       {([["mine", "My Flights", I.plane], ["friends", "Friends", I.friends], ["tracked", "Tracked", I.clock], ["passport", "Passport", I.passport]] as const).map(([k, l, ic]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{ic}<span>{l}</span></button>)}
     </div><button className="searchbtn" onClick={() => push({ t: "search" })}>{I.search}</button></nav>}
@@ -123,7 +127,7 @@ function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => 
     <GlobalSearch push={push} onFlight={f => push({ t: "flight", f })} />
     {(() => { const nx = list.filter(f => !f.example && phaseOf(f) !== "cancelled" && !(f.status === "landed" && Date.now() - +new Date(f.arr.actual || f.arr.scheduled || 0) > 3 * 3600e3)).sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1)[0];
       return nx ? <><NextHero f={nx} open={() => open(nx)} dayof={() => push({ t: "dayof", f: nx })} /><div className="px pf-hero"><PlaneFrom f={nx} compact /></div></> : null; })()}
-    <div className="row g8 px v21-act"><button className="chip ask-btn" onClick={() => push({ t: "ask" })}>✦ Ask Skyline</button><button className="chip" onClick={() => push({ t: "lock" })}>⏱ Countdown</button></div>
+    <div className="px"><HomeWidgets flights={list} push={push} /></div>
     <TodayCard flights={list} />
     <AssistantFeed flights={list} push={push} />
     <NLSearch open={f => push({ t: "flight", f })} />
@@ -204,6 +208,9 @@ function Overlay(p: { o: Ov; z: number; close: () => void; push: (o: Ov) => void
   if (o.t === "tools") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Head title="Tools" right={x} /><div className="px"><ToolsHub open={o.id} /></div></Sheet>;
   if (o.t === "ask") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><AskSkyline flights={p.flights} x={x} /></Sheet>;
   if (o.t === "lock") return <Sheet z={z} onClose={close} snaps={[0.97]} initial={0}><LockView flights={p.flights} x={x} /></Sheet>;
+  if (o.t === "overhead") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Overhead22 x={x} /></Sheet>;
+  if (o.t === "wrapped") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Wrapped22 x={x} /></Sheet>;
+  if (o.t === "conn") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Connections22 flights={p.flights} x={x} /></Sheet>;
   if (o.t === "guide") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><AirportGuide iata={o.iata} x={x} /></Sheet>;
   if (o.t === "dayof") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><DayOf f={p.flights.find(f => f.id === o.f.id) || o.f} push={p.push} x={x} /></Sheet>;
   if (o.t === "features") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Head title="What's new" right={x} /><div className="px"><FeatureList /></div></Sheet>;
@@ -294,10 +301,11 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   const banner = f.status === "cancelled" ? ["Cancelled", "red"] : f.status === "landed" ? [`Arrived ${da != null ? lateLabel(da) : ""}`, da && da > 14 ? "red" : "green"] : f.status === "enroute" ? [`En route${lv?.eta ? ", ETA " + fmtT(lv.eta, f.destination?.tz) : ""}`, "blue"] : f.status === "departed" ? ["Departed " + (f.dep.actual ? fmtT(f.dep.actual, f.origin?.tz) : ""), "blue"] : until > 0 ? [`Gate Departure in ${dur(until)}`, dd && dd > 14 ? "red" : "green"] : [f.statusText || "Scheduled", "green"];
   const tz = tzOffset(f.destination?.tz) - tzOffset(f.origin?.tz);
   const shareUrl = () => shareLink(f);
-  const h = (f.history = flights.filter((x: Flight) => x.origin?.iata === f.origin?.iata && x.destination?.iata === f.destination?.iata && !x.friend));
+  const h = flights.filter((x: Flight) => x.origin?.iata === f.origin?.iata && x.destination?.iata === f.destination?.iata && !x.friend);
   return <div className="fd"><EtaLine f={f} live={lv} />
     {f.example && <div className="exlabel">Example data — not a real flight record</div>}
     <div className={"banner " + banner[1]}><b>{banner[0]}</b><div className="sm">Total {dur(estDurMin(f.origin, f.destination))} est. • {dist(f.origin, f.destination).toLocaleString()} mi{lv ? ` • live ${Math.round(lv.alt || 0).toLocaleString()} ft, ${Math.round(lv.gs || 0)} kt` : ""}</div>{lv?.matched === "route" && <div className="sm">{lv.matchNote}. Probable match: the airline flies a different radio callsign from the flight number.</div>}</div>
+    {!f.example && <div className="px"><AircraftCard f={f} hex={hex} reg={reg} /></div>}
     <div className="px"><FindMyPlane f={f} reg={reg} hex={hex} type={ac?.icaoType || lv?.type || ac?.type || f.aircraft?.model} flights={flights} inb={inb} /><div className="faint xs mt8">{PLANE_CREDITS}</div></div>
     <TimeBlock dir="dep" a={f.origin} t={f.dep} d={dd} badge={<Badge icon={<span>↗</span>} v={f.dep.gate} k={f.dep.terminal && `Terminal ${f.dep.terminal}`} />} />
     {f.diverted && <div className="divert">⑂ DIVERTED TO {f.diverted.iata}<span>Search for Recovery Flight ›</span></div>}
