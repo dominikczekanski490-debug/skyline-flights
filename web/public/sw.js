@@ -1,9 +1,13 @@
-const C = "skyline-v13";
+const C = "skyline-v14"; const IMG = "skyline-img-v14"; const IMG_MAX = 60;
 self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(C).then(c => c.addAll(["/", "/manifest.webmanifest", "/icon-192.png"]))); });
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 // Navigations are network-first (15 s budget for a sleeping free server) so the phone never stays on an old build;
 // the cached shell is only a fallback when offline. Hashed assets are immutable, so cache-first is safe for them.
-self.addEventListener("fetch", e => { const u = new URL(e.request.url); if (e.request.method !== "GET" || u.pathname.startsWith("/api/") || u.pathname === "/version.json" || u.origin !== location.origin) return;
+self.addEventListener("fetch", e => { const u = new URL(e.request.url);
+  // Third-party aircraft photos (Planespotters / Wikimedia): stale-while-revalidate, capped at IMG_MAX entries, never pinned forever.
+  if (e.request.method === "GET" && /(^|\.)plnspttrs\.net$|(^|\.)wikimedia\.org$/.test(u.hostname)) { e.respondWith(caches.open(IMG).then(async c => { const hit = await c.match(e.request);
+    const net = fetch(e.request).then(async r => { if (r.ok || r.type === "opaque") { await c.put(e.request, r.clone()); const k = await c.keys(); for (const x of k.slice(0, Math.max(0, k.length - IMG_MAX))) await c.delete(x); } return r; }).catch(() => hit);
+    return hit || net; })); return; } if (e.request.method !== "GET" || u.pathname.startsWith("/api/") || u.pathname === "/version.json" || u.origin !== location.origin) return;
   const net = fetch(e.request, e.request.mode === "navigate" ? { cache: "no-store" } : undefined).then(r => { if (r.ok) { const cp = r.clone(); caches.open(C).then(c => c.put(e.request.mode === "navigate" ? "/" : e.request, cp)); } return r; });
   if (e.request.mode === "navigate") { e.respondWith(Promise.race([net, new Promise((_, rej) => setTimeout(rej, 15000))]).catch(() => caches.match("/").then(c => c || net))); return; }
   e.respondWith(caches.match(e.request).then(c => c || net)); });

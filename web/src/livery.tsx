@@ -1,4 +1,4 @@
-import React from "react";
+import { useEffect, useState } from "react";
 // Illustrative 2D side-view aircraft drawn in an airline's livery colours. Original drawings, not photos.
 // Livery entries are a simplified colour scheme (fuselage, belly, tail, engine, accent, motif), not exact artwork.
 type Motif = "band" | "circle" | "chevron" | "split" | "stripes" | "disc" | "flag" | "plain";
@@ -126,21 +126,25 @@ export function assetFor(type?: string, code?: string): Ast & { known: boolean }
   const c = (code || "").toUpperCase(); const k = WIDE.has(c) ? "b77w" : ["FR", "RYR"].includes(c) ? "b738" : "a320";
   return { k, name: "", known: false };
 }
-const TOP: Record<string, number> = {a320:0.516,a321:0.516,a333:0.5,a346:0.534,a359:0.502,a388:0.558,at76:0.549,b38m:0.575,b738:0.574,b744:0.471,b752:0.55,b763:0.558,b77w:0.534,b789:0.53,bcs3:0.54,crj9:0.493,dh8d:0.565,e190:0.469};
-export const PLANE_CREDITS = "Aircraft side views: original AI-generated illustrations made for Skyline (no third-party photos). Livery colours are simplified and illustrative, not official artwork.";
-const mk = (k: string, p: string): React.CSSProperties => ({ WebkitMaskImage: `url(/planes/${k}-${p}.png)`, maskImage: `url(/planes/${k}-${p}.png)`, WebkitMaskSize: "100% 100%", maskSize: "100% 100%" } as any);
-export function Livery({ code, icao, name, type, reg, small }: { code?: string; icao?: string; name?: string; type?: string; reg?: string; small?: boolean }) {
-  const lv = liveryFor(code, icao); const a = assetFor(type, lv ? (code || "") : code);
-  const lay = (p: string, c?: string, op = 0.92) => c && !/^#f[0-9a-f]{5}$/i.test(c) ? <div className="pl-ov" style={{ ...mk(a.k, p), background: c, opacity: op }} /> : null;
+export const PLANE_CREDITS = "Aircraft photos: Planespotters.net photo API (each photo © its photographer, linked to the original) and Wikimedia Commons (freely licensed; author and licence shown on each photo). No drawn or recoloured liveries.";
+type Photo = { kind: "exact" | "same-type" | "none"; src?: string; link?: string; author?: string; license?: string; licenseUrl?: string; source?: string; reg?: string };
+const PC = new Map<string, Promise<Photo>>();
+const getPhoto = (q: string) => { if (!PC.has(q)) PC.set(q, fetch("/api/photo?" + q).then(r => r.ok ? r.json() : { kind: "none" }).catch(() => { PC.delete(q); return { kind: "none" } as Photo; })); return PC.get(q)!; };
+export function Livery({ code, icao, name, type, reg, hex, small }: { code?: string; icao?: string; name?: string; type?: string; reg?: string; hex?: string; small?: boolean }) {
+  const lv = liveryFor(code, icao); const a = assetFor(type, code); const aln = name || lv?.n || "";
+  const t = (type || "").toUpperCase().trim(); const tc = /^[A-Z][A-Z0-9]{2,3}$/.test(t) ? t : "";
+  const alI = (icao || "").toUpperCase();
+  const q = new URLSearchParams({ reg: (reg || "").toUpperCase(), hex: hex || "", al: alI, aln, type: tc, tn: a.known ? a.name : "" }).toString();
+  const [p, setP] = useState<Photo | null>(null);
+  useEffect(() => { let on = true; setP(null); if (!reg && !hex && !(aln && a.known)) { setP({ kind: "none" }); return; } getPhoto(q).then(r => on && setP(r)); return () => { on = false; }; }, [q]);
+  const tname = a.known ? a.name : (type || "Type not reported");
   return <div className={"pl-card" + (small ? " sm" : "")}>
-    <div className="pl-sky"><div className="pl-wrap">
-      <img src={`/planes/${a.k}.webp`} loading="lazy" decoding="async" alt="" className="pl-img" />
-      {lv && <>{lay("tail", lv.t)}{lv.b && lv.b !== lv.f && lay("belly", lv.b, 0.85)}{lay("line", lv.a, 0.8)}{lay("eng", lv.e, 0.75)}
-        {lv.f !== "#ffffff" && lay("belly", lv.f, 0.55)}
-        <div className="pl-name" style={{ top: `${(TOP[a.k] + 0.06) * 100}%`, color: lv.tx || lv.t }}>{lv.n}</div></>}
-    </div></div>
-    <div className="pl-cap"><b>{a.known ? a.name : "Type not reported"}</b>{!a.known && <span className="faint sm"> · showing typical aircraft</span>}
-      <div className="faint sm">{[reg, lv?.n || name].filter(Boolean).join(" · ")}{!lv && " · Livery not on file"} · Illustrative</div></div>
-  </div>;
+    <div className="pl-sky">{!p ? <div className="pl-ph pl-wait" /> : p.kind === "none" || !p.src ? <div className="pl-ph pl-none">No photo available</div>
+      : <a href={p.link} target="_blank" rel="noopener" onClick={e => e.stopPropagation()}><img className="pl-ph" src={p.src} loading="lazy" decoding="async" referrerPolicy="no-referrer" alt={`${aln} ${tname}`} /></a>}</div>
+    <div className="pl-cap"><b>{tname}</b>
+      <div className="faint sm">{[reg, aln].filter(Boolean).join(" · ")}</div>
+      {p && p.kind !== "none" && p.src && <div className="faint xs mt4">{p.kind === "exact" ? `Photo of this aircraft (${p.reg || reg || hex})` : `Photo of ${/^[aeiou]/i.test(aln) ? "an" : "a"} ${aln} ${tname} (not necessarily this exact aircraft${p.reg ? ", shows " + p.reg : ""})`}
+        <br /><a href={p.link} target="_blank" rel="noopener" onClick={e => e.stopPropagation()}>{p.source === "Planespotters.net" ? `Photo: ${p.author} / Planespotters.net` : <>Photo: {p.author} / Wikimedia Commons, {p.license}</>}</a></div>}
+    </div></div>;
 }
 export const LIVERY_COUNT = Object.keys(L).length;

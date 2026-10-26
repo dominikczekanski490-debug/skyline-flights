@@ -440,10 +440,9 @@ h1,h2,h3,.froute,.big,.iata{letter-spacing:-.025em}.ftime,.big,.iata,.brow,.boar
 .livery{background:linear-gradient(180deg,#1b2433,#121822);border-radius:16px;padding:8px 8px 10px;margin:8px 0}
 .livery svg{width:100%;height:auto;display:block}.livery .lvcap{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2px 6px;flex-wrap:wrap}
 .pl-card{border-radius:18px;overflow:hidden;background:#0f1622}
-.pl-sky{background:linear-gradient(180deg,#1f4f8f 0%,#5d93cf 55%,#a9c9ea 100%);padding:22px 14px}
-.pl-card.sm .pl-sky{padding:12px 10px}
-.pl-wrap{position:relative;width:100%}
-.pl-img{display:block;width:100%;height:auto;filter:drop-shadow(0 6px 10px rgba(0,0,0,.25))}
-.pl-ov{position:absolute;inset:0;mix-blend-mode:multiply;pointer-events:none}
-.pl-name{position:absolute;left:22%;top:calc(var(--t,52%) + 4%);font:800 clamp(8px,2.6vw,14px)/1 system-ui;letter-spacing:.02em;opacity:.9;white-space:nowrap}
-.pl-cap{padding:10px 14px 12px}
+.pl-sky{background:linear-gradient(180deg,#1f4f8f 0%,#5d93cf 55%,#a9c9ea 100%);padding:12px}
+.pl-ph{display:block;width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:14px;background:rgba(255,255,255,.08)}
+.pl-card.sm .pl-ph{aspect-ratio:16/9}
+.pl-wait{animation:plp 1.4s ease-in-out infinite}@keyframes plp{50%{opacity:.5}}
+.pl-none{display:flex;align-items:center;justify-content:center;color:#e8eef7;font-weight:600;font-size:14px;background:rgba(10,20,40,.35)}
+.pl-cap{padding:10px 14px 12px}.pl-cap a{color:inherit;text-decoration:underline}.mt4{margin-top:4px}
