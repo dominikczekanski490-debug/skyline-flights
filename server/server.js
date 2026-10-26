@@ -474,8 +474,15 @@ async function budBoard(apt, dir, ymd) { const tz = "Europe/Budapest"; const D =
       return mkFlight(apt, dir, apByName2(x.city || x.destination), x.city || x.destination, num, alFromNum(num), x.airline?.name, { sched, est: st === "departed" || st === "landed" ? undefined : est, act: st === "departed" || st === "landed" ? est || sched : undefined, gate: x.gate || undefined, term: x.terminal || undefined, belt: x.baggageClaim || undefined }, rm, st, "Budapest Airport official flight board (bud.hu)", { codeshares: (x.codeshareFlights || []).map(c => c.flightNumber || c).join(", ") || undefined, reg: x.registration || undefined }); })
     .filter(f => inDay(f.dep?.scheduled || f.arr?.scheduled, ymd)); }
 // Warsaw Chopin (lotnisko-chopina.pl) — server-rendered list the site pages with ?page=N (20 rows/page, chronological)
+// v25: Warsaw stale-while-revalidate. Pages fetched 3 at a time (polite), refreshed in the background every 4 min, so requests never wait on a cold 40-page crawl after start-up.
+const WAWC = {}; async function wawCrawl(op) { const H = { headers: { "x-requested-with": "XMLHttpRequest", "user-agent": "Mozilla/5.0 (compatible; Skyline personal flight tracker)" } }; const out = []; let done = false;
+  for (let p = 1; p <= 40 && !done; p += 3) { const hs = await Promise.all([p, p + 1, p + 2].filter(x => x <= 40).map(x => getText2(`https://www.lotnisko-chopina.pl/en/arrivals-and-departures/?page=${x}&operation=${op}`, H).catch(() => ""))); for (const h of hs) { if (!h) { done = true; break; } out.push(h.split("Wersja desktop").slice(1)); if (!h.includes('id="load-more"')) { done = true; break; } } if (!done) await new Promise(z => setTimeout(z, 300)); }
+  if (!out.length) throw new Error("Warsaw timetable unavailable"); return out.flat(); }
+function wawRefresh(op) { const c = WAWC[op] || (WAWC[op] = {}); if (!c.p) c.p = wawCrawl(op).then(v => { c.v = v; c.at = Date.now(); }).finally(() => { c.p = null; }); return c.p; }
+async function wawPages(op) { const c = WAWC[op] || {}; if (c.v) { if (Date.now() - c.at > 240e3) wawRefresh(op).catch(() => {}); return c.v; } await wawRefresh(op); return WAWC[op].v; }
+setTimeout(() => { wawRefresh("d").catch(() => {}); setTimeout(() => wawRefresh("a").catch(() => {}), 8000); }, 3000); setInterval(() => { wawRefresh("d").catch(() => {}); setTimeout(() => wawRefresh("a").catch(() => {}), 8000); }, 240e3).unref?.();
 async function wawBoard(apt, dir, ymd) { const tz = "Europe/Warsaw"; const op = dir === "dep" ? "d" : "a";
-  const pages = await cached(`waw:${dir}`, 240, async () => { const out = []; for (let p = 1; p <= 40; p++) { const h = await getText2(`https://www.lotnisko-chopina.pl/en/arrivals-and-departures/?page=${p}&operation=${op}`, { headers: { "x-requested-with": "XMLHttpRequest", "user-agent": "Mozilla/5.0 (compatible; Skyline personal flight tracker)" } }); out.push(h.split("Wersja desktop").slice(1)); if (!h.includes('id="load-more"')) break; await new Promise(z => setTimeout(z, 250)); } return out.flat(); });
+  const pages = await wawPages(op);
   const col = (r, c) => { const m = r.match(new RegExp(`column-${c}[^"]*"[^>]*>([\\s\\S]*?)</div>`)); return m ? m[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : ""; };
   const now = new Date(); const nowHm = now.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit" }); const today = now.toLocaleDateString("en-CA", { timeZone: tz });
   const dayAdd = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
@@ -695,7 +702,7 @@ async function breBoard(apt, dir, ymd) { const all = await cached(`bre:${ymd}`, 
     out[d].push(mkFlight(apt, d, resolveCity(other), other, num, num.slice(0, 2), null, { sched: localToUtc(tz, day, t), est: done ? undefined : et, act: done ? et : undefined, gate: cell("gate") || undefined, term: cell("terminal") || undefined }, stx[0].toUpperCase() + stx.slice(1), st, "Bremen Airport official daily flight plan (bremen-airport.com)", { otherName: other })); }
   return out; }); return CE_KEEP(all[dir] || [], ymd); }
 OFFICIAL.BRE = { fn: breBoard, label: "Bremen Airport official daily flight plan", provider: "Official airport feed", site: "bremen-airport.com" };
-const CE_BLOCKED = {
+const CE_BLOCKED = { AOK: "Karpathos is run by the state operator HASP, not Fraport Greece (Fraport runs 14 Greek airports incl. Samos SMI); no public flight-data feed found",
   HAM: "Blocked by airport site: connection closed to server requests", STR: "Blocked by airport site: Access Denied (bot protection)", CGN: "No public flight-data endpoint found on the airport site (board rendered client-side behind bot protection)",
   HAJ: "No public flight-data endpoint found on the airport site", LEJ: "No public flight-data endpoint found on the airport site", DRS: "No public flight-data endpoint found on the airport site",
   ZRH: "Blocked by airport site: captcha on flight-data API", GVA: "Blocked by airport site: captcha widget, no public data endpoint", BSL: "No public flight-data endpoint found on the airport site",
