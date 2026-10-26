@@ -1,6 +1,7 @@
 import { motion, useMotionValue, animate, type PanInfo } from "framer-motion";
 import { useEffect, type ReactNode } from "react";
 export const I = { // tiny inline icon set (original drawings)
+  clock: <svg viewBox="0 0 24 24" width="22"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>,
   close: <svg viewBox="0 0 24 24" width="22"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" /></svg>,
   share: <svg viewBox="0 0 24 24" width="22"><path d="M12 3v12M7.5 7.5L12 3l4.5 4.5M6 11H5v10h14V11h-1" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>,
   search: <svg viewBox="0 0 24 24" width="26"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" strokeWidth="2.4" /><path d="M15.5 15.5L21 21" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" /></svg>,

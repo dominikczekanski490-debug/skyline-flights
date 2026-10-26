@@ -533,3 +533,16 @@ h1,h2,h3,.froute,.big,.iata{letter-spacing:-.025em}.ftime,.big,.iata,.brow,.boar
 .tb-ita{--bg:#111;--fg:#f5f5f0}.tb-ita .tb-top{border-bottom:3px solid #009246}
 .tb-adria{--bg:#0a2540;--hd:#c8102e;--fg:#fff;--alt:#0d2e50;--ok:#7be38a;--warn:#ffd23f;--bad:#ff6b6b;--acc:#fff}.tb-adria .tb-top{color:#fff}
 .tb-kef{--bg:#101820;--hd:#101820;--fg:#e8f1f8;--alt:#16222d;--ok:#5fd3c6;--warn:#ffc845;--bad:#ff6b6b;--acc:#5fd3c6}
+/* v18 ETA + Tracked */
+.eta{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin:8px 0 2px;padding:8px 10px;border-radius:12px;background:rgba(91,140,255,.10);border:1px solid rgba(91,140,255,.22)}
+.eta b{font-size:15px}.eta small{flex-basis:100%;font-size:11px;opacity:.65}.eta.c{padding:6px 9px}.eta.k-adsb{background:rgba(52,199,89,.10);border-color:rgba(52,199,89,.3)}.eta.k-skyline{background:rgba(175,82,222,.10);border-color:rgba(175,82,222,.3)}
+.eta-d{font-size:12px;font-weight:700;padding:1px 7px;border-radius:9px}.eta-d.ok{color:var(--green)}.eta-d.warn{color:var(--orange)}.eta-d.bad{color:var(--red)}
+.trk-stats{margin:0 16px 8px;padding:16px;background:linear-gradient(135deg,rgba(91,140,255,.22),rgba(175,82,222,.14))}
+.trk-hero b{font-size:44px;font-weight:800;letter-spacing:-1px}.trk-hero span{margin-left:8px;opacity:.7}
+.trk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0}.trk-grid label{display:block;font-size:10px;letter-spacing:.6px;text-transform:uppercase;opacity:.6}.trk-grid b{font-size:18px}
+.trk-long{font-size:13px;margin-bottom:6px}
+.trk-wrap{position:relative;margin:0 16px 10px;overflow:hidden;border-radius:16px}.trk-del{position:absolute;right:0;top:0;bottom:0;width:96px;background:var(--red);color:#fff;border:0;font-weight:700}
+.trk{display:flex;gap:12px;padding:10px;margin:0!important;transition:transform .2s;position:relative;background:var(--card,#141a2a)}.trk-ph{width:84px;height:84px;border-radius:12px;object-fit:cover;flex:none}.trk-ph.none{background:rgba(127,127,127,.15)}
+.trk-b{flex:1;min-width:0}.trk-s{font-size:12px;opacity:.8;margin:4px 0}.trk-t{font-size:11px;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trk-dl{font-size:12px;font-weight:700}.trk-dl.ok{color:var(--green)}.trk-dl.warn{color:var(--orange)}.trk-dl.bad{color:var(--red)}
+.tabind{width:calc((100% - 10px)/4)!important}

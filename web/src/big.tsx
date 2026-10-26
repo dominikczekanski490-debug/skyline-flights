@@ -3,6 +3,7 @@ import { AirlineTile } from "./brand";
 import { PredictCard } from "./predict";
 // Day-of features: next-flight live card, "is my plane here", flight facts, global search, airport (day-of) mode.
 import { useEffect, useState } from "react";
+import { EtaLine } from "./eta";
 import { api, fmtT, best, delay, dur, dist, estDurMin, lateLabel, lateColor, today, withEstArr, wxIcon, liveOf, statusOf, type Flight } from "./lib";
 import { I } from "./ui";
 
@@ -35,6 +36,7 @@ export function NextHero({ f, open, dayof, noMode }: { f: Flight; open: () => vo
         <svg viewBox="0 0 300 52" className="h16-arc" aria-hidden><path d="M8 46 Q150 2 292 46" className="a0" /><path d="M8 46 Q150 2 292 46" className="a1" pathLength={1} strokeDasharray={`${prog} 1`} />
           <circle cx="8" cy="46" r="3.5" /><circle cx="292" cy="46" r="3.5" /><g transform={`translate(${px} ${py}) rotate(${ang})`}><path d="M7 0 L-4 -6 L-2 0 L-4 6 Z" className="pl" /></g></svg>
         <div className="r"><b>{f.destination?.iata}</b><span>{f.destination?.city}</span></div></div>
+      <EtaLine f={f} live={lv} compact />
       <div className="h16-cells">{cells.map(([k, v]) => <div key={k}><label>{k}</label><b>{v || "—"}</b></div>)}</div>
       {next && <div className="h16-next">{next[0]} <b>{fmtT(new Date(next[1] as number).toISOString(), tz)}</b> · estimate</div>}
       {pr && (pr.predictedDelay ?? 0) >= 5 && <PredictCard compact f={f} p={pr} />}
