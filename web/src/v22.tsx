@@ -11,10 +11,13 @@ export function AircraftCard({ f, hex, reg }: { f: Flight; hex?: string; reg?: s
   const [d, setD] = useState<any>(null); const [err, setErr] = useState("");
   useEffect(() => { let on = true; const go = () => api(`/plane-card?number=${encodeURIComponent(f.number)}&date=${f.date}&o=${f.origin?.iata || ""}&d=${f.destination?.iata || ""}&dep=${f.dep?.actual || f.dep?.scheduled || ""}&arr=${f.arr?.actual || f.arr?.estimated || f.arr?.scheduled || ""}&status=${f.status || ""}&hex=${hex || ""}&reg=${reg || ""}`).then(r => on && setD(r)).catch(e => on && setErr(e.message));
     go(); const t = setInterval(go, 90e3); return () => { on = false; clearInterval(t); }; }, [f.id, hex, reg]);
+  const [tp, stp] = useState<any>(null);
+  useEffect(() => { if (!d || d.photo?.src) return; const t = d.icaoType || d.typicalType; const al = (d.callsign || "").slice(0, 3); if (!t && !al) return; api(`/photo?al=${al}&type=${t || ""}&aln=${encodeURIComponent((f as any).airline?.name || "")}&tn=${encodeURIComponent(d.type || "")}${d.reg ? "&reg=" + d.reg : ""}`).then(r => stp(r?.src ? r : null)).catch(() => {}); }, [d?.reg, d?.typicalType, d?.photo?.src]);
   const lv = d?.live; const air = lv && lv.alt !== "ground" && lv.alt > 0;
   return <section className="v22-sec ac22"><div className="v22-sh"><span>Aircraft</span>{d?.confidence && <em className={"conf " + d.confidence}>{d.confidence === "likely" ? "Likely · Skyline estimate" : d.confidence === "possible" ? "Possible · Skyline estimate" : d.confidence === "typical" ? "Typical type only" : "Confirmed"}</em>}</div>
     <div className="ac22-card">
-      {d?.photo?.src ? <a className="ac22-ph" href={d.photo.link} target="_blank" rel="noreferrer"><img src={d.photo.src.replace("_280.", "_1000.")} onError={e => { (e.target as HTMLImageElement).src = d.photo.src; }} alt="" referrerPolicy="no-referrer" /><span>{d.photo.credit}</span></a>
+      {d?.photo?.src ? <a className="ac22-ph big" href={d.photo.link} target="_blank" rel="noreferrer"><img src={d.photo.src.replace("_280.", "_1000.")} onError={e => { (e.target as HTMLImageElement).src = d.photo.src; }} alt="" referrerPolicy="no-referrer" /><em className={"ac22-tag " + (d.confidence || "")}>{d.confidence === "confirmed" || !d.confidence ? `This aircraft · ${d.reg || d.hex?.toUpperCase() || ""}` : `Possible airframe · ${d.reg || d.hex?.toUpperCase() || ""}`}</em><span>{d.photo.credit}</span></a>
+        : d && tp?.src ? <a className="ac22-ph big" href={tp.link} target="_blank" rel="noreferrer"><img src={tp.src} alt="" referrerPolicy="no-referrer" /><em className="ac22-tag typical">{tp.kind === "type" ? `Type photo · ${tp.typeName || d.type || d.typicalType} (not this airframe)` : `Same type${tp.reg ? " · " + tp.reg : ""} — not this airframe`}</em><span>{tp.credit || (tp.author ? "© " + tp.author : "")}{tp.source ? " · " + tp.source : ""}</span></a>
         : <div className="ac22-ph none"><span>{!d ? "Looking up the aircraft…" : d.reg ? "No photo of this airframe found" : d.inbound ? `Arrives as ${d.inbound.number} from ${d.inbound.from}` : /departed|enroute/.test(f.status || "") || (f as any).dep?.actual ? "In the air — transponder not matched yet" : "Exact aircraft not identified yet"}</span></div>}
       <div className="ac22-main"><div className="ac22-reg">{d?.reg || (d ? "—" : "…")}</div><div className="ac22-type">{d?.type || d?.icaoType || ((f as any).aircraft?.model ? `${(f as any).aircraft.model} (flight feed)` : "") || (d?.typicalType ? `Usually a ${d.typicalType}` : d ? "Type not known yet" : "")}{d?.typicalType && !d?.reg && <small> · typical for this airline (Skyline estimate)</small>}</div>
         {d?.how && <div className="ac22-how">Identified: {HOW[d.how] || d.how}</div>}
@@ -37,7 +40,7 @@ export function AircraftCard({ f, hex, reg }: { f: Flight; hex?: string; reg?: s
         {(d?.gaps || []).length > 0 && <ul className="ac22-gaps">{d.gaps.map((g: string) => <li key={g}>{g}</li>)}</ul>}
         {err && <div className="ac22-gaps">Couldn't reach the aircraft service: {err}</div>}
         {d?.sources?.length > 0 && <div className="faint xs mt8">Sources: {d.sources.join(" · ")}</div>}
-      </div></div></section>;
+      </div></div>{d?.hex && <Xpdr lv={lv} hex={d.hex} />}<Acars hex={d?.hex} reg={d?.reg} conf={d?.confidence} /></section>;
 }
 
 export function WhatsNew22() {
@@ -134,3 +137,25 @@ export function Connections22({ flights, x }: { flights: Flight[]; x: any }) {
       <select value={b} onChange={e => setB(e.target.value)}><option value="">Then…</option>{mine.map(f => <option key={f.id} value={f.id}>{f.number} {f.origin?.iata}→{f.destination?.iata} {f.date}</option>)}</select></div>
     {man ? Row(man) : A && B && <div className="v22-empty">One of these flights has no times yet.</div>}</div>;
 }
+
+// v31: real ACARS/VDL2 messages (airframes.io community feed) — shown only as received, never synthesised.
+export function Acars({ hex, reg, conf }: { hex?: string; reg?: string; conf?: string }) { const [r, sr] = useState<any>(null); const [all, sa] = useState(false);
+  useEffect(() => { if (!hex) return; let on = true; const go = () => api(`/acars/${hex}`).then(x => on && sr(x)).catch(e => on && sr({ error: e.message, messages: [] })); go(); const t = setInterval(go, 120e3); return () => { on = false; clearInterval(t); }; }, [hex]);
+  const ms = (r?.messages || []) as any[]; const txt = ms.filter(m => m.text); const shown = all ? ms : txt.length ? txt : ms.slice(0, 6);
+  return <div className="acars card"><div className="row between"><b>ACARS messages</b><span className="faint sm">{reg || hex?.toUpperCase() || ""}</span></div>
+    {!hex ? <div className="muted sm mt4">ACARS can be looked up once the exact aircraft (its Mode-S hex) is identified. Not identified yet for this flight.</div>
+    : !r ? <div className="skel mt8" style={{ height: 60 }} />
+    : r.error ? <div className="muted sm mt4">Couldn't reach the Airframes.io feed right now ({r.error}).</div>
+    : !ms.length ? <div className="muted sm mt4">No ACARS/VDL2 messages from {reg || hex.toUpperCase()} in the latest 60 frames Airframes.io holds. Coverage depends on volunteer ground stations nearby.</div>
+    : <><div className="faint sm mt4">{ms.length} recent frames · {txt.length} with text{conf && conf !== "confirmed" ? " · aircraft match is a Skyline estimate" : ""}</div>
+      <div className="acars-list">{shown.map((m, i) => <div key={i} className="acars-m"><div className="row between sm"><b>{new Date(m.t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} <span className={"acars-dir " + m.dir}>{m.dir === "down" ? "↓ from aircraft" : "↑ to aircraft"}</span></b><span className="faint">{m.label ? m.label + " · " : ""}{m.labelText}</span></div>
+        {m.text ? <pre>{m.text.length > 600 ? m.text.slice(0, 600) + "…" : m.text}</pre> : <div className="faint xs">No text payload (link-layer / ack)</div>}<div className="faint xs">{[m.flight, m.kind?.toUpperCase(), m.freq && m.freq + " MHz", m.station && "station " + m.station].filter(Boolean).join(" · ")}</div></div>)}</div>
+      {!all && ms.length > shown.length && <button className="secondary mt8" onClick={() => sa(true)}>Show all {ms.length} frames</button>}</>}
+    <div className="faint xs mt8">Source: <a href={`https://app.airframes.io/airframes?icao=${hex || ""}`} target="_blank" rel="noreferrer">Airframes.io</a> community ACARS/VDL2 feed — real received messages, shown raw. Labels are decoded from the standard ARINC 618 label list; payloads are airline-specific.</div></div>; }
+// v31: real transponder (Mode-S/ADS-B) state, separate from ACARS.
+const SQ: Record<string, string> = { "7500": "Unlawful interference", "7600": "Radio failure", "7700": "General emergency", "7000": "VFR conspicuity (EU)", "2000": "Entering SSR area", "1200": "VFR (US)" };
+function Xpdr({ lv, hex }: { lv: any; hex: string }) { if (!lv) return <div className="acars card"><b>Transponder</b><div className="muted sm mt4">{hex.toUpperCase()} is not broadcasting on ADS-B right now.</div></div>; const sq = lv.squawk ? String(lv.squawk) : ""; const em = /^7[56]00$|^7700$/.test(sq) || (lv.emergency && lv.emergency !== "none");
+  return <div className={"acars card" + (em ? " em" : "")}><div className="row between"><b>Transponder (ADS-B)</b><span className="faint sm">live</span></div><div className="xp-grid">
+    <div><label>Squawk</label><b>{sq || "—"}</b>{SQ[sq] && <small>{SQ[sq]}</small>}</div><div><label>Altitude</label><b>{lv.alt === "ground" ? "Ground" : typeof lv.alt === "number" ? Math.round(lv.alt).toLocaleString() + " ft" : "—"}</b></div>
+    <div><label>Ground speed</label><b>{lv.gs ? Math.round(lv.gs) + " kt" : "—"}</b></div><div><label>Vertical</label><b>{typeof lv.vr === "number" ? (lv.vr > 0 ? "+" : "") + Math.round(lv.vr) + " fpm" : typeof lv.baro_rate === "number" ? Math.round(lv.baro_rate) + " fpm" : "—"}</b></div></div>
+    {em && <div className="sm mt4" style={{ color: "var(--red)" }}>Emergency code broadcast: {SQ[sq] || lv.emergency}</div>}<div className="faint xs mt4">Directly from the aircraft's transponder via adsb.lol / adsb.fi.</div></div>; }

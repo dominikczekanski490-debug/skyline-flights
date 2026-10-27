@@ -1,0 +1,40 @@
+/* ===== v31: themed predictions / labs / banners, light contrast, anim toggle ===== */
+html[data-skin][data-theme=light]{--green:#138a4a;--orange:#b85e00;--red:#cc2936;--good:#138a4a}
+html[data-skin=aurora]{--green:#2ee6a6;--good:#2ee6a6;--blue:#5aa8ff}
+html[data-skin=neon]{--green:#3dffb0;--red:#ff4d6d;--orange:#ffb020}
+html[data-skin][data-theme] .pcard{background:radial-gradient(120% 70% at 85% 0%,color-mix(in srgb,var(--pc,var(--acc)) 20%,transparent),transparent 60%),radial-gradient(90% 60% at 0% 0%,color-mix(in srgb,var(--acc) 14%,transparent),transparent 60%),var(--card)!important;border:1px solid color-mix(in srgb,var(--acc) 30%,transparent)!important;box-shadow:0 10px 34px -12px color-mix(in srgb,var(--acc) 30%,transparent)!important}
+html[data-skin] .ptitle{background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+html[data-skin=paper] .ptitle,html[data-skin=paper] .head h1{background:none;color:var(--text)}
+html[data-skin] .pglass{background:color-mix(in srgb,var(--acc) 5%,color-mix(in srgb,var(--text) 3%,transparent));border-color:color-mix(in srgb,var(--acc) 16%,transparent)}
+html[data-skin] .pconf{background:color-mix(in srgb,var(--acc) 10%,var(--chip))}
+html[data-skin] .lab-kind.k-statistical{color:var(--acc)}html[data-skin] .lab-kind.k-rule-based{color:color-mix(in srgb,var(--acc2) 70%,var(--text))}
+html[data-skin][data-theme=light] .lab-kind{opacity:1;font-weight:800}
+html[data-skin][data-theme=light] .lab-kind.k-statistical,html[data-skin][data-theme=light] .lab-kind.k-rule-based{color:var(--acc)}
+html[data-skin] .lab-ic,html[data-skin] .l2-ic{background:color-mix(in srgb,var(--acc) 16%,var(--card))!important;color:var(--acc)!important}
+html[data-skin] .lab-hero,html[data-skin] .l2-hero{background:radial-gradient(100% 80% at 0 0,color-mix(in srgb,var(--acc) 22%,transparent),transparent 65%),var(--card)!important;border-color:color-mix(in srgb,var(--acc) 30%,transparent)!important}
+html[data-skin] .l2-search,html[data-skin] .l2-search input{background:var(--card)!important;color:var(--text)!important}
+html[data-skin] .l2-cats button.on,html[data-skin] .segs button.on{background:var(--acc)!important;color:var(--ink)!important}
+html[data-skin] .lab-stat b{color:var(--text)}html[data-skin] .lab-stat{background:var(--card);border-color:color-mix(in srgb,var(--acc) 18%,transparent)}
+html[data-skin] .lab-chart i,html[data-skin] .l2-cols i:not(.good):not(.bad):not(.warn){background:linear-gradient(180deg,var(--acc2),var(--acc))}
+html[data-skin] .pchance i, html[data-skin] .pchance span{box-shadow:none}
+html[data-skin] .banner{background:color-mix(in srgb,var(--acc) 10%,var(--card))!important;border:1px solid color-mix(in srgb,var(--acc) 26%,transparent)!important;color:var(--text)!important}
+html[data-skin] .banner.green{background:color-mix(in srgb,var(--green) 13%,var(--card))!important;border-color:color-mix(in srgb,var(--green) 32%,transparent)!important}
+html[data-skin] .banner.red{background:color-mix(in srgb,var(--red) 13%,var(--card))!important;border-color:color-mix(in srgb,var(--red) 35%,transparent)!important}
+html[data-skin] .banner.orange{background:color-mix(in srgb,var(--orange) 13%,var(--card))!important;border-color:color-mix(in srgb,var(--orange) 35%,transparent)!important}
+html[data-skin] .pulse-iata,html[data-skin] .site-link b{color:var(--acc2)}
+html[data-skin][data-theme=light] .pulse-iata,html[data-skin][data-theme=light] .site-link b{color:var(--acc)}
+html[data-skin][data-theme=light] .muted,html[data-skin][data-theme=light] .faint{color:var(--muted)}
+html[data-skin][data-theme=light] .card{box-shadow:0 1px 2px rgba(0,0,0,.05),0 8px 24px color-mix(in srgb,var(--acc) 8%,rgba(0,0,0,.04))}
+/* picker names: 2 columns on narrow phones, wrap names */
+@media (max-width:420px){.skp-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.skp-scr{aspect-ratio:4/3}}
+.skp b,.skp small{white-space:normal!important;line-height:1.2}
+/* animated backgrounds off */
+html[data-anim=off] .sheet::before,html[data-anim=off] .skp-scr::before{animation:none!important;transform:none!important;filter:none!important}
+html[data-anim=off] .aurora{display:none}
+html[data-anim=off] *{scroll-behavior:auto}
+.ac22-ph.big{aspect-ratio:3/2}.ac22-tag{position:absolute;left:10px;top:10px;font-style:normal;font-size:11px;font-weight:700;padding:4px 9px;border-radius:99px;background:rgba(0,0,0,.55);color:#fff;backdrop-filter:blur(8px)}.ac22-tag.likely,.ac22-tag.possible,.ac22-tag.typical{background:rgba(180,110,0,.8)}
+.acars{margin:10px 0!important}.acars-list{display:flex;flex-direction:column;gap:8px;margin-top:8px;max-height:420px;overflow:auto}.acars-m{padding:8px 10px;border-radius:12px;background:var(--chip)}.acars-m pre{white-space:pre-wrap;word-break:break-all;font:11px/1.4 ui-monospace,Menlo,monospace;margin:6px 0 4px;color:var(--text)}
+.acars-dir{font-weight:600;font-size:11px;margin-left:6px;color:var(--acc)}.acars-dir.up{color:var(--muted)}
+.xp-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.xp-grid div{padding:8px 10px;border-radius:12px;background:var(--chip);display:flex;flex-direction:column}.xp-grid label{font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:.06em}.xp-grid small{font-size:11px;color:var(--muted)}
+.acars.em{border-color:var(--red)!important}
+html[data-skin] input[type=checkbox],html[data-skin] input[type=radio],html[data-skin] input[type=range]{accent-color:var(--acc)}

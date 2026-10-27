@@ -14,6 +14,7 @@ import { SunRoute } from "./v30";
 import "./v26.css";
 import "./v28.css";
 import "./v30.css";
+import "./v31.css";
 import { ToolsHub, FeatureList, TOOLS, BOARD_FEATURES } from "./tools";
 import { TerminalBoard, status as boardStatus } from "./terminal";
 import { mark, toast, Boundary } from "./guard";
