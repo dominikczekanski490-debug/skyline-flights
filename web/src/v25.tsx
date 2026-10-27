@@ -169,7 +169,7 @@ function Briefing() { const L = useMine(); const P = pulseList(); const [pb, spb
   const lines: string[] = []; const now = Date.now();
   L.slice(0, 4).forEach(f => { const t = f.dep?.scheduled ? +new Date(f.dep.scheduled) : 0; const h = (t - now) / 36e5; const dl = delayMin(f);
     lines.push(`${f.number} ${f.origin?.city || f.origin?.iata} → ${f.destination?.city || f.destination?.iata}: ${h > 48 ? `in ${Math.round(h / 24)} days` : h > 0 ? `departs in ${Math.floor(h)}h ${Math.round((h % 1) * 60)}m` : "departure time passed"}${dl && dl >= 10 ? `, running ${dl} min late` : ""}${f.dep?.gate ? `, gate ${f.dep.gate}` : ""}.`); });
-  pb.forEach(({ a, d }) => { const F = d.flights || []; const cx = F.filter(isCx).length; const D = F.map((f: any) => delayMin(f)).filter((x: any) => x != null); const late = D.filter((x: number) => x >= 15).length;
+  pb.forEach(({ a, d }) => { const F = d.flights || []; const cx = F.filter(isCx).length; const D = F.map((f: any) => delayMin(f)).filter((x: any) => x != null); const late = D.filter((x: number) => x >= 15).length; if (!F.length) { lines.push(`${a}: board not available right now.`); return; }
     lines.push(`${a}: ${F.length} departures today, ${late} late${cx ? `, ${cx} cancelled` : ""}${D.length ? `, average delay ${Math.round(mean(D))} min` : ""}.`); });
   const txt = lines.join("\n");
   return <><div className="lab-brief">{lines.length ? lines.map((l, i) => <p key={i}>{l}</p>) : <p>Nothing to brief yet.</p>}</div><button className="lab-btn" onClick={() => navigator.clipboard?.writeText(txt)}>{Ic.doc} Copy briefing</button><Note>Written from a fixed template (rule-based) using your saved flights and live boards for your Pulse airports. No AI text generation.</Note></>; }
