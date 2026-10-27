@@ -9,8 +9,10 @@ import { usePoll, Refreshed, TRACK_MS, markTracked, LiveLine } from "./refresh";
 import { Labs, LABS, Ic, SecHead, ActBtn } from "./v25";
 import { LABS2 } from "./v28";
 import { LABS3 } from "./v29";
+import { applySkin, SkinPicker } from "./themes";
 import "./v26.css";
 import "./v28.css";
+import "./v30.css";
 import { ToolsHub, FeatureList, TOOLS, BOARD_FEATURES } from "./tools";
 import { TerminalBoard, status as boardStatus } from "./terminal";
 import { mark, toast, Boundary } from "./guard";
@@ -50,7 +52,7 @@ export default function App() {
   useEffect(() => { navigator.storage?.persist?.(); if (new URLSearchParams(location.search).get("tab") === "friends") { setTab("friends"); history.replaceState(null, "", "/"); } }, []);
   useEffect(() => { const f = () => document.visibilityState === "visible" && syncPush(flights.filter(x => !x.friend)).catch(e => console.warn("push resync", e)); const t = setTimeout(f, 1500); const iv = setInterval(f, 10 * 60e3); document.addEventListener("visibilitychange", f); return () => { clearTimeout(t); clearInterval(iv); document.removeEventListener("visibilitychange", f); }; }, [flights.filter(f => !f.friend).map(f => f.id).join()]);
   useEffect(() => { localStorage.setItem("sk.theme", theme); const mq = matchMedia("(prefers-color-scheme: light)");
-    const apply = () => { const r = theme === "auto" ? (mq.matches ? "light" : "dark") : theme; document.documentElement.dataset.theme = r; document.documentElement.dataset.themePref = theme; document.querySelector('meta[name="theme-color"]')?.setAttribute("content", r === "light" ? "#f4f6fb" : "#0b1020"); };
+    const apply = () => applySkin(theme, mq.matches);
     apply(); mq.addEventListener("change", apply); return () => mq.removeEventListener("change", apply); }, [theme]);
   useEffect(() => { localStorage.setItem("sk.map2", mapStyle); }, [mapStyle]);
   // import a friend's shared flight from URL
@@ -544,7 +546,7 @@ function Settings({ x, theme, setTheme, push }: any) {
   const saveK = (body: any) => api("/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, adminToken: tok, newAdminToken: tok }) }).then(() => { setMsg("Saved ✓"); load(); }).catch(e => setMsg(e.message));
   return <><Head title="Settings" sub="Preferences, data and sources" right={x} /><div className="px col g8 set">
     <div className="card m0"><b className="set-h sm"><span>{Ic.image}</span>Photo credits</b><div className="faint sm mt4">{PLANE_CREDITS}</div><div className="faint sm mt4"><a href="https://www.planespotters.net" target="_blank" rel="noopener">Planespotters.net</a> · <a href="https://commons.wikimedia.org" target="_blank" rel="noopener">Wikimedia Commons</a></div></div><div className="card m0 row between"><span className="set-l"><span>{Ic.info}</span>App version</span><b className="sm">{BUILD}</b></div><button className="card m0 row between press" style={{ width: "100%" }} onClick={() => push({ t: "features" })}><span className="set-l"><span>{Ic.flask}</span>All features</span><b className="sm set-n">{TOOLS.length + BOARD_FEATURES.length}</b></button><UnitsCard /><AlertPrefsCard onChange={() => syncPush(JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend)).catch(() => {})} />
-    <div className="card m0"><h3 className="set-h"><span>{Ic.palette}</span>Appearance</h3><div className="segs m0">{["auto", "light", "dark"].map(t => <button key={t} className={theme === t ? "on" : ""} onClick={() => setTheme(t)}>{t}</button>)}</div></div>
+    <div className="card m0"><h3 className="set-h"><span>{Ic.palette}</span>Appearance</h3><SkinPicker v={theme} set={setTheme} /></div>
     <div className="card m0"><h3 className="set-h"><span>{Ic.bell}</span>Push notifications</h3><div className="muted sm">Gate & terminal changes, delays, cancellations, belt numbers — even when Skyline is closed. The server checks your tracked flights every 4 minutes. iPhone: open Skyline from its Home Screen icon (iOS 16.4+).</div>
       <PushControls /></div>
     <div className="card m0"><h3 className="set-h"><span>{Ic.db}</span>Your data</h3><div className="muted sm">Your flights, friends and settings are saved on this iPhone and survive server restarts. Make a backup file to move them to another device.</div>

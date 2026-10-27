@@ -1,0 +1,57 @@
+/* ===== v30 skins ===== */
+html[data-skin]{background:var(--bg)}
+html[data-skin] body{background:var(--bg);color:var(--text)}
+html[data-skin][data-theme] .sheet{isolation:isolate;background:radial-gradient(120% 55% at 0% 0%,var(--sk-g1),transparent 62%),radial-gradient(100% 50% at 100% 0%,var(--sk-g2),transparent 60%),var(--bg)!important}
+html[data-skin][data-theme] .sheet::before{content:"";position:absolute;left:0;right:0;top:0;height:420px;z-index:-1;pointer-events:none;border-radius:inherit;overflow:hidden}
+html[data-skin][data-theme] .card{background:linear-gradient(var(--card),var(--card)) padding-box,linear-gradient(160deg,color-mix(in srgb,var(--acc) 45%,transparent),color-mix(in srgb,var(--text) 8%,transparent) 45%,color-mix(in srgb,var(--text) 4%,transparent)) border-box!important}
+html[data-skin][data-theme] nav.tabbar .pill{background:color-mix(in srgb,var(--tabbg) 94%,transparent)!important;box-shadow:0 10px 40px color-mix(in srgb,var(--acc) 18%,rgba(0,0,0,.45)),inset 0 1px 0 rgba(255,255,255,.06)!important}
+html[data-skin][data-theme] nav.tabbar .searchbtn{box-shadow:0 10px 30px color-mix(in srgb,var(--acc) 45%,transparent)!important}
+html[data-skin][data-theme] .maptint{background:radial-gradient(120% 70% at 50% 0%,transparent 40%,color-mix(in srgb,var(--bg) 55%,transparent)),linear-gradient(180deg,color-mix(in srgb,var(--sk-g1) 60%,transparent),transparent 40%,color-mix(in srgb,var(--bg) 60%,transparent))}
+html[data-skin][data-theme] .aurora{background:radial-gradient(40% 50% at 25% 60%,var(--sk-g1),transparent 70%),radial-gradient(35% 45% at 75% 55%,var(--sk-g2),transparent 70%)}
+html[data-skin][data-theme=light] .card{box-shadow:0 6px 24px color-mix(in srgb,var(--acc) 8%,rgba(0,0,0,.04))}
+/* --- fx: northern lights --- */
+html[data-fx=aurora] .sheet::before,.skp-scr.fx-aurora::before{background:
+ radial-gradient(1px 1px at 12% 18%,#fff 60%,transparent),radial-gradient(1px 1px at 33% 8%,#cfe 60%,transparent),radial-gradient(1.4px 1.4px at 58% 22%,#fff 60%,transparent),radial-gradient(1px 1px at 81% 12%,#dff 60%,transparent),radial-gradient(1px 1px at 92% 30%,#fff 60%,transparent),radial-gradient(1px 1px at 22% 36%,#bfe 60%,transparent),radial-gradient(1.2px 1.2px at 70% 40%,#fff 60%,transparent),radial-gradient(1px 1px at 45% 48%,#cff 60%,transparent),
+ radial-gradient(60% 40% at 20% 10%,rgba(31,211,164,.42),transparent 70%),radial-gradient(55% 45% at 70% 0%,rgba(56,140,255,.40),transparent 70%),radial-gradient(45% 35% at 90% 30%,rgba(16,185,129,.30),transparent 70%),radial-gradient(70% 30% at 40% 30%,rgba(94,234,212,.22),transparent 70%);
+ background-size:100% 100%;mask-image:linear-gradient(180deg,#000 40%,transparent);-webkit-mask-image:linear-gradient(180deg,#000 40%,transparent);animation:skAur 18s ease-in-out infinite alternate}
+@keyframes skAur{0%{transform:translate3d(0,0,0) scale(1);filter:hue-rotate(0)}50%{transform:translate3d(-4%,2%,0) scale(1.08);filter:hue-rotate(-18deg)}100%{transform:translate3d(3%,-1%,0) scale(1.04);filter:hue-rotate(14deg)}}
+html[data-fx=aurora] .card{box-shadow:0 0 0 1px rgba(31,211,164,.06),0 10px 36px rgba(31,211,164,.08)}
+html[data-fx=aurora] .head h1{background:linear-gradient(100deg,#e8fbff,#7cf3d6 55%,#5aa8ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+/* --- other fx --- */
+html[data-fx=sunset] .sheet::before,.skp-scr.fx-sunset::before{background:radial-gradient(80% 50% at 50% -10%,var(--sk-g1),transparent 70%),radial-gradient(50% 40% at 90% 10%,var(--sk-g2),transparent 70%);animation:skPulse 12s ease-in-out infinite alternate}
+html[data-fx=neon] .sheet::before,.skp-scr.fx-neon::before{background:radial-gradient(50% 40% at 10% 0%,var(--sk-g1),transparent 70%),radial-gradient(50% 40% at 95% 15%,var(--sk-g2),transparent 70%),repeating-linear-gradient(0deg,transparent 0 22px,rgba(56,243,255,.05) 22px 23px);mask-image:linear-gradient(180deg,#000,transparent);-webkit-mask-image:linear-gradient(180deg,#000,transparent);animation:skPulse 6s ease-in-out infinite alternate}
+html[data-fx=neon] .head h1{text-shadow:none;background:linear-gradient(90deg,#ff3ea5,#38f3ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+html[data-fx=waves] .sheet::before,.skp-scr.fx-waves::before{background:radial-gradient(120% 40% at 50% 0%,var(--sk-g1),transparent 70%),radial-gradient(60% 30% at 20% 30%,var(--sk-g2),transparent 70%);animation:skAur 22s ease-in-out infinite alternate}
+html[data-fx=glow] .sheet::before,.skp-scr.fx-glow::before{background:radial-gradient(70% 45% at 15% 0%,var(--sk-g1),transparent 70%),radial-gradient(60% 40% at 90% 5%,var(--sk-g2),transparent 70%)}
+@keyframes skPulse{to{opacity:.65;transform:scale(1.05)}}
+@media (prefers-reduced-motion:reduce){html[data-skin] .sheet::before,.skp-scr::before{animation:none!important}}
+/* --- picker --- */
+.skp-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.skp{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:6px;border-radius:16px;background:var(--chip);border:1px solid var(--line);text-align:left;min-width:0;transition:transform .15s,border-color .2s}
+.skp.on{border-color:var(--acc);box-shadow:0 0 0 2px color-mix(in srgb,var(--acc) 35%,transparent)}
+.skp b{font-size:12px;margin:4px 2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.skp small{font-size:10px;color:var(--muted);margin:0 2px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.skp-scr{position:relative;display:block;width:100%;aspect-ratio:3/4;border-radius:11px;overflow:hidden;isolation:isolate;background:radial-gradient(90% 50% at 0 0,var(--p-g1),transparent 70%),var(--p-bg);padding:8px 7px}
+.skp-scr::before{content:"";position:absolute;inset:0;z-index:-1}
+.skp-scr i{display:block;font-style:normal}
+.skp-h{height:7px;width:55%;border-radius:4px;background:var(--p-tx);opacity:.85;margin-bottom:7px}
+.skp-c{height:30%;border-radius:7px;background:var(--p-card);border:1px solid color-mix(in srgb,var(--p-acc) 40%,transparent);padding:5px;margin-bottom:5px}.skp-c.sm{height:16%}
+.skp-c em{display:block;height:4px;border-radius:2px;background:var(--p-acc);width:70%;margin-bottom:4px}.skp-c em+em{background:var(--p-tx);opacity:.3;width:45%}
+.skp-tab{position:absolute;left:12%;right:12%;bottom:6px;height:11px;border-radius:8px;background:var(--p-card);display:flex;justify-content:flex-end;padding:2px}.skp-tab em{width:7px;height:7px;border-radius:50%;background:linear-gradient(140deg,var(--p-acc2),var(--p-acc))}
+.skp-ok{position:absolute;top:10px;right:10px;width:18px;height:18px;border-radius:50%;background:var(--acc);color:var(--ink);font-size:11px;font-weight:800;display:grid;place-items:center}
+/* --- micro-interactions --- */
+.press:active,button.secondary:active,button.primary:active,.card button:active,.chip:active{transform:scale(.96)}
+button{transition:transform .12s ease,background-color .2s,color .2s}
+html[data-skin] *{scrollbar-color:var(--acc) transparent}
+::selection{background:color-mix(in srgb,var(--acc) 40%,transparent)}
+.skel{display:block;border-radius:10px;background:linear-gradient(90deg,var(--chip),color-mix(in srgb,var(--acc) 12%,var(--chip)),var(--chip));background-size:200% 100%;animation:skel 1.2s linear infinite}
+@keyframes skel{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.skel{animation:none}}
+/* skin-aware hero, tab indicator, avatar, flight card */
+html[data-skin] .tabbar .tabind{background:linear-gradient(140deg,color-mix(in srgb,var(--acc) 85%,#000 0%),color-mix(in srgb,var(--acc) 60%,var(--acc2)))!important;box-shadow:0 6px 20px color-mix(in srgb,var(--acc) 45%,transparent)!important}
+html[data-skin][data-theme] .tabbar .pill button.on,html[data-skin][data-theme] .tabbar .pill button.on svg{color:var(--ink)!important;filter:none}
+html[data-skin] .avatar{background:linear-gradient(135deg,var(--acc2),var(--acc));color:var(--ink)}
+html[data-skin] .h16:not(.cancelled):not(.diverted){background:linear-gradient(155deg,color-mix(in srgb,var(--acc) 30%,#05060c) 0%,color-mix(in srgb,var(--acc) 70%,#0a0a14) 55%,color-mix(in srgb,var(--acc2) 80%,var(--acc)) 100%)}
+html[data-skin=aurora] .h16:not(.cancelled):not(.diverted){background:linear-gradient(155deg,#03202a 0%,#0b5a6e 40%,#14a37f 75%,#5aa8ff 100%)}
+html[data-skin=neon] .h16:not(.cancelled):not(.diverted){background:linear-gradient(155deg,#1a0430 0%,#7a0f5a 50%,#ff3ea5 80%,#38f3ff 100%)}
+html[data-skin=paper] .h16:not(.cancelled):not(.diverted){background:linear-gradient(155deg,#111 0%,#3a3a3a 60%,#6b6760 100%)}
+html[data-skin] .fcard{background:linear-gradient(160deg,color-mix(in srgb,var(--acc) 14%,var(--card)),var(--card))!important}
