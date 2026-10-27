@@ -148,3 +148,4 @@ export const LABS3: L3[] = [
   T("uniq", "New places today", "Places served by one flight only", "Network & routes", "star", p => <FL {...p} filt={(f: any, dir: string, _n: number, d: any) => d.flights.filter((x: any) => oth(x, dir)?.iata === oth(f, dir)?.iata).length === 1} sort={byT} empty="Every place has 2+ flights." note="Places with a single flight today — often seasonal or less frequent routes." />),
   T("bigdelay", "Hour+ delays", "Everything 60+ min late", "Disruption", "warn", p => <FL {...p} filt={(f: any, dir: string) => (dl(f, dir) ?? 0) >= 60} sort={(a: any, b: any, dir: string) => (dl(b, dir) ?? 0) - (dl(a, dir) ?? 0)} empty="No flight is an hour or more late." note="Delays of 3 h+ to the EU/UK may qualify for UK261/EU261 compensation — check the airline's claim page." />),
 ];
+export { FL, GR, tT, ms, hav, brg, byT, Row, dTag, useInfo, card, up, T as T3 };

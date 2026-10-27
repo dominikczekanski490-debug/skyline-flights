@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, load, type Flight } from "./lib";
 import { LABS2, LabsHome, AirportPicker, Ic2 } from "./v28";
 import { LABS3 } from "./v29";
+import { LABS4 } from "./v32";
 
 // ---------- design-system icons (original, 24px stroke set) ----------
 const sv = (d: string, extra?: ReactNode) => <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={d} />{extra}</svg>;
@@ -303,7 +304,7 @@ export const LABS: Lab[] = [
   { id: "last", n: "Last flight out", d: "First and last departure per destination", k: "Utility", ic: "moon", el: p => <LastOut {...p} /> },
 ];
 
-export function Labs({ id, apt, f, open }: { id?: string; apt?: string; f?: any; open?: (f: any) => void }) { const [sel, ss] = useState<string | null>(id || null); const [rk, srk] = useState(0); const ALL: any[] = [...LABS, ...LABS2, ...LABS3]; const t = ALL.find(x => x.id === sel);
+export function Labs({ id, apt, f, open }: { id?: string; apt?: string; f?: any; open?: (f: any) => void }) { const [sel, ss] = useState<string | null>(id || null); const [rk, srk] = useState(0); const ALL: any[] = [...LABS, ...LABS2, ...LABS3, ...LABS4]; const t = ALL.find(x => x.id === sel);
   if (t) return <div className="lab-tool"><button className="lab-back" onClick={() => ss(null)}>{Ic.back} Labs</button><div className="lab-th"><span className={"lab-ic k-" + t.k.split("-")[0].toLowerCase()}>{Ic[t.ic] || Ic2[t.ic]}</span><div><h2>{t.n}</h2><Kind k={t.k} /></div></div>{BOARDY.has(t.id) && <DaySeg on={() => srk(x => x + 1)} />}<Fragment key={rk}>{t.el({ apt, f, open })}</Fragment></div>;
   return <LabsHome all={ALL} pick={ss} />; }
 
