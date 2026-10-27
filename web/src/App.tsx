@@ -1,5 +1,6 @@
 import { AircraftCard, WhatsNew22, HomeWidgets, Overhead22, Wrapped22, Connections22 } from "./v22";
 import "./v22.css";
+import { DiscoverCarousel, trackPing, AcarsFeed } from "./v36";
 import "./v24.css";
 import "./v25.css";
 import { AirportPulse } from "./v24";
@@ -46,6 +47,7 @@ const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <AirlineTile a={a} clas
 export default function App() {
   const [tab, setTab] = useState<"mine" | "friends" | "tracked" | "passport">("mine");
   const [flights, setFlights] = useState<Flight[]>(() => load().map(finishStale));
+  useEffect(() => { const t = setTimeout(() => trackPing(flights.filter((f: any) => !f.friend)), 3000); return () => clearTimeout(t); }, [flights.map(f => f.id).join(",")]);
   const [ov, setOv] = useState<Ov[]>([]);
   const [live, setLive] = useState<Record<string, any>>({});
   const [mapStyle, setMapStyle] = useState(localStorage.getItem("sk.map2") || "dark");
@@ -145,7 +147,7 @@ function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => 
     <GlobalSearch push={push} onFlight={f => push({ t: "flight", f })} />
     {(() => { const nx = list.filter(f => !f.example && phaseOf(f) !== "cancelled" && !(f.status === "landed" && Date.now() - +new Date(f.arr.actual || f.arr.scheduled || 0) > 3 * 3600e3)).sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1)[0];
       return nx ? <><NextHero f={nx} open={() => open(nx)} dayof={() => push({ t: "dayof", f: nx })} /><div className="px pf-hero"><PlaneFrom f={nx} compact /></div></> : null; })()}
-    <div className="px"><HomeWidgets flights={list} push={push} /><AirportPulse push={push} /></div>
+    <div className="px"><HomeWidgets flights={list} push={push} /><AirportPulse push={push} /></div><DiscoverCarousel push={push} /><AcarsEntry />
     <TodayCard flights={list} />
     <AssistantFeed flights={list} push={push} />
     <NLSearch open={f => push({ t: "flight", f })} />
@@ -583,3 +585,5 @@ const Man3D = lazy(() => import("./v35"));
 function Man3DBtn() { const [o, setO] = useState(() => /man3d=1/.test(location.hash));
   return <><button className="card press m3btn px" style={{ width: "calc(100% - 24px)", margin: "8px 12px", textAlign: "left" }} onClick={() => setO(true)}><span style={{ fontSize: 22 }}>🛬</span><div><b>See Manchester Airport in 3D</b> <span className="m3beta" style={{ fontSize: 10, padding: "1px 6px", borderRadius: 6, background: "var(--accent,#6aa8ff)", color: "#fff" }}>BETA</span><div className="muted sm">Terminals, runways and live aircraft · shapes from OpenStreetMap</div></div></button>
     {o && createPortal(<Suspense fallback={<div className="m3d" style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "grid", placeItems: "center" }}>Loading 3D view…</div>}><Man3D onClose={() => setO(false)} /></Suspense>, document.body)}</>; }
+
+function AcarsEntry() { const [o, setO] = useState(false); return <div className="px mt8"><button className="card press" style={{ width: "100%", textAlign: "left" }} onClick={() => setO(true)}><b>📡 ACARS feed</b><div className="muted sm">Live datalink messages heard by UK stations, decoded by label</div></button>{o && <AcarsFeed onClose={() => setO(false)} />}</div>; }

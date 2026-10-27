@@ -1311,6 +1311,7 @@ setInterval(() => saveState("flog"), 60 * 60e3); setInterval(() => saveState("co
 setInterval(() => { FLEET?.persist(); STATE.obs = Object.fromEntries(Object.entries(OBS).map(([k, o]) => [k, { events: o.events, lastSeen: o.lastSeen }])); saveState(KV_URL ? "live" : "all"); }, 20 * 60e3);
 import webpush from "web-push";
 import { startFleet } from "./fleet.js";
+import { register as reg36, decode as acarsDecode } from "./v36.js";
 import { liveFits, depEvidence, arrEvidence } from "./evidence.js";
 for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { try { FLEET?.persist(); } catch {} process.exit(0); });
 let FLEET = null;
@@ -1424,7 +1425,7 @@ const ACARS_LBL = { H1: "Datalink (crew/ops)", "_d": "Link test / no text", Q0: 
 api.get("/acars/:hex", wrap(async (req, res) => { const hex = String(req.params.hex || "").toUpperCase().replace(/[^0-9A-F]/g, "").slice(0, 6); if (hex.length !== 6) return res.status(400).json({ error: "hex required" });
   const raw = await cached("acars:" + hex, 90, () => getJSON(`https://api.airframes.io/messages?icao=${hex}&limit=60`, { timeout: 12000 })).catch(e => ({ err: String(e.message || e) }));
   if (raw.err) return res.json({ hex, source: "airframes.io", error: raw.err, messages: [] });
-  const ms = (Array.isArray(raw) ? raw : []).filter(m => (m.fromHex || "").toUpperCase() === hex || (m.toHex || "").toUpperCase() === hex || (m.airframe?.icao || "").toUpperCase() === hex).map(m => ({ t: m.timestamp, dir: (m.fromHex || "").toUpperCase() === hex ? "down" : "up", label: m.label || null, labelText: ACARS_LBL[m.label] || (m.label ? "Label " + m.label : "Link-layer frame"), text: (m.text || "").trim() || null, flight: m.flightNumber || null, tail: m.tail || m.airframe?.tail || null, kind: m.sourceType || null, freq: m.frequency || null, station: m.station?.ident || null, dep: m.departingAirport || null, dst: m.destinationAirport || null, lat: m.latitude ?? null, lon: m.longitude ?? null, alt: m.altitude ?? null }));
+  const ms = (Array.isArray(raw) ? raw : []).filter(m => (m.fromHex || "").toUpperCase() === hex || (m.toHex || "").toUpperCase() === hex || (m.airframe?.icao || "").toUpperCase() === hex).map(m => ({ t: m.timestamp, dir: (m.fromHex || "").toUpperCase() === hex ? "down" : "up", label: m.label || null, labelText: ACARS_LBL[m.label] || (m.label ? "Label " + m.label : "Link-layer frame"), text: (m.text || "").trim() || null, flight: m.flightNumber || null, tail: m.tail || m.airframe?.tail || null, kind: m.sourceType || null, freq: m.frequency || null, station: m.station?.ident || null, dep: m.departingAirport || null, dst: m.destinationAirport || null, lat: m.latitude ?? null, lon: m.longitude ?? null, alt: m.altitude ?? null, ...acarsDecode(m) }));
   res.json({ hex, source: "airframes.io", fetched: new Date().toISOString(), messages: ms });
 }));
 api.get("/wx/:code", wrap(async (req, res) => { const i = icaoOf(req.params.code);
@@ -1715,6 +1716,7 @@ app.use("/api", api);
 const dist = path.join(__dir, "../web/dist");
 app.use(express.static(dist, { setHeaders: (r, p) => { if (p.endsWith("sw.js") || p.endsWith(".html") || p.endsWith("version.json")) r.setHeader("cache-control", "no-cache"); } }));
 app.get(/^\/(?!api).*/, (q, r) => r.sendFile(path.join(dist, "index.html")));
+reg36(api, { getJSON, cached, wrap, STATE, saveState, board, todayLondon, adsb });
 app.listen(PORT, "0.0.0.0", () => console.log("Skyline on :" + PORT));
 
 process.on("unhandledRejection", e => console.error("[unhandledRejection]", e?.message || e));
