@@ -1,0 +1,9 @@
+.m3d{position:fixed;inset:0;z-index:300;background:var(--bg);display:flex;flex-direction:column}
+.m3top{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px}
+.m3beta{font-size:11px;font-weight:700;letter-spacing:.08em;padding:2px 7px;border-radius:6px;background:var(--accent,#6aa8ff);color:#fff}
+.m3map{flex:1;min-height:0}
+.m3fb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+.m3note{font-size:12px;opacity:.8;padding:8px 14px calc(env(safe-area-inset-bottom) + 8px)}
+.m3card{position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 96px);padding:12px 14px}
+.m3p{cursor:pointer}
+.m3btn{display:inline-flex;align-items:center;gap:6px}

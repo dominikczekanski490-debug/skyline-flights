@@ -1439,7 +1439,7 @@ api.get("/sigmets", wrap(async (req, res) => { const [i, u] = await Promise.all(
   const slim = x => ({ fir: x.firName || x.firId || x.icaoId, hazard: x.hazard, qual: x.qualifier, from: x.validTimeFrom, to: x.validTimeTo, base: x.base, top: x.top, raw: x.rawSigmet || x.rawAirSigmet, coords: x.coords });
   res.json({ intl: (i || []).map(slim), us: (u || []).map(slim), source: "aviationweather.gov" }); }));
 api.get("/winds", wrap(async (req, res) => res.json({ raw: await cached("winds", 1800, () => getT("https://aviationweather.gov/api/data/windtemp?region=all&level=high&fcst=06")), source: "aviationweather.gov FB winds (US stations)" })));
-const slimAc = a => ({ hex: a.hex, flight: (a.flight || "").trim(), reg: a.r, type: a.t, desc: a.desc, alt: a.alt_baro, gs: a.gs, track: a.track, lat: a.lat, lon: a.lon, squawk: a.squawk, emergency: a.emergency, mil: !!(a.dbFlags & 1), vs: a.baro_rate, seen: a.seen });
+const slimAc = a => ({ hex: a.hex, flight: (a.flight || "").trim(), reg: a.r, type: a.t, desc: a.desc, alt: a.alt_baro, gs: a.gs, track: a.track ?? a.true_heading ?? a.mag_heading, lat: a.lat, lon: a.lon, squawk: a.squawk, emergency: a.emergency, mil: !!(a.dbFlags & 1), vs: a.baro_rate, seen: a.seen });
 let ADQ = Promise.resolve(); const adq = fn => { const p = ADQ.then(fn); ADQ = p.catch(() => {}).then(() => new Promise(r => setTimeout(r, 1100))); return p; }; // adsb.lol allows ~1 req/s
 // adsb.lol, then airplanes.live, then adsb.fi (path-mapped); last good answer is kept for 10 min if all three are rate-limiting.
 const ADSB_STALE = {}; const fiPath = p => p.replace(/^reg\//, "registration/").replace(/^point\/([-\d.]+)\/([-\d.]+)\/(\d+)/, "lat/$1/lon/$2/dist/$3");

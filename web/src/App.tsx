@@ -25,7 +25,8 @@ import { PlaneFrom, useAircraft } from "./inbound";
 import { Alternatives, FlightStory, PassCard, JetLag } from "./v20";
 import { AssistantFeed, TodayCard, NLSearch, CompCard, shareImage, exportIcs as icsOf, AirportGuide } from "./assist";
 import { NextHero, PlaneHere, Facts, GlobalSearch, DayOf, phaseOf } from "./big";
-import { useRef, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRef, useEffect, useMemo, useState, lazy, Suspense, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import MapView, { MAP_STYLES } from "./MapView";
 import { Sheet, RoundBtn, I, Badge } from "./ui";
@@ -324,7 +325,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   const tz = tzOffset(f.destination?.tz) - tzOffset(f.origin?.tz);
   const shareUrl = () => shareLink(f);
   const h = flights.filter((x: Flight) => x.origin?.iata === f.origin?.iata && x.destination?.iata === f.destination?.iata && !x.friend);
-  return <div className="fd"><EtaLine f={f} live={lv} />
+  return <div className="fd"><EtaLine f={f} live={lv} />{(f.origin?.iata === "MAN" || f.destination?.iata === "MAN") && <Man3DBtn />}
     {f.example && <div className="exlabel">Example data — not a real flight record</div>}
     <div className={"banner " + banner[1]}><b>{banner[0]}</b><div className="sm">Total {dur(estDurMin(f.origin, f.destination))} est. • {dist(f.origin, f.destination).toLocaleString()} mi{lv ? ` • live ${Math.round(lv.alt || 0).toLocaleString()} ft, ${Math.round(lv.gs || 0)} kt` : ""}</div>{lv?.matched === "route" && <div className="sm">{lv.matchNote}. Probable match: the airline flies a different radio callsign from the flight number.</div>}</div>
     <SunRoute f={f} />
@@ -429,7 +430,7 @@ function Board({ iata, x, push, term0 }: any) {
   const nowIdx = list.findIndex((f: any) => +new Date((dir === "dep" ? f.dep : f.arr).scheduled) > Date.now() - 30 * 60e3);
   useEffect(() => { if (nowIdx > 0 && date === today()) setTimeout(() => document.getElementById("brow-now")?.scrollIntoView({ block: "start" }), 50); }, [d]);
   const airlines = [...new Set((d?.flights || []).map((f: any) => f.airline?.iata))].filter(Boolean) as string[];
-  return <><div className="head"><div><div className="row g6 bh-tags">{[iata, ap?.icao, new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: ap?.tz || "Europe/London" }) + " " + (ap?.tz === "Europe/London" ? "GMT" : "local")].map(t => <span key={t} className="tag">{t}</span>)}</div><h1 className="h1s">{ap?.city || iata}</h1><div className="muted sm">{ap ? [ap.name, ap.country].filter(Boolean).join(", ").toUpperCase() : d?.error ? "" : "Loading airport…"}</div></div>{x}</div>
+  return <>{iata === "MAN" && <Man3DBtn />}<div className="head"><div><div className="row g6 bh-tags">{[iata, ap?.icao, new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: ap?.tz || "Europe/London" }) + " " + (ap?.tz === "Europe/London" ? "GMT" : "local")].map(t => <span key={t} className="tag">{t}</span>)}</div><h1 className="h1s">{ap?.city || iata}</h1><div className="muted sm">{ap ? [ap.name, ap.country].filter(Boolean).join(", ").toUpperCase() : d?.error ? "" : "Loading airport…"}</div></div>{x}</div>
     <div className="chips bh-chips"><div className="sk-seg mini"><button className={!term ? "on" : ""}>{Ic.list}<span>List</span></button><button onClick={() => setTerm(true)}>{Ic.board}<span>FIDS</span></button></div><button className={"sk-pill " + (info ? "on" : "")} onClick={() => setInfo(v => !v)}>{info ? Ic.list : Ic.info}<span>{info ? "Board" : "Info"}</span></button><button className="sk-pill" onClick={() => navigator.share?.({ url: location.href, title: `${iata} board` })}>{Ic.share}<span>Share</span></button>
       <select className="chip" value={date} onChange={e => setDate(e.target.value)}>{[-1, 0, 1, 2].map(o => { const v = new Date(Date.now() + o * 864e5).toLocaleDateString("en-CA", { timeZone: "Europe/London" }); return <option key={v} value={v}>{["Yesterday", "Today", "Tomorrow", fmtD(v)][o + 1]}</option>; })}</select>
             <select className="chip" value={airline} onChange={e => setAirline(e.target.value)}><option value="">Airline: All</option>{airlines.sort().map(a => <option key={a}>{a}</option>)}</select></div>
@@ -577,3 +578,8 @@ function Settings({ x, theme, setTheme, push }: any) {
     {msg && <div className="note">{msg}</div>}
     <div className="sk-foot">{Ic.db}<span>Data: MAN/STN/EMA official flight info • adsb.lol / adsb.fi (ADS-B live positions) • adsbdb (routes) • hexdb.io (aircraft) • planespotters.net (photos) • Open-Meteo (weather) • RainViewer (radar) • OpenFlights (airports/airlines) • Esri / CARTO / OSM (maps). Skyline is an independent app, not affiliated with Flighty.</span></div><div style={{ height: 60 }} /></div></>;
 }
+
+const Man3D = lazy(() => import("./v35"));
+function Man3DBtn() { const [o, setO] = useState(() => /man3d=1/.test(location.hash));
+  return <><button className="card press m3btn px" style={{ width: "calc(100% - 24px)", margin: "8px 12px", textAlign: "left" }} onClick={() => setO(true)}><span style={{ fontSize: 22 }}>🛬</span><div><b>See Manchester Airport in 3D</b> <span className="m3beta" style={{ fontSize: 10, padding: "1px 6px", borderRadius: 6, background: "var(--accent,#6aa8ff)", color: "#fff" }}>BETA</span><div className="muted sm">Terminals, runways and live aircraft · shapes from OpenStreetMap</div></div></button>
+    {o && createPortal(<Suspense fallback={<div className="m3d" style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "grid", placeItems: "center" }}>Loading 3D view…</div>}><Man3D onClose={() => setO(false)} /></Suspense>, document.body)}</>; }
