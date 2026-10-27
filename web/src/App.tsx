@@ -11,6 +11,8 @@ import { LABS2 } from "./v28";
 import { LABS3 } from "./v29";
 import { LABS4 } from "./v32";
 import { applySkin, SkinPicker } from "./themes";
+import { NotifInbox, NotifPreviews, changeMsgs, flightTitle, contextLine, addInbox } from "./v34";
+import "./v34.css";
 import { SunRoute } from "./v30";
 import "./v26.css";
 import "./v28.css";
@@ -48,6 +50,7 @@ export default function App() {
   const [mapStyle, setMapStyle] = useState(localStorage.getItem("sk.map2") || "dark");
   const [radar, setRadar] = useState(false); const [locate, setLocate] = useState(0);
   useEffect(() => { const tb = location.hash.match(/tab=(mine|friends|tracked|passport)/); if (tb) setTab(tb[1] as any); const v = location.hash.match(/ov=(overhead|wrapped|conn|ask|settings|search)/); if (v) setOv([{ t: v[1] } as Ov]); const lb = location.hash.match(/labs=?(\w*)/); if (lb) setOv([{ t: "labs", id: lb[1] || undefined }]); const fm = location.hash.match(/flight=([\w-]+)/); if (fm) { const f = load().find(x => x.id === fm[1]); if (f) setOv([{ t: "flight", f }]); } }, []);
+  useEffect(() => { const h = () => { const fm = location.hash.match(/flight=([\w-]+)/); const f = fm && load().find(x => x.id === decodeURIComponent(fm[1])); if (f) setOv([{ t: "flight", f }]); }; window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
   useEffect(() => { const m = location.hash.match(/board=([A-Za-z]{3})/); if (m) setOv([{ t: "board", iata: m[1].toUpperCase() }]); const a = location.hash.match(/airports=(\w+)/); if (a) setOv([{ t: "airports", mode: a[1] }]); }, []);
   const [why, setWhy] = useState<any>(null); (window as any).__why = (f: any) => { navigator.vibrate?.(8); setWhy(f); };
   const [theme, setTheme] = useState(localStorage.getItem("sk.theme") || "dark");
@@ -73,8 +76,9 @@ export default function App() {
     for (const f of now) { try { const r = batch[`${f.number}@${f.date}`]; if (!r || r.error) continue; setLive(l => ({ ...l, [f.id]: r.live || null }));
       if (r.flight && !f.manual) { const keep = (a: any = {}, b: any = {}) => { const o = { ...a }; for (const k in b) if (b[k] != null && b[k] !== "") o[k] = b[k]; return o; };
         const n: Flight = { ...f, ...r.flight, dep: keep(f.dep, r.flight.dep), arr: keep(f.arr, r.flight.arr), id: f.id, date: f.date, notes: f.notes, friend: f.friend, checkedAt: Date.now(), live: r.live ? { ...r.live, at: Date.now() } : null, aircraft: { ...f.aircraft, ...r.flight.aircraft, ...(r.live ? { reg: r.live.reg, hex: r.live.hex, model: r.live.type } : {}) } } as any;
-        const msg: string[] = []; if (n.statusText !== f.statusText && n.statusText) msg.push(n.statusText!); if (n.dep.gate !== f.dep.gate && n.dep.gate) msg.push(`Gate ${n.dep.gate}`);
-        if (msg.length) { n.updates = [...(f.updates || []), { at: Date.now(), text: msg.join(" · ") }]; localNotify(`${n.number} ${n.origin?.iata}→${n.destination?.iata}`, msg.join(" · "), n.id); }
+        const cm = changeMsgs(f, n); const msg = cm.map(x => x.text);
+        if (msg.length) { n.updates = [...(f.updates || []), { at: Date.now(), text: msg.join(" · ") }]; const cx = contextLine(n); const it = { title: flightTitle(n), body: msg.join(" · ") + (cx ? "\n" + cx : ""), kind: cm[0].kind, url: "/#flight=" + n.id, at: Date.now(), tag: n.id };
+          addInbox(it); localNotify(it.title, it.body, n.id, { url: it.url, kind: it.kind }); }
         upd(finishStale(n)); } } catch (e) { console.warn("refresh", f.number, e); } }
     markTracked(); busy = false; };
     tick(); const t = setInterval(tick, TRACK_MS); const v = () => document.visibilityState === "visible" && tick(); document.addEventListener("visibilitychange", v); window.addEventListener("focus", v);
@@ -560,7 +564,7 @@ function Settings({ x, theme, setTheme, push }: any) {
     <div className="card m0"><h3 className="set-h"><span>{Ic.palette}</span>Appearance</h3><SkinPicker v={theme} set={setTheme} /></div>
     <div className="card m0"><h3 className="set-h"><span>{Ic.bell}</span>Notifications</h3><div className="muted sm">Gate & terminal changes, boarding, delays (15+ min, or improving), cancellations, departure, landing and baggage belt for your tracked flights. Tap <b>Turn on alerts</b> — iPhone only asks for permission after a tap, and only inside the Home Screen app (Safari → Share → Add to Home Screen, iOS 16.4+).</div>
       <div className="faint sm mt4"><b>Honest limits:</b> with the app open, Skyline also alerts on-device straight away. When it's closed, alerts come from the server, which checks tracked flights every 4 min — so they can lag by a few minutes, and if the free server is asleep (Render free tier) the first check after it wakes can be late. Focus modes and iOS notification settings can hide banners.</div>
-      <PushControls /></div>
+      <PushControls /><NotifInbox /><NotifPreviews /></div>
     <div className="card m0"><h3 className="set-h"><span>{Ic.db}</span>Your data</h3><div className="muted sm">Your flights, friends and settings are saved on this iPhone and survive server restarts. Make a backup file to move them to another device.</div>
       <div className="row g8 mt8 wrap"><button className="secondary" onClick={() => exportBackup()}><i className="sk-ii">{Ic.download}</i> Back up</button><label className="secondary"><i className="sk-ii">{Ic.upload}</i> Restore<input hidden type="file" accept=".json,application/json" onChange={e => e.target.files?.[0] && importBackup(e.target.files[0]).catch(er => setMsg(er.message))} /></label></div>
       <input className="field mt8" placeholder="Your name (shown on flights you share)" defaultValue={localStorage.getItem("sk.name") || ""} onBlur={e => localStorage.setItem("sk.name", e.target.value.trim())} /></div>

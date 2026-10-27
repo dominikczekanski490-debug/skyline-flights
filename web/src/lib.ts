@@ -1,6 +1,6 @@
 export type Ap = { iata: string; icao?: string; name: string; city?: string; country?: string; lat?: number; lon?: number; tz?: string };
 export type Times = { scheduled?: string | null; estimated?: string | null; actual?: string | null; gate?: string; terminal?: string; baggage?: string };
-export type Flight = { staleInferred?: boolean; id: string; number: string; date: string; airline?: any; origin?: Ap; destination?: Ap; dep: Times; arr: Times; status?: string; statusText?: string; source?: string;
+export type Flight = { staleInferred?: boolean; evidence?: { dep: string | null; arr: string | null }; unconfirmed?: boolean; id: string; number: string; date: string; airline?: any; origin?: Ap; destination?: Ap; dep: Times; arr: Times; status?: string; statusText?: string; source?: string;
   callsign?: string; aircraft?: { reg?: string; hex?: string; model?: string }; notes?: string; example?: boolean; manual?: boolean; diverted?: Ap; scheduleUnknown?: boolean; updates?: { at: number; text: string }[]; friend?: string };
 // GETs retry twice on network errors, 429 and 5xx (upstream feeds such as adsb.lol/adsb.fi rate-limit), with backoff.
 export const api = async (p: string, o?: RequestInit): Promise<any> => { const get = !o?.method || o.method === "GET";

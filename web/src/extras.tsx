@@ -223,8 +223,8 @@ export function PushChecklist({ refresh }: { refresh?: number }) {
 }
 
 // Local notification that works on iPhone too (pages there can't construct Notification; the service worker can).
-export function localNotify(title: string, body: string, tag?: string): Promise<boolean> { try { if (typeof Notification === "undefined" || Notification.permission !== "granted") return Promise.resolve(false);
-  return (navigator.serviceWorker ? navigator.serviceWorker.getRegistration("/").then(r => r || navigator.serviceWorker.register("/sw.js")) : Promise.resolve(null as any)).then((r: any) => r ? r.showNotification(title, { body, tag, icon: "/icon-192.png", badge: "/icon-192.png" }).then(() => true) : (new Notification(title, { body }), true)).catch(() => false); } catch { return Promise.resolve(false); } }
+export function localNotify(title: string, body: string, tag?: string, x: { url?: string; kind?: string } = {}): Promise<boolean> { try { if (typeof Notification === "undefined" || Notification.permission !== "granted") return Promise.resolve(false);
+  return (navigator.serviceWorker ? navigator.serviceWorker.getRegistration("/").then(r => r || navigator.serviceWorker.register("/sw.js")) : Promise.resolve(null as any)).then((r: any) => r ? r.showNotification(title, { body, tag, renotify: !!tag, icon: "/icon-192.png", badge: "/badge-72.png", data: { url: x.url || "/", kind: x.kind } } as any).then(() => true) : (new Notification(title, { body }), true)).catch(() => false); } catch { return Promise.resolve(false); } }
 
 // ---------- Security queues (real feed only) ----------
 export function SecurityCard({ iata }: { iata: string }) {
