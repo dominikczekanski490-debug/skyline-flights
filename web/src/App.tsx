@@ -10,6 +10,7 @@ import { Labs, LABS, Ic, SecHead, ActBtn } from "./v25";
 import { LABS2 } from "./v28";
 import { LABS3 } from "./v29";
 import { applySkin, SkinPicker } from "./themes";
+import { SunRoute } from "./v30";
 import "./v26.css";
 import "./v28.css";
 import "./v30.css";
@@ -320,6 +321,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   return <div className="fd"><EtaLine f={f} live={lv} />
     {f.example && <div className="exlabel">Example data — not a real flight record</div>}
     <div className={"banner " + banner[1]}><b>{banner[0]}</b><div className="sm">Total {dur(estDurMin(f.origin, f.destination))} est. • {dist(f.origin, f.destination).toLocaleString()} mi{lv ? ` • live ${Math.round(lv.alt || 0).toLocaleString()} ft, ${Math.round(lv.gs || 0)} kt` : ""}</div>{lv?.matched === "route" && <div className="sm">{lv.matchNote}. Probable match: the airline flies a different radio callsign from the flight number.</div>}</div>
+    <SunRoute f={f} />
     {!f.example && <div className="px"><AircraftCard f={f} hex={hex} reg={reg} /></div>}
     <div className="px"><FindMyPlane f={f} reg={reg} hex={hex} type={ac?.icaoType || lv?.type || ac?.type || f.aircraft?.model} flights={flights} inb={inb} rs={rs} /><div className="faint xs mt8">{PLANE_CREDITS}</div></div>
     <TimeBlock dir="dep" a={f.origin} t={f.dep} d={dd} badge={<Badge icon={Ic.gate} v={f.dep.gate} k={f.dep.terminal && `Terminal ${f.dep.terminal}`} />} />

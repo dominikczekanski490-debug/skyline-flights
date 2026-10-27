@@ -1,3 +1,4 @@
+import { CountUp, Skel } from "./v30";
 // v28: Labs v2 — 20 more "smart" features (rule-based or simple statistics on real boards / METAR; NO language model),
 // a searchable, favourite-able, category-grouped Labs home, and a full airport picker that works for every airport.
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -42,9 +43,9 @@ export function AirportPicker({ v, set }: { v: string; set: (s: string) => void 
 const useApt = (d?: string) => { const [a, sa] = useState<string>(() => d || ls("sk.labs.apt", "MAN")); return [a, (x: string) => { sa(x); localStorage.setItem("sk.labs.apt", JSON.stringify(x)); }] as const; };
 function useB(iata: string, dir = "dep") { const [s, set] = useState<{ d?: any; e?: string; ld: boolean }>({ ld: true });
   useEffect(() => { let on = true; set({ ld: true }); getBoard(iata, dir, 0).then(d => on && set({ d, ld: false })).catch(e => on && set({ e: String(e.message || e), ld: false })); return () => { on = false; }; }, [iata, dir]); return s; }
-const Load = () => <div className="lab-load"><i /><i /><i /></div>;
+const Load = () => <Skel />;
 const Note = ({ children }: { children: ReactNode }) => <div className="lab-note">{children}</div>;
-const Stat = ({ l, v, tone }: { l: string; v: ReactNode; tone?: string }) => <div className={"lab-stat " + (tone || "")}><b>{v}</b><span>{l}</span></div>;
+const Stat = ({ l, v, tone }: { l: string; v: ReactNode; tone?: string }) => <div className={"lab-stat " + (tone || "")}><b><CountUp v={v} /></b><span>{l}</span></div>;
 const Bar = ({ v, max, tone }: { v: number; max: number; tone?: string }) => <div className="lab-bar"><i className={tone} style={{ width: `${Math.max(2, Math.min(100, (v / (max || 1)) * 100))}%` }} /></div>;
 function G({ b, need = 1, children }: { b: { d?: any; e?: string; ld: boolean }; need?: number; children: (d: any) => ReactNode }) {
   if (b.ld) return <Load />; if (b.e) return <Note>Board unavailable right now: {b.e}</Note>;

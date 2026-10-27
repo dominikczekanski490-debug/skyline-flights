@@ -55,3 +55,4 @@ html[data-skin=aurora] .h16:not(.cancelled):not(.diverted){background:linear-gra
 html[data-skin=neon] .h16:not(.cancelled):not(.diverted){background:linear-gradient(155deg,#1a0430 0%,#7a0f5a 50%,#ff3ea5 80%,#38f3ff 100%)}
 html[data-skin=paper] .h16:not(.cancelled):not(.diverted){background:linear-gradient(155deg,#111 0%,#3a3a3a 60%,#6b6760 100%)}
 html[data-skin] .fcard{background:linear-gradient(160deg,color-mix(in srgb,var(--acc) 14%,var(--card)),var(--card))!important}
+.sunr{margin:10px 16px!important}.sunr-bar{position:relative;height:14px;border-radius:8px;margin:10px 0 6px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.sunr-bar i{position:absolute;top:-4px;bottom:-4px;width:3px;margin-left:-1.5px;border-radius:2px;background:#fff;box-shadow:0 0 8px #ffd36b}
