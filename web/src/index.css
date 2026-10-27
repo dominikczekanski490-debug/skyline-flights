@@ -105,8 +105,8 @@ textarea{width:100%;min-height:90px;border:0;border-top:1px solid var(--line);ma
 .psum2{margin:12px 0 4px;font-size:16px;font-weight:600;line-height:1.38;letter-spacing:-.01em}
 .pglass{margin-top:14px;padding:12px 14px;border-radius:18px;background:color-mix(in srgb,var(--text) 4%,transparent);border:1px solid color-mix(in srgb,var(--text) 6%,transparent);backdrop-filter:blur(18px)}
 .plab{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
-.pbar{display:grid;grid-template-columns:1fr 42% 40px;align-items:center;gap:10px;font-size:13px;padding:5px 0}.pbar em{font-style:normal;color:var(--muted);font-size:11px}
-.pbar>div{height:8px;border-radius:99px;background:color-mix(in srgb,var(--text) 8%,transparent);overflow:hidden}.pbar i{display:block;height:100%;border-radius:99px}.pbar b{text-align:right;font-variant-numeric:tabular-nums}
+.pchance{display:grid;grid-template-columns:minmax(0,1fr) 38% 44px;align-items:center;gap:10px;font-size:13px;padding:5px 0}.pchance em{font-style:normal;color:var(--muted);font-size:11px}
+.pchance>div{height:8px;border-radius:99px;background:color-mix(in srgb,var(--text) 8%,transparent);overflow:hidden}.pchance i{display:block;height:100%;border-radius:99px}.pchance b{text-align:right;font-variant-numeric:tabular-nums}
 .pfac{margin-top:16px}.pfrow{display:flex;gap:12px;padding:12px 0;border-top:1px solid color-mix(in srgb,var(--text) 7%,transparent)}
 .pfic{width:38px;height:38px;flex:none;border-radius:12px;display:grid;place-items:center;font-size:19px}
 .pft{font-size:15px;letter-spacing:-.01em}.pfimp{font-weight:800;font-variant-numeric:tabular-nums;font-size:15px}
