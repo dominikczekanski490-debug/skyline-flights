@@ -1,4 +1,4 @@
-const C = "skyline-v22"; const IMG = "skyline-img-v17"; const IMG_MAX = 200;
+const C = "skyline-v23"; const IMG = "skyline-img-v17"; const IMG_MAX = 200;
 self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(C).then(c => c.addAll(["/", "/manifest.webmanifest", "/icon-192.png"]))); });
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 // Navigations are network-first (15 s budget for a sleeping free server) so the phone never stays on an old build;
@@ -15,10 +15,10 @@ self.addEventListener("push", e => { let d = {}; try { d = e.data ? e.data.json(
   // iOS revokes push permission if a push arrives without showing a notification, so always show one.
   e.waitUntil(self.registration.showNotification(d.title || "Skyline", { body: d.body || "Flight update", tag: d.tag || undefined, renotify: !!d.tag, icon: "/icon-192.png", badge: "/icon-192.png", data: { url: d.url || "/" } })); });
 // Page asks the worker to show a local notification (iOS has no `new Notification()` in pages).
-self.addEventListener("message", e => { if (e.data?.type === "notify") self.registration.showNotification(e.data.title, { body: e.data.body, tag: e.data.tag, icon: "/icon-192.png" }); });
+self.addEventListener("message", e => { if (e.data?.type === "notify") e.waitUntil(self.registration.showNotification(e.data.title, { body: e.data.body, tag: e.data.tag || undefined, renotify: !!e.data.tag, icon: "/icon-192.png", badge: "/icon-192.png", data: { url: e.data.url || "/" } })); });
 self.addEventListener("notificationclick", e => { e.notification.close(); const url = new URL(e.notification.data?.url || "/", self.location.origin).href;
   e.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(l => { for (const c of l) if (c.url.startsWith(self.location.origin) && "focus" in c) { if (c.url !== url && "navigate" in c) c.navigate(url).catch(() => {}); return c.focus(); } return clients.openWindow(url); })); });
 // Browser rotated the subscription → re-register with the server immediately.
 self.addEventListener("pushsubscriptionchange", e => { e.waitUntil((async () => { const k = await (await fetch("/api/push/key")).json(); const b = atob((k.publicKey + "===".slice((k.publicKey.length + 3) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
   const sub = await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from(b, c => c.charCodeAt(0)) });
-  await fetch("/api/push/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON() }) }); })().catch(() => {})); });
+  await fetch("/api/push/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), oldEndpoint: e.oldSubscription?.endpoint || null }) }); })().catch(() => {})); });

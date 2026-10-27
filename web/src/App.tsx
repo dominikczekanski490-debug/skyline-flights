@@ -34,7 +34,7 @@ import { Tracked, isTracked, finishStale } from "./tracked";
 import { EXAMPLE } from "./example";
 import { Timeline, Progress, WeatherCard, AirportInfo, PassportMore, PasteImport, exportIcs, UnitsCard, AlertPrefsCard } from "./more";
 import { AskSkyline, LockView, RouteWeather, useInsights } from "./v21";
-import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras, DepartureDay, UpdateBanner, PushChecklist, BUILD, localNotify } from "./extras";
+import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras, DepartureDay, UpdateBanner, PushChecklist, BUILD, localNotify, testLocal, notifEnv } from "./extras";
 
 type Ov = { t: "ask" } | { t: "lock" } | { t: "flight"; f: Flight } | { t: "board"; iata: string; term?: boolean; dir?: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" } | { t: "tools"; id?: string } | { t: "features" } | { t: "labs"; id?: string; apt?: string; f?: Flight } | { t: "dayof"; f: Flight } | { t: "guide"; iata: string } | { t: "overhead" } | { t: "wrapped" } | { t: "conn" };
 const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <AirlineTile a={a} className="card-tile" mode="colour" style={{ width: Math.round(s * 2.4), height: s }} />;
@@ -534,9 +534,16 @@ function PushControls() {
   const flights = () => { try { return JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend); } catch { return []; } };
   const run = (p: Promise<string>) => { setBusy(true); setMsg(null); p.then(t => setMsg({ t })).catch(e => setMsg({ t: e.message || String(e), err: true })).finally(() => { setBusy(false); setSt(pushState()); }); };
   const label: any = { subscribed: "✅ On", off: "Off", denied: "⛔ Blocked", "not-installed": "📲 Add to Home Screen first", unsupported: "Not supported", error: "Error" };
-  return <><div className="sm mt8">Status: <b>{label[st.state]}</b>{st.state !== "subscribed" && st.state !== "off" ? <div className="muted sm">{st.msg}</div> : null}</div>
+  const ev = notifEnv(); const yn = (b: boolean | null, t: string, f: string) => <span className={b ? "good-t" : b === false ? "bad-t" : "faint"}>{b ? t : f}</span>;
+  return <><div className="notif-env mt8">
+      <div className="lab-row"><span className="grow">Permission</span>{yn(ev.perm === "granted" ? true : ev.perm === "denied" ? false : null, "Allowed", ev.perm === "denied" ? "Blocked" : ev.perm === "unavailable" ? "Unavailable here" : "Not asked yet")}</div>
+      <div className="lab-row"><span className="grow">Home Screen app</span>{ev.ios ? yn(ev.standalone, "Yes", "No — required on iPhone") : <span className="faint">Not needed on this device</span>}</div>
+      <div className="lab-row"><span className="grow">Web Push support</span>{yn(ev.push, "Yes", "No")}</div>
+    </div>
+    <div className="sm mt8">Status: <b>{label[st.state]}</b>{st.state !== "subscribed" && st.state !== "off" ? <div className="muted sm">{st.msg}</div> : null}</div>
     <div className="row g8 mt8 wrap"><button className="primary" disabled={busy} onClick={() => run(syncPush(flights(), true).then(m => "Notifications " + m))}>{st.state === "subscribed" ? "Re-register alerts" : "Turn on alerts"}</button>
-      <button className="secondary" disabled={busy || st.state !== "subscribed"} onClick={() => run(testPush())}>Send test</button>
+      <button className="secondary" disabled={busy || st.state !== "subscribed"} onClick={() => run(testPush())}>Test server push</button>
+      <button className="secondary" disabled={busy} onClick={() => run(testLocal())}>Test on this device</button>
       <button className="chip" onClick={() => pushStatus().then(setDbg).catch(e => setDbg({ error: e.message }))}>Diagnostics</button></div>
     <div className="mt8"><PushChecklist refresh={msg ? msg.t.length : 0} /></div>
     {msg && <div className={"pushmsg mt8 " + (msg.err ? "err" : "ok")}>{msg.err ? "Failed: " : ""}{msg.t}</div>}
@@ -550,7 +557,8 @@ function Settings({ x, theme, setTheme, push }: any) {
   return <><Head title="Settings" sub="Preferences, data and sources" right={x} /><div className="px col g8 set">
     <div className="card m0"><b className="set-h sm"><span>{Ic.image}</span>Photo credits</b><div className="faint sm mt4">{PLANE_CREDITS}</div><div className="faint sm mt4"><a href="https://www.planespotters.net" target="_blank" rel="noopener">Planespotters.net</a> · <a href="https://commons.wikimedia.org" target="_blank" rel="noopener">Wikimedia Commons</a></div></div><div className="card m0 row between"><span className="set-l"><span>{Ic.info}</span>App version</span><b className="sm">{BUILD}</b></div><button className="card m0 row between press" style={{ width: "100%" }} onClick={() => push({ t: "features" })}><span className="set-l"><span>{Ic.flask}</span>All features</span><b className="sm set-n">{TOOLS.length + BOARD_FEATURES.length}</b></button><UnitsCard /><AlertPrefsCard onChange={() => syncPush(JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend)).catch(() => {})} />
     <div className="card m0"><h3 className="set-h"><span>{Ic.palette}</span>Appearance</h3><SkinPicker v={theme} set={setTheme} /></div>
-    <div className="card m0"><h3 className="set-h"><span>{Ic.bell}</span>Push notifications</h3><div className="muted sm">Gate & terminal changes, delays, cancellations, belt numbers — even when Skyline is closed. The server checks your tracked flights every 4 minutes. iPhone: open Skyline from its Home Screen icon (iOS 16.4+).</div>
+    <div className="card m0"><h3 className="set-h"><span>{Ic.bell}</span>Notifications</h3><div className="muted sm">Gate & terminal changes, boarding, delays (15+ min, or improving), cancellations, departure, landing and baggage belt for your tracked flights. Tap <b>Turn on alerts</b> — iPhone only asks for permission after a tap, and only inside the Home Screen app (Safari → Share → Add to Home Screen, iOS 16.4+).</div>
+      <div className="faint sm mt4"><b>Honest limits:</b> with the app open, Skyline also alerts on-device straight away. When it's closed, alerts come from the server, which checks tracked flights every 4 min — so they can lag by a few minutes, and if the free server is asleep (Render free tier) the first check after it wakes can be late. Focus modes and iOS notification settings can hide banners.</div>
       <PushControls /></div>
     <div className="card m0"><h3 className="set-h"><span>{Ic.db}</span>Your data</h3><div className="muted sm">Your flights, friends and settings are saved on this iPhone and survive server restarts. Make a backup file to move them to another device.</div>
       <div className="row g8 mt8 wrap"><button className="secondary" onClick={() => exportBackup()}><i className="sk-ii">{Ic.download}</i> Back up</button><label className="secondary"><i className="sk-ii">{Ic.upload}</i> Restore<input hidden type="file" accept=".json,application/json" onChange={e => e.target.files?.[0] && importBackup(e.target.files[0]).catch(er => setMsg(er.message))} /></label></div>

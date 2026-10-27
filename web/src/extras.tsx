@@ -223,8 +223,8 @@ export function PushChecklist({ refresh }: { refresh?: number }) {
 }
 
 // Local notification that works on iPhone too (pages there can't construct Notification; the service worker can).
-export function localNotify(title: string, body: string, tag?: string) { try { if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-  navigator.serviceWorker?.getRegistration("/").then(r => r ? r.showNotification(title, { body, tag, icon: "/icon-192.png" }) : void new Notification(title, { body })).catch(() => {}); } catch {} }
+export function localNotify(title: string, body: string, tag?: string): Promise<boolean> { try { if (typeof Notification === "undefined" || Notification.permission !== "granted") return Promise.resolve(false);
+  return (navigator.serviceWorker ? navigator.serviceWorker.getRegistration("/").then(r => r || navigator.serviceWorker.register("/sw.js")) : Promise.resolve(null as any)).then((r: any) => r ? r.showNotification(title, { body, tag, icon: "/icon-192.png", badge: "/icon-192.png" }).then(() => true) : (new Notification(title, { body }), true)).catch(() => false); } catch { return Promise.resolve(false); } }
 
 // ---------- Security queues (real feed only) ----------
 export function SecurityCard({ iata }: { iata: string }) {
@@ -259,3 +259,13 @@ export function DepartureDay({ f }: { f: Flight }) {
   return <div className="card"><h3>Departure day</h3>{items.map(([k, v, o]) => <div key={k} className="row between ckrow"><span className="row g8"><span className={"ck " + (o === true ? "ok" : o === false ? "bad" : "na")}>{o === true ? "✓" : o === false ? "!" : "–"}</span>{k}</span><span className="sm">{v}</span></div>)}
     <div className="faint sm mt8">Leave time above uses the delay; security time {qMax != null ? "is live from the airport" : "isn't published by this airport, so allow your usual buffer"}.</div></div>;
 }
+
+// On-device test: proves permission + service worker work, independent of the server / Apple push service.
+export async function testLocal(): Promise<string> {
+  if (typeof Notification === "undefined") throw new Error("This browser has no notifications here. On iPhone, open Skyline from its Home Screen icon (iOS 16.4+).");
+  if (Notification.permission !== "granted") throw new Error(Notification.permission === "denied" ? "Blocked — iOS Settings → Notifications → Skyline → Allow." : "Tap Turn on alerts first so iOS can ask for permission.");
+  const ok = await localNotify("Skyline test (this device)", "Local notifications work. Server push is tested separately.", "sk-local-test");
+  if (!ok) throw new Error("The service worker couldn't show a notification.");
+  return "Shown by this device's service worker. If you didn't see a banner, check Focus / iOS notification settings.";
+}
+export const notifEnv = () => ({ ios: isIOS(), standalone: isStandalone(), perm: typeof Notification !== "undefined" ? Notification.permission : "unavailable", push: pushSupported() });

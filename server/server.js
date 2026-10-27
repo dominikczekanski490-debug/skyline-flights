@@ -1338,7 +1338,7 @@ api.get("/push/status", wrap(async (req, r) => { await ready; const ep = req.que
     you: ep ? (s ? { subscribed: true, watching: s.flights.length, at: s.at, lastOk: s.lastOk || null, lastErr: s.lastErr || null } : { subscribed: false }) : undefined, log: PUSHLOG.slice(0, 15) }); }));
 api.post("/push/subscribe", wrap(async (req, res) => { await ready; const { sub } = req.body || {};
   if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return res.status(400).json({ error: "Invalid subscription (missing endpoint or keys)" });
-  const id = subId(sub.endpoint); const prev = STATE.subs[id]?.flights || []; const flights = Array.isArray(req.body.flights) ? req.body.flights : prev;
+  const id = subId(sub.endpoint); const oid = req.body.oldEndpoint ? subId(req.body.oldEndpoint) : null; if (oid && oid !== id && STATE.subs[oid]) { STATE.subs[id] = { ...STATE.subs[oid], ...(STATE.subs[id] || {}) }; delete STATE.subs[oid]; plog("rotated", pushHost(sub.endpoint)); } const prev = STATE.subs[id]?.flights || []; const flights = Array.isArray(req.body.flights) ? req.body.flights : prev;
   STATE.subs[id] = { ...(STATE.subs[id] || {}), sub, at: Date.now(), prefs: req.body.prefs || STATE.subs[id]?.prefs || null, flights: flights.slice(0, 30).map(f => { const o = prev.find(p => p.number === f.number && p.date === f.date); return { number: String(f.number).toUpperCase(), date: f.date, snap: o?.snap || f.snap || null }; }) };
   if (!prev.length && !STATE.subs[id].lastOk) plog("subscribed", pushHost(sub.endpoint)); saveState(); res.json({ ok: true, watching: STATE.subs[id].flights.length }); }));
 api.post("/push/test", wrap(async (req, res) => { await ready; const id = subId(req.body?.endpoint); const s = STATE.subs[id];
