@@ -28,7 +28,8 @@ export function PredictCard({ f, p, compact, onWhy }: { f: any; p: any; compact?
 import { useEffect, useState } from "react";
 import { Livery } from "./livery";
 import { api } from "./lib";
-export function FindMyPlane({ f, reg, hex, type, flights, inb }: any) {
+const CONF: Record<string, [string, string]> = { confirmed: ["Confirmed", "ok"], airline: ["Confirmed", "ok"], transponder: ["Confirmed", "ok"], likely: ["Likely", "lk"], possible: ["Possible", "ps"], typical: ["Typical", "ty"] };
+export function FindMyPlane({ f, reg, hex, type, flights, inb, rs }: any) {
   const [h, setH] = useState<any>(null); const [more, setMore] = useState(false);
   useEffect(() => { setH(null); if (reg || hex) api(`/aircraft/${encodeURIComponent(reg || "-")}/history${hex ? "?hex=" + hex : ""}`).then(setH).catch(() => setH({ legs: [] })); }, [reg, hex]);
   const flown = reg ? (flights || []).filter((x: any) => x.id !== f.id && (x.aircraft?.reg || "").toUpperCase() === String(reg).toUpperCase() && x.status === "landed").length : 0;
@@ -38,7 +39,11 @@ export function FindMyPlane({ f, reg, hex, type, flights, inb }: any) {
   return <div className="fmp">
     <div className="fmp-h"><span className="fmp-t">Find My Plane</span>{flown > 0 && <span className="fmp-n">You flew {flown} time{flown > 1 ? "s" : ""} on this aircraft</span>}</div>
     <Livery code={f.airline?.iata} icao={f.airline?.icao} name={f.airline?.name} type={type} reg={reg} hex={hex} />
-    {!reg && !hex && <div className="fmp-na">Aircraft not assigned yet — usually 2–3 h before departure. Skyline keeps checking.</div>}
+    {(() => { const c = CONF[rs?.confidence || (reg || hex ? "confirmed" : "typical")] || CONF.typical; const gone = !!(f.dep?.actual || ["departed", "enroute"].includes(f.status || ""));
+      const why = rs?.reason || (reg || hex ? null : gone ? "In the air — matching its transponder…" : "Looking for the aircraft…");
+      const i = rs?.inbound; return <div className="fmp-why"><span className={"fmp-conf " + c[1]}>{c[0]}</span>{(reg || hex) && rs?.confidence && rs.confidence !== "confirmed" ? <b> {c[0]} {reg || String(hex).toUpperCase()}</b> : null}{why && <span> {why}</span>}
+        {i && <div className="fmp-inb">Inbound <b>{i.number}</b> from {i.from}{i.reg ? <> · operated by <b>{i.reg}</b></> : " · aircraft not identified yet"}{i.arr?.scheduled ? ` · due ${new Date(i.arr.scheduled).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })} UK` : ""}</div>}
+        {!reg && !hex && rs?.candidates?.length > 1 && <div className="fmp-inb">Candidates: {rs.candidates.map((x: any) => x.reg || x.cs).join(", ")}</div>}</div>; })()}
     {prev && <div className={"fmp-pill " + (prev.status === "landed" ? (pd != null && pd > 14 ? "red" : "green") : "blue")}>{prev.status === "landed" ? `Inbound aircraft arrived · ${pd == null ? "" : pd > 4 ? `${pd}m late` : "On time"}` : `Inbound aircraft ${prev.number} from ${prev.origin?.iata} · ${prev.statusText || prev.status}`}</div>}
     {(reg || hex) && <div className="fmp-legs"><div className="fmp-lab">Where this aircraft has been</div>
       {!h ? <div className="skel" style={{ height: 70 }} /> : !legs.length ? <div className="faint sm">No recent flight history available</div> :

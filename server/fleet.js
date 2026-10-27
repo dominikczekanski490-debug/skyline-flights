@@ -39,5 +39,9 @@ export function startFleet({ AP, adsb, STATE }) {
     return { hex: h, reg: p.reg, type: p.type, cs: p.cs, now: p.last ? { gnd: p.last.gnd, ap: p.last.ap || null, alt: p.last.alt, at: new Date(p.last.t).toISOString() } : null,
       legs: p.legs.filter(l => (l[3] || l[1]) > day0).map(l => ({ from: l[0], dep: l[1] ? new Date(l[1]).toISOString() : null, to: l[2], arr: l[3] ? new Date(l[3]).toISOString() : null, cs: l[4], how: l[5] || "", conf: /c|a|u/.test(l[5] || "") ? "likely" : "observed" })) }; }
   const stats = () => ({ aircraft: F.size, withLegs: [...F.values()].filter(p => p.legs.length).length, legs: [...F.values()].reduce((s, p) => s + p.legs.length, 0), sweeps, areas: CENTERS.length });
-  return { legsFor, stats, persist };
+  // v27: every aircraft of an airline seen recently (callsign prefix), with where it is now — used by the plane resolver.
+  function airlineNow(prefixes, maxAgeMs = 20 * 60e3) { const now = Date.now(), out = []; for (const [h, p] of F) { const s = p.last; if (!s || now - s.t > maxAgeMs || !p.cs) continue; if (!prefixes.some(x => p.cs.startsWith(x))) continue;
+      const L = p.legs[p.legs.length - 1]; out.push({ hex: h, reg: p.reg, type: p.type, cs: p.cs, gnd: !!s.gnd, ap: s.ap || null, lat: s.la, lon: s.lo, alt: s.gnd ? "ground" : s.alt, gs: s.gs, track: s.trk, app: s.app?.ap || null, seenAgo: Math.round((now - s.t) / 1000), last: L ? { from: L[0], to: L[2], dep: L[1], arr: L[3] } : null }); } return out; }
+  function legsOn(o, d, prefixes) { const out = []; for (const [h, p] of F) for (const l of p.legs) if (l[0] === o && l[2] === d && l[4] && prefixes.some(x => l[4].startsWith(x))) out.push({ hex: h, reg: p.reg, cs: l[4], dep: l[1], arr: l[3] }); return out; }
+  return { legsFor, stats, persist, airlineNow, legsOn };
 }

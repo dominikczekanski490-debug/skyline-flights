@@ -16,7 +16,7 @@ export function PlaneFrom({ f, compact }: { f: Flight; compact?: boolean }) {
   const tz = f.origin?.tz; const eta = inb && (inb.arr?.actual || inb.arr?.estimated || inb.arr?.scheduled);
   const st = inb ? (inb.arr?.actual ? `landed ${fmtT(inb.arr.actual, tz)}` : inb.live?.alt ? `in the air · lands ~${fmtT(eta, tz)}` : `due ${fmtT(eta, tz)}`) : "";
   const line = inb ? <>Your plane is coming from <b>{inb.from}</b> as <b>{inb.number}</b> · {st}{d != null && d >= 5 ? <span className="lt-bad"> · {d} min late</span> : d != null && !inb.arr?.actual ? " · on time" : ""}</>
-    : <>{reg ? `Inbound leg for ${reg} not known yet.` : "Aircraft not assigned yet."} <span className="faint">Usually assigned 2–3 h before departure — Skyline keeps checking.</span></>;
+    : <>{reg ? `Inbound leg for ${reg} not known yet.` : (a as any)?.reason || "Looking for the aircraft…"} {!reg && !(a as any)?.reason && <span className="faint">Skyline keeps checking.</span>}</>;
   const gone = !!(f.dep?.actual || ["departed", "enroute"].includes(f.status || ""));
   if (compact && (gone || f.status === "landed")) return null;
   if (gone && f.status !== "landed") { const L = a?.live; const left = L?.lat != null && f.destination?.lat != null && L.gs > 80 ? Math.round(dist({ lat: L.lat, lon: L.lon } as any, f.destination) / 1.15078 / L.gs * 60) : null;

@@ -5,19 +5,21 @@ import { connections } from "./assist";
 
 const buzz = (ms = 8) => { try { navigator.vibrate?.(ms); } catch { /* */ } };
 const ago = (iso: string) => { const m = Math.round((Date.now() - +new Date(iso)) / 60000); return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
-const HOW: Record<string, string> = { given: "from the flight feed", "observed-arr": "seen landing on ADS-B", "observed-dep": "seen taking off on ADS-B", "adsb-callsign": "matched by its transponder callsign", "adsb-route": "transponder matched by route", "adsb-geometry": "the only matching aircraft on this route (Skyline estimate)", rotation: "flew the inbound leg (Skyline estimate)", board: "from the airline/airport" };
+const HOW: Record<string, string> = { given: "from the flight feed", "observed-arr": "seen landing on ADS-B", "observed-dep": "seen taking off on ADS-B", "adsb-callsign": "matched by its transponder callsign", "adsb-route": "transponder matched by route", "adsb-geometry": "the only matching aircraft on this route (Skyline estimate)", rotation: "flew the inbound leg (Skyline estimate)", "learned-callsign": "the callsign this route used yesterday is live now (Skyline estimate)", ground: "parked at the departure airport (Skyline estimate)", board: "from the airline/airport" };
 
 export function AircraftCard({ f, hex, reg }: { f: Flight; hex?: string; reg?: string }) {
   const [d, setD] = useState<any>(null); const [err, setErr] = useState("");
   useEffect(() => { let on = true; const go = () => api(`/plane-card?number=${encodeURIComponent(f.number)}&date=${f.date}&o=${f.origin?.iata || ""}&d=${f.destination?.iata || ""}&dep=${f.dep?.actual || f.dep?.scheduled || ""}&arr=${f.arr?.actual || f.arr?.estimated || f.arr?.scheduled || ""}&status=${f.status || ""}&hex=${hex || ""}&reg=${reg || ""}`).then(r => on && setD(r)).catch(e => on && setErr(e.message));
     go(); const t = setInterval(go, 90e3); return () => { on = false; clearInterval(t); }; }, [f.id, hex, reg]);
   const lv = d?.live; const air = lv && lv.alt !== "ground" && lv.alt > 0;
-  return <section className="v22-sec ac22"><div className="v22-sh"><span>Aircraft</span>{d?.confidence && <em className={"conf " + d.confidence}>{d.confidence === "likely" ? "Likely · Skyline estimate" : "Confirmed"}</em>}</div>
+  return <section className="v22-sec ac22"><div className="v22-sh"><span>Aircraft</span>{d?.confidence && <em className={"conf " + d.confidence}>{d.confidence === "likely" ? "Likely · Skyline estimate" : d.confidence === "possible" ? "Possible · Skyline estimate" : d.confidence === "typical" ? "Typical type only" : "Confirmed"}</em>}</div>
     <div className="ac22-card">
       {d?.photo?.src ? <a className="ac22-ph" href={d.photo.link} target="_blank" rel="noreferrer"><img src={d.photo.src.replace("_280.", "_1000.")} onError={e => { (e.target as HTMLImageElement).src = d.photo.src; }} alt="" referrerPolicy="no-referrer" /><span>{d.photo.credit}</span></a>
-        : <div className="ac22-ph none"><span>{!d ? "Looking up the aircraft…" : d.reg ? "No photo of this airframe found" : "Aircraft not assigned yet"}</span></div>}
+        : <div className="ac22-ph none"><span>{!d ? "Looking up the aircraft…" : d.reg ? "No photo of this airframe found" : d.inbound ? `Arrives as ${d.inbound.number} from ${d.inbound.from}` : /departed|enroute/.test(f.status || "") || (f as any).dep?.actual ? "In the air — transponder not matched yet" : "Exact aircraft not identified yet"}</span></div>}
       <div className="ac22-main"><div className="ac22-reg">{d?.reg || (d ? "—" : "…")}</div><div className="ac22-type">{d?.type || d?.icaoType || ((f as any).aircraft?.model ? `${(f as any).aircraft.model} (flight feed)` : "") || (d?.typicalType ? `Usually a ${d.typicalType}` : d ? "Type not known yet" : "")}{d?.typicalType && !d?.reg && <small> · typical for this airline (Skyline estimate)</small>}</div>
         {d?.how && <div className="ac22-how">Identified: {HOW[d.how] || d.how}</div>}
+        {d?.reason && (d.reg || d.hex) && d.confidence !== "confirmed" && <div className="ac22-how">{d.reason}</div>}
+        {d?.inbound && <div className="ac22-how">Inbound <b>{d.inbound.number}</b> from {d.inbound.from}{d.inbound.reg ? <> {d.inbound.status === "landed" ? "arrived" : "operated"} as <b>{d.inbound.reg}</b></> : " — aircraft not identified yet"}</div>}
         <div className="ac22-grid">
           <div><label>Operator / owner</label><b>{d?.owner || "Not available"}</b></div>
           <div><label>Mode-S hex</label><b>{d?.hex ? d.hex.toUpperCase() : "Not available"}</b></div>

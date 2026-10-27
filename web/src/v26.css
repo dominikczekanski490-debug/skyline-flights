@@ -100,3 +100,8 @@
 .tb-otp .tb-top{background:#050402;border-bottom:1px solid #3a2400}.tb-otp .tb-title b{color:#ffb84a;font-size:17px;letter-spacing:1px}.tb-otp .tb-title span{color:#c97a10;font-size:12px;margin-left:8px}.tb-otp .tb-clock{color:#ffb84a}
 .tb-otp .tb-head{background:#050402;color:#ffb84a;opacity:1;border-bottom:1px solid #3a2400}
 .tb-otp .tb-row{border-bottom:1px dashed #2a1a00}.tb-otp .tb-row *{color:#ffa21a}.tb-otp .tb-st.ok{color:#ffe14a;animation:none}
+/* v27 Find My Plane confidence */
+.fmp-why{margin:8px 0;font-size:13px;line-height:1.4;color:var(--fg,#fff)}
+.fmp-conf{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:99px;margin-right:4px;vertical-align:1px}
+.fmp-conf.ok{background:rgba(48,209,88,.18);color:#30d158}.fmp-conf.lk{background:rgba(10,132,255,.18);color:#5eb0ff}.fmp-conf.ps{background:rgba(255,159,10,.18);color:#ff9f0a}.fmp-conf.ty{background:rgba(255,255,255,.1);color:#bbb}
+.fmp-inb{margin-top:6px;font-size:12px;opacity:.85}

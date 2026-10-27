@@ -137,7 +137,7 @@ export function Livery({ code, icao, name, type, reg, hex, small }: { code?: str
   const q = new URLSearchParams({ reg: (reg || "").toUpperCase(), hex: hex || "", al: alI, aln, type: tc, tn: a.known ? a.name : "" }).toString();
   const [p, setP] = useState<Photo | null>(null);
   useEffect(() => { let on = true; setP(null); if (!reg && !hex && !aln && !alI && !tc) { setP({ kind: "none" }); return; } getPhoto(q).then(r => on && setP(r)); return () => { on = false; }; }, [q]);
-  const tname = a.known ? a.name : (type || "Typical aircraft (exact one not assigned yet)");
+  const tname = a.known ? a.name : (type || "Typical aircraft for this route");
   return <div className={"pl-card" + (small ? " sm" : "")}>
     <div className="pl-sky">{!p ? <div className="pl-ph pl-wait" /> : p.kind === "none" || !p.src ? <div className="pl-ph pl-none">No photo available</div>
       : <a href={p.link} target="_blank" rel="noopener" onClick={e => e.stopPropagation()}><img className="pl-ph" src={p.src} loading="lazy" decoding="async" referrerPolicy="no-referrer" alt={`${aln} ${tname}`} /></a>}</div>
