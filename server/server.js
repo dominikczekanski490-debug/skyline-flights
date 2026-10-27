@@ -1307,6 +1307,7 @@ setInterval(() => saveState("flog"), 60 * 60e3); setInterval(() => saveState("co
 setInterval(() => { FLEET?.persist(); STATE.obs = Object.fromEntries(Object.entries(OBS).map(([k, o]) => [k, { events: o.events, lastSeen: o.lastSeen }])); saveState(KV_URL ? "live" : "all"); }, 20 * 60e3);
 import webpush from "web-push";
 import { startFleet } from "./fleet.js";
+for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { try { FLEET?.persist(); } catch {} process.exit(0); });
 let FLEET = null;
 import crypto from "crypto";
 // VAPID keys MUST stay stable across restarts, otherwise every iPhone subscription silently dies (DATA_DIR is /tmp on Render).
@@ -1317,7 +1318,7 @@ function deriveVapid() { const seed = process.env.VAPID_SEED || process.env.SKYL
 const VAPID_SUBJECT = /^(mailto:[^@\s]+@[^@\s]+\.[a-z]{2,}|https:\/\/[^\s]+)$/i.test(process.env.VAPID_SUBJECT || "") ? process.env.VAPID_SUBJECT : "https://skyline-flights.onrender.com"; // Apple 403s BadJwtToken on bad/example subjects
 let vapidSource = "";
 const PUSHLOG = []; const plog = (...a) => { const line = new Date().toISOString() + " " + a.join(" "); console.log("[push]", line); PUSHLOG.unshift(line); PUSHLOG.length = Math.min(PUSHLOG.length, 40); };
-const ready = loadState().then(() => { if (!process.env.NO_FLEET) FLEET = startFleet({ AP, STATE, adsb: p => (async () => { for (const u of ["https://api.adsb.lol/v2/" + p, "https://api.airplanes.live/v2/" + p]) { try { const j = await adq(() => getJ(u)); return (j.ac || j.aircraft || []).map(slimAc); } catch {} } throw new Error("adsb busy"); })() });
+const ready = loadState().then(() => { if (!process.env.NO_FLEET) FLEET = startFleet({ AP, STATE, snapFile: path.join(DATA_DIR, "fleet-snap.json"), adsb: p => (async () => { for (const u of ["https://api.adsb.lol/v2/" + p, "https://api.airplanes.live/v2/" + p]) { try { const j = await adq(() => getJ(u)); return (j.ac || j.aircraft || []).map(slimAc); } catch {} } throw new Error("adsb busy"); })() });
   if (process.env.VAPID_PUBLIC && process.env.VAPID_PRIVATE) { STATE.vapid = { publicKey: process.env.VAPID_PUBLIC, privateKey: process.env.VAPID_PRIVATE }; vapidSource = "env"; }
   else { const d = deriveVapid(); if (d) { if (STATE.vapid?.publicKey !== d.publicKey) STATE.subs = {}; STATE.vapid = d; vapidSource = "derived"; } }
   if (!STATE.vapid) { STATE.vapid = webpush.generateVAPIDKeys(); vapidSource = "generated (rotates on restart!)"; saveState(); } else if (!vapidSource) vapidSource = "stored";
@@ -1586,12 +1587,22 @@ async function resolvePlane(q, depth = 0) {
   for (const p of pre) { const c = p + dg + (sx || ""); const l = await liveByCallsign(c).catch(() => null); steps.push(`ADS-B callsign ${c}: ${l ? "found" : "not seen"}`);
     if (l && (l.reg || l.hex)) return out({ reg: l.reg || null, hex: l.hex, type: l.type, confidence: "confirmed", how: "adsb-callsign", reason: `Its transponder is broadcasting callsign ${l.callsign || c}.`, live: l }); }
   // 3) the airline's aircraft in Skyline's Europe-wide sweep whose callsign adsbdb maps to this flight number / route
+  if (FLEET && o) { FLEET.focus(o); if (d && air) FLEET.focus(d); }
   if (pre.length) { const F = await airlineFleetRoutes(pre, depth ? 25 : 70); steps.push(`${F.length} ${pre.join("/")} aircraft in the live sweep`);
     const byNum = F.filter(x => x.num === number); if (byNum.length) { const x = byNum.sort((a, b) => a.seenAgo - b.seenAgo)[0];
       return out({ reg: x.reg, hex: x.hex, type: x.type, confidence: "confirmed", how: "adsb-route", reason: `Transponder callsign ${x.cs} is registered to ${number} (adsbdb).`, live: { lat: x.lat, lon: x.lon, alt: x.alt, gs: x.gs, track: x.track, hex: x.hex, callsign: x.cs, onGround: x.gnd } }); }
     if (o && d) { const byRt = F.filter(x => x.ro === o && x.rd === d && (air ? (!x.gnd || x.ap === o) : (x.gnd && x.ap === o))); const uniq = [...new Map(byRt.map(x => [x.hex, x])).values()];
       if (uniq.length === 1) { const x = uniq[0]; return out({ reg: x.reg, hex: x.hex, type: x.type, confidence: "likely", how: "adsb-route", reason: `The only ${pre[0]} aircraft flying ${o}→${d} now (callsign ${x.cs}).`, live: { lat: x.lat, lon: x.lon, alt: x.alt, gs: x.gs, track: x.track, hex: x.hex, callsign: x.cs, onGround: x.gnd } }); }
       if (uniq.length > 1) steps.push(`${uniq.length} ${pre[0]} aircraft on ${o}→${d}`);
+      // take-off match: the fleet log saw this airline's aircraft take off from o close to this flight's actual departure
+      const dRef = +new Date(q.depActual || 0) || (air ? depT : 0); if (dRef) { const tk = F.filter(x => !x.gnd && x.last?.from === o && !x.last.to && x.last.dep && Math.abs(x.last.dep - dRef) < 30 * 60e3 && (!x.rd || x.rd === d) && (!x.ro || x.ro === o));
+        const tk2 = tk.length > 1 && AP[d] ? tk.filter(x => hdgOk(x, AP[d]) || x.app === d) : tk; steps.push(`take-off log at ${o}: ${tk.length} ${pre[0]} departure(s) near ${new Date(dRef).toISOString().slice(11, 16)} UTC`);
+        if (tk2.length === 1) { const x = tk2[0]; return out({ reg: x.reg, hex: x.hex, type: x.type, confidence: "likely", how: "adsb-takeoff", reason: `Skyline's ADS-B log saw ${x.reg || x.hex} (callsign ${x.cs}) take off from ${o} at ${new Date(x.last.dep).toISOString().slice(11, 16)} UTC, matching this departure${x.rd === d ? " and its adsbdb route" : ""}.`, live: { lat: x.lat, lon: x.lon, alt: x.alt, gs: x.gs, track: x.track, hex: x.hex, callsign: x.cs, onGround: false } }); } }
+      // logged leg: the fleet log has a complete or open o→d leg for this airline that left within 30 min of this departure (covers flights that already landed)
+      if (dRef) { const lg = [...new Map(FLEET.legsOn(o, d, pre).filter(l => l.dep && Math.abs(l.dep - dRef) < 30 * 60e3).map(l => [l.hex, l])).values()]; steps.push(`fleet log ${o}→${d} legs near departure: ${lg.length}`);
+        if (lg.length === 1) { const l = lg[0]; const x = F.find(y => y.hex === l.hex); return out({ reg: l.reg, hex: l.hex, type: x?.type || null, confidence: "likely", how: "adsb-leg", reason: `Skyline's ADS-B log recorded ${l.reg || l.hex} (callsign ${l.cs}) flying ${o}→${d}, off at ${new Date(l.dep).toISOString().slice(11, 16)} UTC${l.arr ? ", landed " + new Date(l.arr).toISOString().slice(11, 16) + " UTC" : ""}.`, live: x ? { lat: x.lat, lon: x.lon, alt: x.alt, gs: x.gs, track: x.track, hex: x.hex, callsign: x.cs, onGround: x.gnd } : null }); } }
+      // approach match: airborne, descending towards d, came from o
+      if (air) { const ap = F.filter(x => !x.gnd && x.app === d && (x.last?.from === o || x.ro === o)); if (ap.length === 1) { const x = ap[0]; return out({ reg: x.reg, hex: x.hex, type: x.type, confidence: "likely", how: "adsb-approach", reason: `${x.reg || x.hex} (callsign ${x.cs}) is descending into ${d} after leaving ${o} — the only ${pre[0]} aircraft doing so.`, live: { lat: x.lat, lon: x.lon, alt: x.alt, gs: x.gs, track: x.track, hex: x.hex, callsign: x.cs, onGround: false } }); } }
       // geometry: airborne airline aircraft on the great-circle corridor heading for d, progress consistent with time
       const A = AP[o], B = AP[d]; if (A && B && air) { const km = hkm(A, B); const fit = F.filter(x => !x.gnd && typeof x.alt === "number" && x.lat != null && (hkm(A, x) + hkm(x, B)) < km * 1.05 + 20 && hdgOk(x, B) && (!x.ro || x.ro === o) && (!x.rd || x.rd === d));
         const prog = depT ? Math.min(1, (Date.now() - depT) / ((km / 780 + 0.4) * 3600e3)) : null; const fit2 = prog == null ? fit : fit.filter(x => Math.abs(hkm(A, x) / km - prog) < 0.35);
@@ -1626,7 +1637,7 @@ async function resolvePlane(q, depth = 0) {
           reason: `Inbound ${inbound.number} from ${inbound.from} ${landed ? "arrived" : flying ? "is in the air now" : "departs " + (inbound.depSched ? "at " + new Date(inbound.depSched).toISOString().slice(11, 16) + " UTC" : "earlier")} as ${inbound.reg || inbound.hex}; airlines normally turn the same aircraft round.` }); }
       steps.push(`inbound ${inbound.number} from ${inbound.from}: aircraft not identified yet${inbound.depStatus ? " (" + inbound.depStatus + " at " + inbound.from + ")" : ""}`); } else steps.push("no paired inbound flight on the arrivals board"); }
   // 5) airline aircraft sitting on the ground at o whose last observed leg came from d
-  if (o && pre.length && FLEET) { const G = FLEET.airlineNow(pre, 90 * 60e3).filter(x => x.gnd && x.ap === o); const fromD = G.filter(x => x.last?.from === d);
+  if (o && pre.length && FLEET && !air) { const G = FLEET.airlineNow(pre, 90 * 60e3).filter(x => x.gnd && x.ap === o); const fromD = G.filter(x => x.last?.from === d);
     const pick = fromD.length === 1 ? fromD[0] : G.length === 1 ? G[0] : null; steps.push(`${G.length} ${pre[0]} aircraft on the ground at ${o}`);
     if (pick && depT && depT - Date.now() < 4 * 3600e3) return out({ reg: pick.reg, hex: pick.hex, type: pick.type, confidence: fromD.length === 1 ? "likely" : "possible", how: "ground", inbound, reason: `${pick.reg || pick.hex} is the ${fromD.length === 1 ? "only " + pre[0] + " aircraft at " + o + " that last flew in from " + d : "only " + pre[0] + " aircraft Skyline can see on the ground at " + o + " (others may be parked with transponders off)"}.`, live: { lat: pick.lat, lon: pick.lon, alt: "ground", hex: pick.hex, callsign: pick.cs, onGround: true } }); }
   const cands = q._cands || null;

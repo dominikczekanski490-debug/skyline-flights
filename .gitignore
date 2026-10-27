@@ -7,3 +7,4 @@ tunnel.py
 server/config.json
 screenshots/
 ref/
+server/fleet-snap.json*
