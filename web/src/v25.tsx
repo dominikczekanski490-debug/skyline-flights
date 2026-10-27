@@ -34,6 +34,28 @@ export const Ic: Record<string, ReactNode> = {
   flask: sv("M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3M7 15h10"),
   chev: sv("M9 6l6 6-6 6"),
   back: sv("M15 6l-6 6 6 6"),
+  plus: sv("M12 5v14M5 12h14"),
+  link: sv("M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"),
+  upload: sv("M12 21V9M7 14l5-5 5 5M4 3h16"),
+  bell: sv("M6 16V11a6 6 0 1 1 12 0v5l2 2H4zM10 21h4"),
+  key: sv("M14.5 9.5a4 4 0 1 0-1 2.6L21 19.5V22h-3v-2h-2v-2h-2l-2-2"),
+  info: sv("M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7.5v.01"),
+  palette: sv("M12 21a9 9 0 1 1 9-9c0 2.5-2 3.5-4 3.5h-2a2 2 0 0 0-1.5 3.3A1.5 1.5 0 0 1 12 21zM7.5 11v.01M10 7.5v.01M14.5 7.5v.01M17 11v.01"),
+  user: sv("M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c1-4 4-6 8-6s7 2 8 6"),
+  db: sv("M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"),
+  cal: sv("M4 6h16v15H4zM4 10h16M8 3v5M16 3v5"),
+  share: sv("M12 3v13M7 8l5-5 5 5M5 13v8h14v-8"),
+  search: sv("M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5"),
+  route: sv("M6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 15V9a4 4 0 0 1 4-4h4M18 9v6a4 4 0 0 1-4 4h-4"),
+  tower: sv("M9 21l1-10h4l1 10M8 11h8M12 11V7M7 7h10l-2-4H9zM6 21h12"),
+  list: sv("M8 6h12M8 12h12M8 18h12M4 6v.01M4 12v.01M4 18v.01"),
+  board: sv("M3 5h18v14H3zM3 9h18M7 13h4M7 16h6M15 13h2M15 16h2"),
+  land: sv("M3 21h18M4.5 9.5l2-1 3 3 4.5-.5 6 2.5c.8.4.6 1.6-.3 1.6L8 15z"),
+  check: sv("M5 12.5l4.5 4.5L19 7"),
+  trash: sv("M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3"),
+  star: sv("M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"),
+  bag: sv("M6 8h12l-1 13H7zM9 8V6a3 3 0 0 1 6 0v2"),
+  ticket: sv("M3 8a2 2 0 0 0 0 4v0a2 2 0 0 1 0 4v3h18v-3a2 2 0 0 1 0-4 2 2 0 0 1 0-4V5H3zM14 5v14"),
 };
 
 // ---------- shared data helpers ----------
@@ -285,3 +307,11 @@ export function Labs({ id, apt, f, open }: { id?: string; apt?: string; f?: any;
   const grp: [string, Lab["k"][]][] = [["Smart insights", ["Statistical", "Rule-based"]], ["Utilities", ["Utility"]]];
   return <div className="labs"><div className="lab-hero"><span>{Ic.flask}</span><div><b>Skyline Labs</b><small>{LABS.filter(x => x.k !== "Utility").length} smart insights · {LABS.filter(x => x.k === "Utility").length} utilities. All run on live boards, weather and your flights. None use an AI language model: “smart” ones are rules or simple statistics, and say so.</small></div></div>
     {grp.map(([g, ks]) => <div key={g}><div className="lab-gh">{g}</div><div className="lab-grid">{LABS.filter(x => ks.includes(x.k)).map(x => <button key={x.id} className="lab-tile press" onClick={() => ss(x.id)}><span className={"lab-ic k-" + x.k.split("-")[0].toLowerCase()}>{Ic[x.ic]}</span><b>{x.n}</b><small>{x.d}</small><Kind k={x.k} /></button>)}</div></div>)}</div>; }
+
+// v26 design-system primitives
+export function SecHead({ ic, title, sub, right }: { ic?: ReactNode; title: ReactNode; sub?: ReactNode; right?: ReactNode }) {
+  return <div className="sk-sec">{ic && <span className="sk-sec-ic">{ic}</span>}<div className="grow"><b>{title}</b>{sub && <small>{sub}</small>}</div>{right}</div>; }
+export function StatTile({ ic, k, v, tone }: { ic: ReactNode; k: string; v: ReactNode; tone?: string }) {
+  return <div className={"sk-stat " + (tone || "")}><span>{ic}</span><b>{v}</b><label>{k}</label></div>; }
+export function ActBtn({ ic, children, onClick, tone }: { ic: ReactNode; children: ReactNode; onClick?: () => void; tone?: string }) {
+  return <button className={"sk-act press " + (tone || "")} onClick={onClick}><span>{ic}</span><b>{children}</b></button>; }

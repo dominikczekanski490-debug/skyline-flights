@@ -3,6 +3,7 @@ import { api, best, delay, dist, dur, estDurMin, fmtT, fmtD, today, download, wi
 import { useFlightPhoto } from "./livery";
 import { AirlineTile } from "./brand";
 import { exportIcs } from "./assist";
+import { Ic, SecHead, StatTile, ActBtn } from "./v25";
 // A flight is "tracked" (finished) once it landed >20 min ago, was cancelled, or its date has passed while not airborne.
 // A flight belongs in Tracked once it has finished: official "landed" + 20 min, ADS-B on the ground near the destination,
 // or (if the feed never confirmed) 20 min past its arrival time (60 min if that arrival is only a Skyline block-time estimate).
@@ -41,12 +42,12 @@ export function Tracked({ flights, setFlights, open }: { flights: Flight[]; setF
   const groups: [string, Flight[]][] = []; for (const f of L) { const k = fmtD(f.date, { month: "long", year: "numeric" }); const g = groups.find(x => x[0] === k); g ? g[1].push(f) : groups.push([k, [f]]); }
   const exp = (kind: "csv" | "json") => kind === "json" ? download("skyline-tracked.json", JSON.stringify(L, null, 1), "application/json")
     : download("skyline-tracked.csv", ["date,flight,airline,from,to,sched_dep,act_dep,sched_arr,act_arr,delay_min,aircraft,reg,miles", ...L.map(f => [f.date, f.number, f.airline?.name || "", f.origin?.iata, f.destination?.iata, f.dep.scheduled || "", f.dep.actual || "", f.arr.scheduled || "", f.arr.actual || "", delay(f.arr) ?? "", f.aircraft?.model || "", f.aircraft?.reg || "", Math.round(dist(f.origin, f.destination))].map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))].join("\n"), "text/csv");
-  return <><div className="head"><h1>Tracked Flights</h1></div>
-    <div className="trk-stats card"><div className="trk-hero"><b>{L.length}</b><span>flights tracked</span></div>
-      <div className="trk-grid">{([["Distance", `${Math.round(s.mi).toLocaleString()} mi`], ["Hours", dur(s.mn)], ["Airports", s.ap], ["Airlines", s.al], ["Countries", s.co], ["On-time", s.ot == null ? "—" : `${s.ot}%`]] as const).map(([k, v]) => <div key={k}><label>{k}</label><b>{v}</b></div>)}</div>
-      {s.lg && <div className="trk-long">Longest: <b>{s.lg.origin?.iata} → {s.lg.destination?.iata}</b> · {Math.round(s.lgd).toLocaleString()} mi · {s.lg.number}</div>}
-      {s.ot != null && <small className="muted">On-time = arrived &lt;15 min late, over {s.n} flights with known times. Same flights feed Passport; nothing is stored twice.</small>}</div>
-    {!L.length ? <div className="empty16"><b>No tracked flights yet</b><span>When a flight you follow lands (or its date passes), it moves here automatically with its times, delay, aircraft and distance.</span></div>
-      : <>{groups.map(([k, fs]) => <div key={k}><div className="sect">{k}</div>{fs.map(f => <Row key={f.id} f={f} open={() => open(f)} del={() => confirm(`Delete ${f.number} on ${f.date}?`) && setFlights((l: Flight[]) => l.filter(x => x.id !== f.id))} />)}</div>)}
-        <div className="row g8 px mt12"><button className="chip" onClick={() => exp("csv")}>Export CSV</button><button className="chip" onClick={() => exp("json")}>Export JSON</button><button className="chip" onClick={() => exportIcs(L)}>Calendar (.ics)</button></div></>}
+  return <><div className="head"><div><h1>Tracked</h1><div className="sub">Every flight you've finished, in one logbook</div></div></div>
+    <div className="sk-hero"><div className="sk-hero-top"><div><b className="sk-hero-n">{L.length}</b><span>flights tracked</span></div><span className="sk-hero-ic">{Ic.check}</span></div>
+      {s.lg && <div className="sk-hero-long"><span>{Ic.route}</span><div><small>Longest flight</small><b>{s.lg.origin?.iata} → {s.lg.destination?.iata}</b></div><em>{Math.round(s.lgd).toLocaleString()} mi · {s.lg.number}</em></div>}</div>
+    <div className="sk-stats">{([[Ic.route, "Distance", `${Math.round(s.mi).toLocaleString()} mi`], [Ic.clock, "In the air", dur(s.mn)], [Ic.tower, "Airports", s.ap], [Ic.plane, "Airlines", s.al], [Ic.globe, "Countries", s.co], [Ic.gauge, "On-time", s.ot == null ? "—" : `${s.ot}%`, s.ot == null ? "" : s.ot >= 80 ? "good" : s.ot >= 60 ? "warn" : "bad"]] as any[]).map(([ic, k, v, t]) => <StatTile key={k} ic={ic} k={k} v={v} tone={t} />)}</div>
+    {s.ot != null && <div className="sk-foot">{Ic.info}<span>On-time = arrived under 15 min late, over {s.n} flights with known times. Same flights feed Passport; nothing is stored twice.</span></div>}
+    {!L.length ? <div className="empty16"><div className="e-ic">{Ic.check}</div><b>No tracked flights yet</b><span>When a flight you follow lands (or its date passes), it moves here automatically with its times, delay, aircraft and distance.</span></div>
+      : <>{groups.map(([k, fs]) => <div key={k}><SecHead ic={Ic.cal} title={k} sub={`${fs.length} flight${fs.length > 1 ? "s" : ""}`} />{fs.map(f => <Row key={f.id} f={f} open={() => open(f)} del={() => confirm(`Delete ${f.number} on ${f.date}?`) && setFlights((l: Flight[]) => l.filter(x => x.id !== f.id))} />)}</div>)}
+        <SecHead ic={Ic.download} title="Export logbook" /><div className="sk-acts three"><ActBtn ic={Ic.doc} onClick={() => exp("csv")}>CSV</ActBtn><ActBtn ic={Ic.db} onClick={() => exp("json")}>JSON</ActBtn><ActBtn ic={Ic.cal} onClick={() => exportIcs(L)}>Calendar</ActBtn></div></>}
     <div style={{ height: 170 }} /></>; }
