@@ -16,7 +16,7 @@ export function startFleet({ AP, adsb, STATE, snapFile }) {
   try { for (const [h, v] of Object.entries(src)) F.set(h, { reg: v[0], type: v[1], cs: v[2], last: v[4] || null, legs: v[3] || [] }); } catch {}
   const restored = { n: F.size, at: srcAt ? new Date(srcAt).toISOString() : null };
   const FOCUS = new Map(); // iata -> until (dense sampling around airports the resolver is asked about)
-  function focus(iata) { const a = AP[iata]; if (a?.lat != null) FOCUS.set(iata, Date.now() + 30 * 60e3); }
+  function focus(iata) { const a = AP[iata]; if (a?.lat == null) return; FOCUS.delete(iata); FOCUS.set(iata, Date.now() + 30 * 60e3); while (FOCUS.size > 12) FOCUS.delete(FOCUS.keys().next().value); }
   const open = (p, from, t, cs, how) => { const L = p.legs[p.legs.length - 1]; if (L && L[3] == null && Math.abs(t - L[1]) < 25 * 60e3) return; if (L && L[3] == null && L[2] == null) L[5] = (L[5] || "") + "u"; p.legs.push([from, t, null, null, cs, how]); if (p.legs.length > 14) p.legs.shift(); };
   const close = (p, to, t, how) => { const L = p.legs[p.legs.length - 1]; if (L && L[3] == null && t > L[1] && L[0] !== to) { L[2] = to; L[3] = t; L[5] = (L[5] || "") + how; } else if (!L || L[3] != null) { if (L && L[2] === to && Math.abs(L[3] - t) < 40 * 60e3) return; p.legs.push([null, null, to, t, p.cs, how]); if (p.legs.length > 14) p.legs.shift(); } };
   function ingest(list, now) {
@@ -27,7 +27,7 @@ export function startFleet({ AP, adsb, STATE, snapFile }) {
       const fresh = prev && t - prev.t < 25 * 60e3;
       if (gnd || (alt < 1500 && s.gs < 80)) { const n = nearest(s.la, s.lo, 6); if (n && fresh && !prev.gnd && prev.alt > 0) close(p, n.a.iata, t, "g"); s.gnd = true; s.ap = n?.a.iata; }
       else { // airborne
-        if ((!fresh || prev.gnd) && alt < 10000 && s.vs >= 0) { const back = prev?.gnd && prev.ap ? null : proj(s.la, s.lo, (s.trk + 180) % 360, alt / 320); const n = prev?.gnd && prev.ap ? { a: AP[prev.ap] } : nearest(back[0], back[1], 25); if (n) open(p, n.a.iata, prev?.gnd && prev.ap ? (prev.t + t) / 2 : t - (alt / 2200) * 60e3, cs, prev?.gnd ? "g" : "c"); }
+        if ((!fresh || prev.gnd) && alt < 16000 && s.vs >= 0) { const back = prev?.gnd && prev.ap ? null : proj(s.la, s.lo, (s.trk + 180) % 360, alt / 320); const n = prev?.gnd && prev.ap ? { a: AP[prev.ap] } : nearest(back[0], back[1], 25 + alt / 500); if (n) open(p, n.a.iata, prev?.gnd && prev.ap ? (prev.t + t) / 2 : t - (alt / 2200) * 60e3, cs, prev?.gnd ? "g" : "c"); }
         if (cs && p.cs && cs !== p.cs && fresh && !prev.gnd) { /* callsign change in flight: ignore */ }
         if (alt < 9000 && s.vs < -300) { const f = proj(s.la, s.lo, s.trk, alt / 320); const n = nearest(f[0], f[1], 20); s.app = n ? { ap: n.a.iata, t: t + (alt / 1500) * 60e3 } : null; } }
       p.cs = cs; p.last = s; }
