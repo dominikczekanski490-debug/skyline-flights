@@ -1,6 +1,7 @@
 // v25: Skyline Labs — 15 "smart" features (all rule-based or simple statistics on live data; NO LLM) + 10 utilities.
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, load, type Flight } from "./lib";
+import { LABS2, LabsHome, AirportPicker, Ic2 } from "./v28";
 
 // ---------- design-system icons (original, 24px stroke set) ----------
 const sv = (d: string, extra?: ReactNode) => <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={d} />{extra}</svg>;
@@ -84,8 +85,7 @@ const Kind = ({ k }: { k: string }) => <span className={"lab-kind k-" + k.toLowe
 const Stat = ({ l, v, tone }: { l: string; v: ReactNode; tone?: string }) => <div className={"lab-stat " + (tone || "")}><b>{v}</b><span>{l}</span></div>;
 const Note = ({ children }: { children: ReactNode }) => <div className="lab-note">{children}</div>;
 const Src = ({ d }: { d: any }) => d ? <div className="lab-src">Data: {d.provider || d.source || "live board"}{d.sourceKind && d.sourceKind !== "official" ? " (not an official timetable)" : ""}</div> : null;
-function AptPick({ v, set, label = "Airport" }: { v: string; set: (s: string) => void; label?: string }) { const [t, st] = useState(v); useEffect(() => st(v), [v]);
-  return <div className="lab-apt"><span>{label}</span><input value={t} maxLength={3} onChange={e => { const u = e.target.value.toUpperCase().replace(/[^A-Z]/g, ""); st(u); if (u.length === 3) set(u); }} />{pulseList().filter(x => x !== v).slice(0, 4).map(x => <button key={x} onClick={() => set(x)}>{x}</button>)}</div>; }
+function AptPick({ v, set }: { v: string; set: (s: string) => void; label?: string }) { return <AirportPicker v={v} set={set} />; }
 function Gate({ b, children }: { b: { d?: any; e?: string; ld: boolean }; children: (d: any) => ReactNode }) {
   if (b.ld) return <div className="lab-load"><i /><i /><i /></div>; if (b.e) return <Note>Board unavailable: {b.e}</Note>;
   if (!b.d?.flights?.length) return <Note>No flights on this board today.{b.d?.officialUrl && <> <a href={b.d.officialUrl} target="_blank" rel="noopener">Airport website ↗</a></>}</Note>; return <>{children(b.d)}<Src d={b.d} /></>; }
@@ -302,11 +302,9 @@ export const LABS: Lab[] = [
   { id: "last", n: "Last flight out", d: "First and last departure per destination", k: "Utility", ic: "moon", el: p => <LastOut {...p} /> },
 ];
 
-export function Labs({ id, apt, f, open }: { id?: string; apt?: string; f?: any; open?: (f: any) => void }) { const [sel, ss] = useState<string | null>(id || null); const [rk, srk] = useState(0); const t = LABS.find(x => x.id === sel);
-  if (t) return <div className="lab-tool"><button className="lab-back" onClick={() => ss(null)}>{Ic.back} Labs</button><div className="lab-th"><span className={"lab-ic k-" + t.k.split("-")[0].toLowerCase()}>{Ic[t.ic]}</span><div><h2>{t.n}</h2><Kind k={t.k} /></div></div>{BOARDY.has(t.id) && <DaySeg on={() => srk(x => x + 1)} />}<Fragment key={rk}>{t.el({ apt, f, open })}</Fragment></div>;
-  const grp: [string, Lab["k"][]][] = [["Smart insights", ["Statistical", "Rule-based"]], ["Utilities", ["Utility"]]];
-  return <div className="labs"><div className="lab-hero"><span>{Ic.flask}</span><div><b>Skyline Labs</b><small>{LABS.filter(x => x.k !== "Utility").length} smart insights · {LABS.filter(x => x.k === "Utility").length} utilities. All run on live boards, weather and your flights. None use an AI language model: “smart” ones are rules or simple statistics, and say so.</small></div></div>
-    {grp.map(([g, ks]) => <div key={g}><div className="lab-gh">{g}</div><div className="lab-grid">{LABS.filter(x => ks.includes(x.k)).map(x => <button key={x.id} className="lab-tile press" onClick={() => ss(x.id)}><span className={"lab-ic k-" + x.k.split("-")[0].toLowerCase()}>{Ic[x.ic]}</span><b>{x.n}</b><small>{x.d}</small><Kind k={x.k} /></button>)}</div></div>)}</div>; }
+export function Labs({ id, apt, f, open }: { id?: string; apt?: string; f?: any; open?: (f: any) => void }) { const [sel, ss] = useState<string | null>(id || null); const [rk, srk] = useState(0); const ALL: any[] = [...LABS, ...LABS2]; const t = ALL.find(x => x.id === sel);
+  if (t) return <div className="lab-tool"><button className="lab-back" onClick={() => ss(null)}>{Ic.back} Labs</button><div className="lab-th"><span className={"lab-ic k-" + t.k.split("-")[0].toLowerCase()}>{Ic[t.ic] || Ic2[t.ic]}</span><div><h2>{t.n}</h2><Kind k={t.k} /></div></div>{BOARDY.has(t.id) && <DaySeg on={() => srk(x => x + 1)} />}<Fragment key={rk}>{t.el({ apt, f, open })}</Fragment></div>;
+  return <LabsHome all={ALL} pick={ss} />; }
 
 // v26 design-system primitives
 export function SecHead({ ic, title, sub, right }: { ic?: ReactNode; title: ReactNode; sub?: ReactNode; right?: ReactNode }) {

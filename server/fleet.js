@@ -36,7 +36,7 @@ export function startFleet({ AP, adsb, STATE, snapFile }) {
     const L = p.legs[p.legs.length - 1]; if ((!L || now - (L[3] || L[1] || 0) > KEEP) && (!s || now - s.t > KEEP)) F.delete(h); else p.legs = p.legs.filter(l => now - (l[3] || l[1]) < KEEP); } }
   let i = 0, sweeps = 0;
   let fi = 0; async function tickFocus() { const now = Date.now(); for (const [k, u] of FOCUS) if (u < now) FOCUS.delete(k); const ks = [...FOCUS.keys()]; if (!ks.length) return; const a = AP[ks[fi++ % ks.length]]; try { const r = await adsb(`point/${a.lat}/${a.lon}/60`); ingest(Array.isArray(r) ? r : r?.list || r?.ac || [], Date.now()); focusSweeps++; } catch {} }
-  let focusSweeps = 0; setTimeout(() => setInterval(tickFocus, +process.env.FOCUS_MS || 6000), 18000);
+  let focusSweeps = 0; setTimeout(() => setInterval(tickFocus, +process.env.FOCUS_MS || 15000), 18000);
   async function tick() { const c = CENTERS[i++ % CENTERS.length]; try { const r = await adsb(`point/${c[0]}/${c[1]}/250`); ingest(Array.isArray(r) ? r : r?.list || r?.ac || [], Date.now()); sweeps++; } catch {} if (i % CENTERS.length === 0) sweepTimeouts(Date.now()); }
   setTimeout(() => { tick(); setInterval(tick, +process.env.FLEET_MS || 5000); }, 15000);
   function persist() { const o = {}; let n = 0; const now = Date.now(); for (const [h, p] of F) { const recent = p.last && now - p.last.t < 3 * 3600e3; if (p.legs.length || recent) { o[h] = [p.reg, p.type, p.cs, p.legs.slice(-8), recent ? { ...p.last, la: +p.last.la.toFixed(4), lo: +p.last.lo.toFixed(4) } : null]; n++; } } STATE.fleet = o; STATE.fleetAt = now;
