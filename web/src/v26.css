@@ -78,3 +78,25 @@
 .sk-seg.mini{display:inline-flex;width:max-content}
 .bh-chips select.chip{flex:none;padding:7px 12px;font-size:12.5px;font-weight:600;min-height:0;height:auto}
 .sk-field input,.sk-field input:focus{border:0!important;background:transparent!important;box-shadow:none!important;padding-left:0!important;padding-right:0!important;border-radius:0!important;margin:0!important;width:auto}
+/* v26 photo-matched FIDS (refs: Commons — Madrid T4 Bene Riobó CC BY-SA 4.0; Palma Usien CC BY-SA 3.0; Lisbon CAPTAIN RAJU CC BY-SA 4.0 / CC0 2022; OTP Zeugma_fr CC BY-SA 3.0). Recreations, not official designs. */
+.tb-mad{--bg:#000;--hd:#000;--fg:#fff;--alt:#0b0b0b;--ok:#2ee66b;--warn:#ffd400;--bad:#ff3b3b;--acc:#ffd400;background:#000;font-family:Arial,Helvetica,sans-serif}
+.tb-mad .tb-top{background:#000;border-bottom:1px solid #333}.tb-mad .tb-title b{color:#ffd400;font-size:22px}.tb-mad .tb-title span{color:#fff;font-size:16px;margin-left:8px}.tb-mad .tb-clock{color:#ffd400}
+.tb-mad .tb-head{background:#000;color:#ffd400;opacity:1;font-weight:700;border-bottom:1px solid #333}
+.tb-mad .tb-row{border-bottom:1px solid #1e1e1e}.tb-mad .tb-row:nth-child(even){background:#0b0b0b}.tb-mad .c-dest,.tb-mad .c-time,.tb-mad .c-fl{color:#fff}
+.tb-mad .tb-st{color:#fff;font-weight:700}.tb-mad .tb-st.ok{color:#2ee66b;animation:none}.tb-mad .tb-st.warn{color:#ffd400}.tb-mad .tb-st.bad{color:#ff3b3b}
+.tb-g{display:inline-block;min-width:2.3em;padding:0 .2em;text-align:center;font-style:normal;font-weight:700;color:#fff;background:#555;border-radius:2px;line-height:1.35}
+.tb-g[data-z="H"]{background:#d2232a}.tb-g[data-z="J"]{background:#f2c200;color:#000}.tb-g[data-z="K"]{background:#7a2c8f}.tb-g[data-z="S"],.tb-g[data-z="M"]{background:#1f9a48}
+.tb-pmi{--bg:#0b2a8a;--hd:#ffd200;--fg:#fff;--alt:#0d309a;--ok:#fff;--warn:#fff;--bad:#fff;background:#0b2a8a;font-family:Arial,Helvetica,sans-serif}
+.tb-pmi .tb-top{background:#0b2a8a;border-bottom:0}.tb-pmi .tb-title b{color:#fff;font-size:22px}.tb-pmi .tb-title span{color:#ffd200;margin-left:8px}.tb-pmi .tb-clock{color:#fff}
+.tb-pmi .tb-head{background:#ffd200;color:#0b1a4a;opacity:1;font-weight:700}
+.tb-pmi .tb-row{border-bottom:1px solid #1d3ea6}.tb-pmi .tb-row:nth-child(even){background:#0d309a}.tb-pmi .c-dest,.tb-pmi .c-time,.tb-pmi .c-fl,.tb-pmi .c-gate{color:#fff}
+.tb-pmi .tb-st{color:#fff;font-weight:700}.tb-pmi .tb-st.bad,.tb-pmi .tb-st.warn{background:#d81e1e;color:#fff;padding:0 4px;animation:none}.tb-pmi .tb-st.ok{color:#fff;animation:none}
+.tb-lis{--bg:#3a1037;--hd:#d8e85a;--fg:#fff;--alt:#431440;--ok:#d8e85a;--warn:#d8e85a;--bad:#ff6b6b;background:#3a1037;font-family:"Helvetica Neue",Arial,sans-serif}
+.tb-lis .tb-top{background:#3a1037;border-bottom:0}.tb-lis .tb-title b{color:#fff;font-size:24px;font-weight:600;text-transform:lowercase}.tb-lis .tb-title span{color:#d8e85a;margin-left:8px;text-transform:lowercase}.tb-lis .tb-clock{color:#fff}
+.tb-lis .tb-head{background:#d8e85a;color:#3a1037;opacity:1;font-weight:600;text-transform:lowercase}
+.tb-lis .tb-row{border-bottom:1px solid #521f4d}.tb-lis .c-dest,.tb-lis .c-time,.tb-lis .c-fl,.tb-lis .c-gate{color:#fff}
+.tb-lis .tb-st{color:#fff}.tb-lis .tb-st.ok,.tb-lis .tb-st.warn{color:#d8e85a;animation:none}.tb-lis .tb-st.bad{color:#ff6b6b}
+.tb-otp{--bg:#050402;--hd:#050402;--fg:#ffa21a;--alt:#0a0703;--ok:#ffe14a;--warn:#ffa21a;--bad:#ff5a2a;background:#050402;font-family:"Courier New",monospace;text-shadow:0 0 4px rgba(255,140,0,.55)}
+.tb-otp .tb-top{background:#050402;border-bottom:1px solid #3a2400}.tb-otp .tb-title b{color:#ffb84a;font-size:17px;letter-spacing:1px}.tb-otp .tb-title span{color:#c97a10;font-size:12px;margin-left:8px}.tb-otp .tb-clock{color:#ffb84a}
+.tb-otp .tb-head{background:#050402;color:#ffb84a;opacity:1;border-bottom:1px solid #3a2400}
+.tb-otp .tb-row{border-bottom:1px dashed #2a1a00}.tb-otp .tb-row *{color:#ffa21a}.tb-otp .tb-st.ok{color:#ffe14a;animation:none}
