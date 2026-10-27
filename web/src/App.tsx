@@ -9,6 +9,8 @@ import { usePoll, Refreshed, TRACK_MS, markTracked, LiveLine } from "./refresh";
 import { Labs, LABS, Ic, SecHead, ActBtn } from "./v25";
 import { LABS2 } from "./v28";
 import { LABS3 } from "./v29";
+import { Island, IslandToggle } from "./v33";
+import "./v33.css";
 import { applySkin, SkinPicker } from "./themes";
 import { SunRoute } from "./v30";
 import "./v26.css";
@@ -80,7 +82,7 @@ export default function App() {
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", v); window.removeEventListener("focus", v); }; }, [active.map(f => f.id).join()]);
   const top = ov.at(-1); const focus = top?.t === "flight" ? top.f : null;
   const mapFlights = focus ? [focus] : tab === "passport" ? flights.filter(f => !f.friend) : tab === "friends" ? flights.filter(f => f.friend) : active.filter(f => !f.friend);
-  return <div className="app"><WarmBanner /><UpdateBanner />{why && <WhySheet f={why} close={() => setWhy(null)} />}
+  return <div className="app"><Island flights={flights} open={f => setOv(o => [...o, { t: "flight", f } as Ov])} /><WarmBanner /><UpdateBanner />{why && <WhySheet f={why} close={() => setWhy(null)} />}
     <MapView flights={mapFlights} live={live} style={mapStyle} radar={radar} focus={focus} locate={locate} onPlane={id => { const f = flights.find(x => x.id === id); f && push({ t: "flight", f }); }} />
     <div className="maptint" /><div className="aurora" />
     <div className="mapbtns"><button onClick={() => setMapStyle(MAP_STYLES[(MAP_STYLES.indexOf(mapStyle) + 1) % MAP_STYLES.length])}>{I.layers}</button><button className={radar ? "on" : ""} onClick={() => setRadar(!radar)}>{I.cloud}</button><button onClick={() => setLocate(Date.now())}>{I.locate}</button></div>
@@ -556,7 +558,7 @@ function Settings({ x, theme, setTheme, push }: any) {
   const saveK = (body: any) => api("/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, adminToken: tok, newAdminToken: tok }) }).then(() => { setMsg("Saved ✓"); load(); }).catch(e => setMsg(e.message));
   return <><Head title="Settings" sub="Preferences, data and sources" right={x} /><div className="px col g8 set">
     <div className="card m0"><b className="set-h sm"><span>{Ic.image}</span>Photo credits</b><div className="faint sm mt4">{PLANE_CREDITS}</div><div className="faint sm mt4"><a href="https://www.planespotters.net" target="_blank" rel="noopener">Planespotters.net</a> · <a href="https://commons.wikimedia.org" target="_blank" rel="noopener">Wikimedia Commons</a></div></div><div className="card m0 row between"><span className="set-l"><span>{Ic.info}</span>App version</span><b className="sm">{BUILD}</b></div><button className="card m0 row between press" style={{ width: "100%" }} onClick={() => push({ t: "features" })}><span className="set-l"><span>{Ic.flask}</span>All features</span><b className="sm set-n">{TOOLS.length + BOARD_FEATURES.length}</b></button><UnitsCard /><AlertPrefsCard onChange={() => syncPush(JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend)).catch(() => {})} />
-    <div className="card m0"><h3 className="set-h"><span>{Ic.palette}</span>Appearance</h3><SkinPicker v={theme} set={setTheme} /></div>
+    <div className="card m0"><h3 className="set-h"><span>{Ic.palette}</span>Appearance</h3><SkinPicker v={theme} set={setTheme} /><IslandToggle /></div>
     <div className="card m0"><h3 className="set-h"><span>{Ic.bell}</span>Notifications</h3><div className="muted sm">Gate & terminal changes, boarding, delays (15+ min, or improving), cancellations, departure, landing and baggage belt for your tracked flights. Tap <b>Turn on alerts</b> — iPhone only asks for permission after a tap, and only inside the Home Screen app (Safari → Share → Add to Home Screen, iOS 16.4+).</div>
       <div className="faint sm mt4"><b>Honest limits:</b> with the app open, Skyline also alerts on-device straight away. When it's closed, alerts come from the server, which checks tracked flights every 4 min — so they can lag by a few minutes, and if the free server is asleep (Render free tier) the first check after it wakes can be late. Focus modes and iOS notification settings can hide banners.</div>
       <PushControls /></div>
