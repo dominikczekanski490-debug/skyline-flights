@@ -7,5 +7,5 @@
 .acat.oooi{background:#1f8a4c;color:#fff}.acat.pos{background:#2563eb;color:#fff}.acat.wx{background:#0891b2;color:#fff}.acat.text{background:#a855f7;color:#fff}.acat.atc{background:#d97706;color:#fff}
 .dcar{display:flex;gap:10px;overflow-x:auto;padding:8px 12px 4px;scroll-snap-type:x mandatory}
 .dcard{flex:0 0 150px;scroll-snap-align:start;text-align:left;padding:12px;border-radius:16px;background:linear-gradient(160deg,color-mix(in srgb,var(--lv,#6aa8ff) 35%,transparent),rgba(127,127,127,.08));border:1px solid color-mix(in srgb,var(--lv,#6aa8ff) 45%,transparent);color:inherit;min-height:110px}
-.dtag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.85;margin-bottom:4px}
+.dtag{display:block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.85;margin-bottom:4px}
 .dgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}.dgrid .dcard{flex:auto}

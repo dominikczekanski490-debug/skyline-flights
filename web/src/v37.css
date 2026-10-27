@@ -1,0 +1,13 @@
+.walk .wpick{padding:8px 14px;align-items:center}
+.wview{position:relative;height:42vh;min-height:240px;background:#0b0f17}.wmap{position:absolute;inset:0}
+.schem{width:100%;height:100%}.schem polygon{fill:#2a3550;stroke:#5b6b8f}.schem polyline{fill:none;stroke:#ffd400;stroke-width:3;stroke-dasharray:6 4}.schem circle{fill:#ffd400}.schem circle.on{fill:#fff;stroke:#ffd400;stroke-width:3}
+.wsign{position:absolute;top:12px;left:12px;background:#ffd400;color:#111;font-weight:800;padding:6px 12px;border-radius:4px;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.wbadge{position:absolute;bottom:8px;left:8px;right:8px;font-size:10px;color:#fff;background:rgba(0,0,0,.55);padding:4px 8px;border-radius:6px}
+.wcard{flex:1;overflow:auto;padding:12px 14px calc(env(safe-area-inset-bottom) + 20px)}
+.wph{margin:10px 0 0}.wph img{width:100%;border-radius:12px;max-height:220px;object-fit:cover}
+.fids{margin-top:10px;background:#0b1630;border-radius:8px;overflow:hidden;font-family:ui-monospace,Menlo,monospace;color:#ffd400}
+.fidsh{display:flex;justify-content:space-between;background:#ffd400;color:#111;font-weight:800;padding:5px 8px;font-size:13px}
+.fidsr{display:grid;grid-template-columns:44px 62px 1fr 34px 70px;gap:4px;padding:4px 8px;font-size:12px;border-top:1px solid rgba(255,212,0,.15)}
+.fidsr .fd{color:#fff;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.fidsr .fs{color:#9fe870;font-size:11px}
+.fidsf{font-size:9px;color:#8aa;padding:4px 8px}
+.atg{display:grid;grid-template-columns:1fr;gap:2px;margin:6px 0}

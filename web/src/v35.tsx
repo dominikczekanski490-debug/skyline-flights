@@ -5,15 +5,21 @@ import * as maplibregl from "maplibre-gl";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { api } from "./lib";
+import { liv } from "./v36";
+import { lazy, Suspense } from "react";
+const Walk = lazy(() => import("./v37"));
 maplibregl.setWorkerUrl(workerUrl);
 
 const MAN: [number, number] = [-2.2750, 53.3537];
 const css = (v: string, d: string) => (getComputedStyle(document.documentElement).getPropertyValue(v).trim() || d);
 const webgl = () => { try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch { return false; } };
-const plane = (rot: number, c: string) => `<div style="transform:rotate(${rot}deg)"><svg width="26" height="26" viewBox="0 0 24 24"><path fill="${c}" stroke="rgba(0,0,0,.55)" stroke-width=".8" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg></div>`;
+const fam = (t = "") => /^(A33|A34|A35|A38|B74|B76|B77|B78|IL96|MD11|A30)/.test(t) ? "wide" : /^(AT|DH8|E1|E2|E7|CRJ|SF3|J31|BE|C2|P18)/.test(t) ? "reg" : "narrow";
+export const groundState = (a: any) => a.alt !== "ground" ? null : (a.gs ?? 0) < 1 ? "Stationary" : a.gs < 6 ? "Moving slowly (pushback or holding)" : a.gs < 40 ? "Taxiing" : "Runway roll (take-off or landing)";
+const plane = (rot: number, c: string, t2 = "#fff", size = 26) => `<div style="transform:rotate(${rot}deg);filter:drop-shadow(0 3px 3px rgba(0,0,0,.45))"><svg width="${size}" height="${size}" viewBox="0 0 24 24"><path fill="${c}" stroke="rgba(0,0,0,.55)" stroke-width=".8" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/><path fill="${t2}" d="M10 20.5 12 19l2 1.5V22l-2-.6-2 .6z"/></svg></div>`;
 
 export default function Man3D({ onClose }: { onClose: () => void }) {
-  const el = useRef<HTMLDivElement>(null), m = useRef<maplibregl.Map | undefined>(undefined), marks = useRef<Record<string, maplibregl.Marker>>({});
+  const el = useRef<HTMLDivElement>(null), m = useRef<maplibregl.Map | undefined>(undefined), marks = useRef<Record<string, maplibregl.Marker>>({}), gates = useRef<[number, number, string][]>([]);
+  const [walk, setWalk] = useState(false);
   const [ok] = useState(webgl); const [err, setErr] = useState(""); const [sel, setSel] = useState<any>(null); const [n, setN] = useState<number | null>(null); const [route, setRoute] = useState<any>(null);
   useEffect(() => {
     if (!ok || !el.current) return;
@@ -39,11 +45,14 @@ export default function Man3D({ onClose }: { onClose: () => void }) {
     m.current = map; map.on("error", e => console.warn("man3d", e?.error?.message));
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     let stop = false;
+    fetch("/man-walk.geojson").then(r => r.json()).then(j => { gates.current = j.features.filter((f: any) => f.properties.kind === "gate").map((f: any) => [...f.geometry.coordinates, f.properties.ref]);
+      map.once("idle", () => { try { map.addSource("walk", { type: "geojson", data: j }); map.addLayer({ id: "gatesig", type: "symbol", source: "walk", filter: ["==", ["get", "kind"], "gate"], minzoom: 15, layout: { "text-field": ["get", "ref"], "text-size": 11, "text-font": ["Open Sans Bold"], "text-allow-overlap": false }, paint: { "text-color": "#111", "text-halo-color": "#ffd400", "text-halo-width": 4 } });
+        map.addLayer({ id: "termsig", type: "symbol", source: "apt", filter: ["all", ["==", ["get", "kind"], "terminal"], ["!=", ["get", "name"], ""]], layout: { "text-field": ["get", "name"], "text-size": 13, "text-font": ["Open Sans Bold"] }, paint: { "text-color": "#ffd400", "text-halo-color": "#111", "text-halo-width": 3 } }); } catch {} }); }).catch(() => {});
     const load = async () => {
       try { const r = await api(`/overhead?lat=${MAN[1]}&lon=${MAN[0]}&r=12`); if (stop) return; const L = (r.list || []).slice(0, 60); setN(L.length); const seen = new Set<string>();
         for (const a of L) { seen.add(a.hex); const gnd = a.alt === "ground"; const c = gnd ? "#ffd166" : accent; let mk = marks.current[a.hex];
           if (!mk) { const d = document.createElement("div"); d.className = "m3p"; d.onclick = () => setSel(a); mk = marks.current[a.hex] = new maplibregl.Marker({ element: d, rotationAlignment: "map", pitchAlignment: "map" }).setLngLat([a.lon, a.lat]).addTo(map); }
-          mk.setLngLat([a.lon, a.lat]); mk.getElement().innerHTML = plane(a.track ?? 0, c); mk.getElement().onclick = () => setSel(a); }
+          mk.setLngLat([a.lon, a.lat]); const l = liv(a.flight); const f = fam(a.type); mk.getElement().innerHTML = plane(a.track ?? 0, l ? l[0] : c, l ? l[1] : "#fff", f === "wide" ? 36 : f === "reg" ? 20 : 27); if (gnd && gates.current.length) { let best: any = null, bd = 1e9; for (const g of gates.current) { const d = Math.hypot((g[0] - a.lon) * 0.6, g[1] - a.lat) * 111000; if (d < bd) { bd = d; best = g; } } a.stand = bd < 70 ? best[2] : null; } mk.getElement().onclick = () => setSel(a); }
         for (const k of Object.keys(marks.current)) if (!seen.has(k)) { marks.current[k].remove(); delete marks.current[k]; }
       } catch { /* keep last positions */ } };
     load(); const t = setInterval(load, 10000);
@@ -52,13 +61,13 @@ export default function Man3D({ onClose }: { onClose: () => void }) {
   useEffect(() => { setRoute(null); const cs = (sel?.flight || "").trim(); if (cs) api("/callsign/" + cs).then(r => setRoute(r.route)).catch(() => {}); }, [sel?.hex]);
   const cs = (sel?.flight || "").trim();
   return <div className="m3d">
-    <div className="m3top"><button className="chip" onClick={onClose}>‹ Back</button><b>Manchester in 3D</b><span className="m3beta">BETA</span></div>
+    <div className="m3top"><button className="chip" onClick={onClose}>‹ Back</button><b>Manchester in 3D</b><span className="m3beta">BETA</span><button className="chip" style={{ marginLeft: "auto" }} onClick={() => setWalk(true)}>🚶 Walkthrough</button></div>{walk && <Suspense fallback={null}><Walk onClose={() => setWalk(false)} /></Suspense>}
     {ok && !err ? <div ref={el} className="m3map" /> : <div className="m3fb"><b>3D view isn't available here</b><p className="muted sm">{err || "This browser has WebGL turned off, so the 3D airport can't be drawn. The 2D board and map still work."}</p></div>}
     <div className="m3note">Beta · building shapes from OpenStreetMap, not an exact model{n != null && <> · {n} live aircraft within 12 nm (ADS-B, adsb.lol)</>}</div>
     {sel && <div className="m3card card"><div className="row between"><b>{cs || sel.reg || sel.hex}</b><button className="chip" onClick={() => setSel(null)}>✕</button></div>
       <div className="muted sm">{[sel.type, sel.reg].filter(Boolean).join(" · ")}</div>
-      <div className="sm mt8">{sel.alt === "ground" ? "On the ground" : sel.alt != null ? `${sel.alt} ft` : "Altitude not reported"}{sel.gs != null && ` · ${Math.round(sel.gs)} kt`}{sel.track != null ? ` · heading ${Math.round(sel.track)}°` : " · heading not reported"}{sel.nm != null && ` · ${sel.nm} nm from MAN`}</div>
+      <div className="sm mt8">{liv(cs) && <span className="tag" style={{ background: liv(cs)![0], color: "#fff" }}>{liv(cs)![2]} colours</span>} {sel.alt === "ground" ? groundState(sel) + (sel.stand ? ` · near stand ${sel.stand}` : "") : sel.alt != null ? `${sel.alt} ft` : "Altitude not reported"}{sel.gs != null && ` · ${Math.round(sel.gs)} kt`}{sel.track != null ? ` · heading ${Math.round(sel.track)}°` : " · heading not reported"}{sel.nm != null && ` · ${sel.nm} nm from MAN`}</div>
       {route && <div className="sm mt8">{route.origin?.iata_code} → {route.destination?.iata_code} <span className="faint">(route for this callsign from adsbdb, may be out of date)</span></div>}
-      <div className="faint sm mt8">Live ADS-B position, updated every 10 s</div></div>}
+      <div className="faint sm mt8">Live ADS-B position, updated every 10 s. Plane colours are the airline\u2019s brand colours (stylised), not an exact livery; size shows the type family.</div></div>}
   </div>;
 }
