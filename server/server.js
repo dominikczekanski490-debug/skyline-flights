@@ -337,7 +337,7 @@ async function lbaBoard(apt, dir, ymd) { return ukCache(apt + dir, ymd, async ()
   const res = await fetch(`https://www.leedsbradfordairport.co.uk/flights/${path}`, { method: "POST", headers: { "next-action": LBA_ACT[dir], accept: "text/x-component", "content-type": "text/plain;charset=UTF-8", referer: `https://www.leedsbradfordairport.co.uk/flights/${path}`, "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" }, body: dir === "dep" ? "[5,3]" : "[5,3]", signal: AbortSignal.timeout(15000) });
   if (!res.ok) throw new Error("LBA feed " + res.status); const line = (await res.text()).split("\n").find(l => l.startsWith("1:")); if (!line) throw new Error("LBA feed format changed"); const a = JSON.parse(line.slice(2));
   return a.filter(x => x.PublicFlightIndicator !== "N" && x.DepartureArrivalType === (dir === "dep" ? "D" : "A") && x.ScheduledDate === ymd && !x.CodeSharePrimaryFlightId).map(x => {
-    const act = dir === "dep" ? (x.ATOT || x.AOBT) : (x.ALDT || x.AIBT); const st = x.FlightIsCancelled ? "Cancelled" : (x.FlightStatusText || "Scheduled").replace(/^Airborne/, "Departed");
+    const act = dir === "dep" ? x.ATOT : (x.ALDT || x.AIBT); const st = x.FlightIsCancelled ? "Cancelled" : (x.FlightStatusText || "Scheduled").replace(/^Airborne/, "Departed");
     const f = ukRow(apt, dir, ymd, { num: (x.AirlineIATA || "") + x.FlightNumber, airline: titleCase((x.AirlineDescFormatted || x.AirlineDesc || "").toLowerCase()), place: titleCase((x.OriginDestAirportDesc || "").toLowerCase()), placeIataHint: x.OriginDestAirportIATA, st,
       sched: new Date(x.ScheduledDateTime).toISOString(), est: act ? undefined : x.EstimatedDateTime ? new Date(x.EstimatedDateTime).toISOString() : undefined, act: act ? new Date(act).toISOString() : undefined, gate: x.GateCode || undefined, belt: x.CarouselCode || undefined, term: x.TerminalCode || undefined });
     if (f && x.CallSign) f.callsign = x.CallSign; if (f && x.Registration) f.aircraft = { ...(f.aircraft || {}), reg: x.Registration }; if (f && x.AircraftTypeDesc) f.aircraft = { ...(f.aircraft || {}), typeName: x.AircraftTypeDesc, icao: x.AircraftTypeICAO }; if (f && x.StandCode) f.stand = x.StandCode; return f; }).filter(Boolean); }); }
@@ -938,7 +938,7 @@ const obsEvent = (iata, kind, cs, from, to) => cs && OBS[iata]?.events.find(e =>
 // marked it, show it as departed/landed (est.) instead of a stale gate status. Flagged so the UI can label it.
 function staleFix(L, dir) { const now = Date.now(); return L.map(f => { const st = f.status || "";
   if (/cancel|divert|landed/.test(st)) return f;
-  if (dir === "dep" && !/departed|enroute/.test(st) && !f.dep?.actual) { const t = Date.parse(f.dep?.estimated || f.dep?.scheduled || ""); if (t && now - t > 40 * 60e3) return { ...f, status: "departed", statusText: "Departed (est.)", staleInferred: true }; }
+  if (dir === "dep" && !/departed|enroute/.test(st) && !f.dep?.actual) { const t = Date.parse(f.dep?.estimated || f.dep?.scheduled || ""); if (t && now - t > 40 * 60e3) return { ...f, status: "departed", statusText: `Probably departed (est.) · feed still says ${f.statusText || "scheduled"}`, staleInferred: true }; }
   if (dir === "arr" && !f.arr?.actual) { const t = Date.parse(f.arr?.estimated || f.arr?.scheduled || ""); if (t && now - t > 45 * 60e3) return { ...f, status: "landed", statusText: "Landed (est.)", staleInferred: true }; }
   return f; }); }
 api.get("/board/:iata", wrap(async (req, res) => { const iata = req.params.iata.toUpperCase(); const dir = req.query.dir === "arr" ? "arr" : "dep";
@@ -992,8 +992,8 @@ async function findFlight(number, ymd) {
     result.sources.push("adsbdb (route only)");
   }
   if (result.flight) result.flight.callsign = cs;
-  if (cs) { const live = await liveByCallsign(cs).catch(() => null); if (live) { result.live = live; result.sources.push(live.source); } }
-  if (!result.live && result.flight && result.flight.status === "departed" && !result.flight.arr?.actual) { const lv = await routeMatch({ ...result.flight, date: ymd }).catch(() => null); if (lv) { result.live = lv; result.sources.push("adsb.lol (route match)"); } }
+  if (cs) { const live = await liveByCallsign(cs).catch(() => null); if (live) { const fit = result.flight ? liveFits(result.flight, live) : { ok: true }; if (fit.ok) { result.live = live; result.sources.push(live.source); } else result.liveRejected = `ADS-B ${live.callsign || cs}${live.reg ? " (" + live.reg + ")" : ""} ignored: ${fit.why}`; } }
+  if (!result.live && result.flight && result.flight.status === "departed" && !result.flight.arr?.actual) { const lv = await routeMatch({ ...result.flight, date: ymd }).catch(() => null); if (lv && liveFits(result.flight, lv).ok) { result.live = lv; result.sources.push("adsb.lol (route match)"); } }
   const F = result.flight, L = result.live;
   if (F && L?.lat != null && F.destination?.lat) { const rem = nm(L, F.destination), tot = nm(F.origin || L, F.destination);
     L.remainingNm = Math.round(rem); L.progress = tot ? Math.max(0, Math.min(100, Math.round((1 - rem / tot) * 100))) : null;
@@ -1006,6 +1006,10 @@ async function findFlight(number, ymd) {
       const a2 = !F2.arr?.actual && obsEvent(F2.destination?.iata, "arr", c2, sd, sd + 20 * 3600e3); if (a2) { F2.arr = { ...F2.arr, actual: new Date(a2.t).toISOString(), actualSource: "ADS-B observed" + (a2.approx ? " (approx.)" : "") }; F2.status = "landed"; F2.statusText = "Landed (observed by ADS-B)"; } } }
   if (result.flight) { const F2 = result.flight; for (const s2 of ["dep", "arr"]) { const t = F2[s2] || (F2[s2] = {}); const ref = t.actual || t.estimated; t.delayMin = ref && t.scheduled ? Math.round((new Date(ref) - new Date(t.scheduled)) / 60e3) : null; }
     if (["landed", "departed"].includes(F2.status) || F2.arr?.actual || F2.dep?.actual) flogPut(F2); }
+  if (result.flight) { const F2 = result.flight; const de = depEvidence(F2, result.live), ae = arrEvidence(F2, result.live); F2.evidence = { dep: de, arr: ae };
+    // v34: never state departed/landed as fact without evidence (a feed actual time or matched live ADS-B).
+    if (["departed", "enroute"].includes(F2.status) && !de) { F2.status = "departed"; F2.unconfirmed = true; F2.statusText = "Departed per airport feed · not yet seen airborne"; }
+    if (F2.status === "landed" && !ae) { F2.unconfirmed = true; F2.statusText = "Landed per airport feed · not yet confirmed"; } }
   if (result.flight && !result.flight.date) result.flight.date = ymd;
   return result;
 }
@@ -1307,6 +1311,7 @@ setInterval(() => saveState("flog"), 60 * 60e3); setInterval(() => saveState("co
 setInterval(() => { FLEET?.persist(); STATE.obs = Object.fromEntries(Object.entries(OBS).map(([k, o]) => [k, { events: o.events, lastSeen: o.lastSeen }])); saveState(KV_URL ? "live" : "all"); }, 20 * 60e3);
 import webpush from "web-push";
 import { startFleet } from "./fleet.js";
+import { liveFits, depEvidence, arrEvidence } from "./evidence.js";
 for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { try { FLEET?.persist(); } catch {} process.exit(0); });
 let FLEET = null;
 import crypto from "crypto";
@@ -1341,25 +1346,41 @@ api.post("/push/subscribe", wrap(async (req, res) => { await ready; const { sub 
   const id = subId(sub.endpoint); const oid = req.body.oldEndpoint ? subId(req.body.oldEndpoint) : null; if (oid && oid !== id && STATE.subs[oid]) { STATE.subs[id] = { ...STATE.subs[oid], ...(STATE.subs[id] || {}) }; delete STATE.subs[oid]; plog("rotated", pushHost(sub.endpoint)); } const prev = STATE.subs[id]?.flights || []; const flights = Array.isArray(req.body.flights) ? req.body.flights : prev;
   STATE.subs[id] = { ...(STATE.subs[id] || {}), sub, at: Date.now(), prefs: req.body.prefs || STATE.subs[id]?.prefs || null, flights: flights.slice(0, 30).map(f => { const o = prev.find(p => p.number === f.number && p.date === f.date); return { number: String(f.number).toUpperCase(), date: f.date, snap: o?.snap || f.snap || null }; }) };
   if (!prev.length && !STATE.subs[id].lastOk) plog("subscribed", pushHost(sub.endpoint)); saveState(); res.json({ ok: true, watching: STATE.subs[id].flights.length }); }));
+api.get("/push/inbox", wrap(async (req, r) => { await ready; const s = STATE.subs[subId(req.query.endpoint)]; r.json({ items: s?.inbox || [] }); }));
 api.post("/push/test", wrap(async (req, res) => { await ready; const id = subId(req.body?.endpoint); const s = STATE.subs[id];
   if (!s) return res.status(404).json({ error: "Server has no subscription for this device (it may have restarted). Tap Turn on alerts again." });
-  const r = await sendPush(id, s, { title: "Skyline notifications are on ✓", body: `Watching ${s.flights.length} flight${s.flights.length === 1 ? "" : "s"} for gate, delay and cancellation changes.`, tag: "skyline-test", url: "/" }, { TTL: 600 });
+  const r = await sendPush(id, s, { title: "✈ Skyline · notifications are on", body: `Watching ${s.flights.length} flight${s.flights.length === 1 ? "" : "s"}: gate, delay, boarding, take-off and landing.\nTake-off and landing are only sent when confirmed.`, tag: "skyline-test", kind: "test", url: "/", icon: "/icon-192.png", badge: "/badge-72.png" }, { TTL: 600 });
   if (r.ok) return res.json({ ok: true, status: r.status, host: pushHost(s.sub.endpoint) });
   res.status(502).json({ error: `Push service ${pushHost(s.sub.endpoint)} rejected it: ${r.status} ${r.error}${r.status === 404 || r.status === 410 ? " (subscription expired — tap Turn on alerts again)" : ""}`, status: r.status }); }));
-const snapOf = f => ({ status: f.status, statusText: f.statusText, gate: f.dep?.gate || null, term: f.dep?.terminal || null, belt: f.arr?.baggage || null, dly: delayMin(f) });
-function diff(a, b, f) { const m = []; if (!a) return m;
-  if (b.status === "cancelled" && a.status !== "cancelled") m.push("❌ Cancelled");
-  if (b.gate && b.gate !== a.gate) m.push(`🚪 Gate ${a.gate ? a.gate + " → " : ""}${b.gate}`);
-  if (b.term && a.term && b.term !== a.term) m.push(`Terminal ${a.term} → ${b.term}`);
-  if (b.dly != null && (a.dly ?? 0) + 10 <= b.dly && b.dly >= 15) m.push(`⏱ Now ${b.dly} min late`);
-  if (b.dly != null && a.dly != null && a.dly >= 15 && b.dly <= a.dly - 15) m.push(`✅ Delay reduced to ${Math.max(0, b.dly)} min`);
-  if (b.belt && b.belt !== a.belt) m.push(`🧳 Baggage belt ${b.belt}`);
-  { const ph = x => { const t = (x || "").toLowerCase(); return /final call/.test(t) ? "Final call" : /boarding/.test(t) ? "Boarding" : /go to gate|gate open/.test(t) ? "Gate open" : null; };
-    const pa = ph(a.statusText), pb = ph(b.statusText); if (pb && pb !== pa) m.push(`🚪 ${pb}${b.gate ? " · Gate " + b.gate : ""}`); }
-  if (b.status !== a.status && ["departed", "enroute", "landed", "diverted", "boarding"].includes(b.status) && !(a.status === "enroute" && b.status === "departed") && !(a.status === "departed" && b.status === "enroute")) m.push(b.status === "enroute" ? "Departed, now en route" : b.statusText || b.status);
+const snapOf = (f, L) => ({ status: f.status, statusText: f.statusText, gate: f.dep?.gate || null, term: f.dep?.terminal || null, belt: f.arr?.baggage || null, dly: delayMin(f), dlyAct: !!f.dep?.actual,
+  depOk: depEvidence(f, L), arrOk: arrEvidence(f, L), eta: f.arr?.actual ? null : (f.arr?.estimated || null), dep: f.dep?.actual || null, arr: f.arr?.actual || null });
+const hmL = (t, tz) => t ? new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz || "Europe/London" }) : "";
+// Messages are { kind, text }. Departed/landed only with evidence (see evidence.js); delays from estimates say "estimated".
+function diff(a, b, f) { const m = []; if (!a) return m; const P = (kind, text) => m.push({ kind, text });
+  if (b.status === "cancelled" && a.status !== "cancelled") P("cancel", "❌ Cancelled");
+  if (b.status === "diverted" && a.status !== "diverted") P("status", "↪️ Diverted");
+  if (b.gate && b.gate !== a.gate) P("gate", `🚪 Gate ${a.gate ? a.gate + " → " : ""}${b.gate}`);
+  if (b.term && a.term && b.term !== a.term) P("gate", `🏢 Terminal ${a.term} → ${b.term}`);
+  const est = b.dlyAct ? "" : " (estimated)";
+  if (b.dly != null && (a.dly ?? 0) + 10 <= b.dly && b.dly >= 15) P("delay", `⏱ Delayed ${b.dly} min${est}`);
+  if (b.dly != null && a.dly != null && a.dly >= 15 && b.dly <= a.dly - 15) P("delay", `✅ Delay down to ${Math.max(0, b.dly)} min${est}`);
+  if (b.belt && b.belt !== a.belt) P("belt", `🧳 Bags on belt ${b.belt}`);
+  { const ph = x => { const t = (x || "").toLowerCase(); return /final call|last call/.test(t) ? "Final call" : /gate closed|closing/.test(t) ? "Gate closed" : /boarding/.test(t) ? "Boarding" : /go to gate|gate open/.test(t) ? "Gate open" : null; };
+    const pa = ph(a.statusText), pb = ph(b.statusText); if (pb && pb !== pa && !b.depOk) P("status", `🚪 ${pb} (airport feed)`); }
+  const hadDep = a.depOk !== undefined ? !!a.depOk : ["departed", "enroute", "landed"].includes(a.status) && !/not yet/.test(a.statusText || "");
+  const hadArr = a.arrOk !== undefined ? !!a.arrOk : a.status === "landed" && !/not yet/.test(a.statusText || "");
+  if (b.depOk && !hadDep && !b.arrOk) P("status", `🛫 Took off${b.dep ? " " + hmL(b.dep, f.origin?.tz) : ""}${b.depOk === "adsb" ? " · seen airborne on ADS-B" : ""}`);
+  if (b.arrOk && !hadArr) P("status", `🛬 Landed${b.arr ? " " + hmL(b.arr, f.destination?.tz) : ""}${b.arrOk === "adsb" ? " · seen on the ground by ADS-B" : ""}`);
   return m; }
+// Rich notification: title "✈ LS1566 · Larnaca → Stansted", body = changes + context line.
+function richPush(f, msgs, k) { const c = x => x?.city || x?.iata || "?"; const tz = f.destination?.tz; const ctx = [];
+  const eta = f.arr?.actual ? null : f.arr?.estimated; if (eta) ctx.push(`ETA ${hmL(eta, tz)} (est.)`);
+  if (f.dep?.gate) ctx.push(`Gate ${f.dep.gate}`); if (f.dep?.terminal) ctx.push(`Terminal ${String(f.dep.terminal).replace(/^T/, "")}`);
+  const kind = msgs.find(x => x.kind === "cancel") ? "cancel" : msgs[0].kind;
+  return { title: `✈ ${f.number} · ${c(f.origin)} → ${c(f.destination)}`, body: msgs.map(x => x.text).join(" · ") + (ctx.length ? "\n" + ctx.join(" · ") : ""), tag: k, kind, renotify: true,
+    url: "/#flight=" + encodeURIComponent(f.id || k), icon: "/icon-192.png", badge: "/badge-72.png", at: Date.now(), flight: f.number }; }
 // prefs: { events: { cancel, gate, delay, belt, status }: bool, quiet: { on, from: "22:00", to: "07:00", tz } } — cancellations always break quiet hours
-function filterPrefs(m, p) { if (!p || !m.length) return m; const ev = p.events || {}; const kind = x => x.startsWith("❌") ? "cancel" : x.startsWith("🚪") || x.startsWith("Terminal") ? "gate" : x.startsWith("⏱") || x.startsWith("✅") ? "delay" : x.startsWith("🧳") ? "belt" : "status";
+function filterPrefs(m, p) { if (!p || !m.length) return m; const ev = p.events || {}; const kind = x => x.kind;
   let out = m.filter(x => ev[kind(x)] !== false);
   if (p.quiet?.on && p.quiet.from && p.quiet.to) { const hm = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: p.quiet.tz || "Europe/London" });
     const q = p.quiet.from <= p.quiet.to ? hm >= p.quiet.from && hm < p.quiet.to : hm >= p.quiet.from || hm < p.quiet.to; if (q) out = out.filter(x => kind(x) === "cancel"); }
@@ -1367,8 +1388,8 @@ function filterPrefs(m, p) { if (!p || !m.length) return m; const ev = p.events 
 async function watch() { await ready; const cache = {};
   for (const [id, s] of Object.entries(STATE.subs)) { const keep = [];
     for (const w of s.flights) { if (w.date < new Date(Date.now() - 36 * 3600e3).toISOString().slice(0, 10)) continue; keep.push(w);
-      try { const k = w.number + w.date; const r = cache[k] ||= await findFlight(w.number, w.date); if (!r.flight) continue; const n = snapOf(r.flight); const msg = filterPrefs(diff(w.snap, n, r.flight), s.prefs); w.snap = n;
-        if (msg.length) await sendPush(id, s, { title: `${r.flight.number} ${r.flight.origin?.iata || ""}→${r.flight.destination?.iata || ""}`, body: msg.join(" • "), tag: k, url: "/" }, { topic: k.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) });
+      try { const k = w.number + w.date; const r = cache[k] ||= await findFlight(w.number, w.date); if (!r.flight) continue; const n = snapOf(r.flight, r.live); const msg = filterPrefs(diff(w.snap, n, r.flight), s.prefs); w.snap = n;
+        if (msg.length) { const pl = richPush(r.flight, msg, k); (s.inbox ||= []).unshift(pl); s.inbox.length = Math.min(s.inbox.length, 30); await sendPush(id, s, pl, { topic: k.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) }); }
       } catch {} }
     if (STATE.subs[id]) STATE.subs[id].flights = keep; }
   saveState(); }
