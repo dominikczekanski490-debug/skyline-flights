@@ -1,0 +1,43 @@
+/* v40 (t137u): "Skyline 4" UI revamp — refined type scale, layered cards, floating tab dock, hero card, motion. Uses skin vars so every theme follows. */
+:root{--rv-r:26px;--rv-acc:var(--sk-acc,var(--acc,#4da3ff));--rv-hair:color-mix(in srgb,var(--text,#fff) 10%,transparent);--rv-ease:cubic-bezier(.22,1,.36,1)}
+body{font-feature-settings:"ss01","cv11","tnum";-webkit-font-smoothing:antialiased;letter-spacing:-.006em}
+.head h1{font-size:38px!important;font-weight:800!important;letter-spacing:-.045em!important;line-height:1.02}
+.sheet-body h2,.card h3,h3{letter-spacing:-.03em}
+.muted,.faint{letter-spacing:0}
+/* cards: layered glass with a hairline sheen on top */
+.card,.lab-card,.w22,.aur-card{border-radius:var(--rv-r)!important;border:1px solid var(--rv-hair)!important;box-shadow:0 1px 0 color-mix(in srgb,#fff 9%,transparent) inset,0 12px 32px -14px rgba(0,0,0,.45)!important;transition:transform .35s var(--rv-ease),box-shadow .35s var(--rv-ease)}
+.card{position:relative;overflow:hidden}
+.card::before{content:"";position:absolute;left:18px;right:18px;top:0;height:1px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--rv-acc) 55%,transparent),transparent);opacity:.7;pointer-events:none}
+.press:active,.w22:active,.card:active{transform:scale(.98)}
+/* list rows */
+.lab-row{padding:12px 4px!important;border-bottom:1px solid var(--rv-hair)!important;transition:background .2s}
+.lab-row:active{background:color-mix(in srgb,var(--rv-acc) 10%,transparent)}
+.l2-rank{width:26px;height:26px;border-radius:9px;display:inline-grid;place-items:center;background:color-mix(in srgb,var(--rv-acc) 16%,transparent);color:var(--rv-acc);font-weight:700;font-size:12px}
+/* hero / next-flight card */
+.h16{border-radius:30px!important;box-shadow:0 24px 60px -20px color-mix(in srgb,var(--rv-acc) 55%,transparent),0 0 0 1px color-mix(in srgb,#fff 10%,transparent) inset!important}
+.h16::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.10),transparent 40%);pointer-events:none;z-index:0}
+/* tab dock */
+.tabbar .pill{border-radius:30px!important;padding:6px!important;box-shadow:0 20px 50px -10px rgba(0,0,0,.55),0 0 0 1px var(--rv-hair) inset!important}
+.pill button{font-size:11px!important;font-weight:600!important;letter-spacing:.01em;gap:3px!important}
+.pill button svg{width:22px;height:22px;stroke-width:1.8;transition:transform .35s var(--rv-ease)}
+.pill button.on svg{transform:translateY(-1px) scale(1.08)}
+.tabind{background:linear-gradient(180deg,color-mix(in srgb,var(--rv-acc) 30%,transparent),color-mix(in srgb,var(--rv-acc) 14%,transparent))!important;box-shadow:0 0 0 1px color-mix(in srgb,var(--rv-acc) 40%,transparent) inset,0 6px 20px -6px var(--rv-acc)!important;transition:transform .45s var(--rv-ease)!important}
+/* consistent iconography */
+svg[stroke]:not(.nl-mtn){stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* buttons & chips */
+.btn{border-radius:16px!important;font-weight:650;letter-spacing:-.01em;transition:transform .2s var(--rv-ease),filter .2s}.btn:active{transform:scale(.97)}
+.btn.primary{background:linear-gradient(180deg,color-mix(in srgb,var(--rv-acc) 100%,#fff 12%),var(--rv-acc))!important;box-shadow:0 10px 24px -10px var(--rv-acc)}
+.segs{border-radius:16px!important;padding:4px!important}
+/* screen enter transition */
+@keyframes rvIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+html[data-anim=on] .sheet-body>*{animation:rvIn .5s var(--rv-ease) both}
+html[data-anim=on] .sheet-body>*:nth-child(2){animation-delay:.04s}html[data-anim=on] .sheet-body>*:nth-child(3){animation-delay:.08s}html[data-anim=on] .sheet-body>*:nth-child(4){animation-delay:.12s}
+@media (prefers-reduced-motion:reduce){.sheet-body>*{animation:none!important}}
+/* light themes */
+html[data-theme=light] .card,html[data-theme=light] .w22{box-shadow:0 1px 0 #fff inset,0 10px 28px -16px rgba(20,30,60,.25)!important}
+/* E-ink: flat, no motion */
+html[data-skin=eink] .card::before,html[data-skin=eink] .h16::after{display:none}
+html[data-skin=eink] .card,html[data-skin=eink] .w22,html[data-skin=eink] .h16,html[data-skin=eink] .tabbar .pill{box-shadow:none!important;border:2px solid #000!important}
+html[data-skin=eink] .tabind{background:#000!important;box-shadow:none!important}html[data-skin=eink] .pill button.on{color:#fff!important}html[data-skin=eink] .pill button.on svg{color:#fff!important;filter:none}
+html[data-skin=eink] .sheet-body>*{animation:none!important}html[data-skin=eink] *{transition:none!important}
+html[data-skin=eink] .l2-rank{background:#000;color:#fff}html[data-skin=eink] .btn.primary{background:#000!important;box-shadow:none}
