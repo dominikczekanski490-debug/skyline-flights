@@ -21,6 +21,8 @@ const past = (t, now) => { const v = Date.parse(t || ""); return !!v && v <= now
 // "feed" | "adsb" | null
 export function depEvidence(f, L, now = Date.now()) {
   if (!f) return null;
+  if (f.dep?.takeoff && past(f.dep.takeoff, now)) return "adsb";
+  if (f.dep?.actualKind === "offblock" && f.dep.airborneText) return "feed";
   if (f.dep?.actual && past(f.dep.actual, now) && !f.staleInferred && f.dep.actualKind !== "offblock") return /ADS-B/.test(f.dep.actualSource || "") ? "adsb" : "feed";
   if (L && liveFits(f, L, now).ok && typeof L.alt === "number" && (L.gs || 0) > 80 && f.origin?.lat != null && nmi(f.origin, L) > 3) return "adsb";
   return null; }

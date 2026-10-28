@@ -745,7 +745,15 @@ async function krkBoard(apt, dir, ymd) {
     return out; });
   return all.filter(f => inDay((dir === "dep" ? f.dep : f.arr).scheduled, ymd)); }
 if (AP.KRK) OFFICIAL.KRK = { fn: krkBoard, label: "Kraków Airport official flight board", provider: "Official airport feed", site: "krakowairport.pl" };
-const officialBoard = (apt, dir, ymd) => OFFICIAL[apt].fn(apt, dir, ymd);
+// v41 OOOI: airport feeds' departure "actual" is the off-block (gate) time, not wheels-off. Mark it, and attach a real
+// take-off time only from evidence: Skyline's ADS-B take-off log for the ICAO callsign, or feed wording that says airborne.
+const AIRBORNE_TXT = /airborne|took off|in the air|en ?route/i;
+function oooiMark(apt, dir, L) { if (dir !== "dep" || !Array.isArray(L)) return L; return L.map(f => { const d = f.dep || {}; if (!d.actual || d.actualSource || d.actualKind) return f;
+  const al = f.airline?.icao, n = (f.number || "").slice(2).replace(/^0+/, ""); const cs = al && /^\d+[A-Z]?$/.test(n) ? al + n : null; const t0 = Date.parse(d.actual);
+  const ev = cs && t0 ? obsEvent(apt, "dep", cs, t0 - 5 * 60e3, t0 + 60 * 60e3) : null; const dep = { ...d, actualKind: "offblock", offBlock: d.actual };
+  if (ev) { dep.takeoff = new Date(ev.t).toISOString(); dep.takeoffSource = "ADS-B observed take-off" + (ev.approx ? " (approx.)" : ""); } else if (AIRBORNE_TXT.test(f.statusText || "")) dep.airborneText = true;
+  return { ...f, dep }; }); }
+const officialBoard = async (apt, dir, ymd) => oooiMark(apt, dir, await OFFICIAL[apt].fn(apt, dir, ymd));
 
 // ---------- AeroDataBox (optional key, RapidAPI) ----------
 const ADB = process.env.ADB_BASE || "https://aerodatabox.p.rapidapi.com"; // ADB_BASE only for local mock tests
@@ -1354,7 +1362,7 @@ api.post("/push/test", wrap(async (req, res) => { await ready; const id = subId(
   if (r.ok) return res.json({ ok: true, status: r.status, host: pushHost(s.sub.endpoint) });
   res.status(502).json({ error: `Push service ${pushHost(s.sub.endpoint)} rejected it: ${r.status} ${r.error}${r.status === 404 || r.status === 410 ? " (subscription expired — tap Turn on alerts again)" : ""}`, status: r.status }); }));
 const snapOf = (f, L) => ({ status: f.status, statusText: f.statusText, gate: f.dep?.gate || null, term: f.dep?.terminal || null, belt: f.arr?.baggage || null, dly: delayMin(f), dlyAct: !!f.dep?.actual,
-  depOk: depEvidence(f, L), arrOk: arrEvidence(f, L), eta: f.arr?.actual ? null : (f.arr?.estimated || null), dep: f.dep?.actual || null, arr: f.arr?.actual || null });
+  depOk: depEvidence(f, L), arrOk: arrEvidence(f, L), eta: f.arr?.actual ? null : (f.arr?.estimated || null), dep: f.dep?.takeoff || (f.dep?.actualKind === "offblock" ? null : f.dep?.actual) || null, offblk: f.dep?.actualKind === "offblock" ? f.dep.actual : null, arr: f.arr?.actual || null });
 const hmL = (t, tz) => t ? new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz || "Europe/London" }) : "";
 // Messages are { kind, text }. Departed/landed only with evidence (see evidence.js); delays from estimates say "estimated".
 function diff(a, b, f) { const m = []; if (!a) return m; const P = (kind, text) => m.push({ kind, text });
@@ -1370,6 +1378,7 @@ function diff(a, b, f) { const m = []; if (!a) return m; const P = (kind, text) 
     const pa = ph(a.statusText), pb = ph(b.statusText); if (pb && pb !== pa && !b.depOk) P("status", `🚪 ${pb} (airport feed)`); }
   const hadDep = a.depOk !== undefined ? !!a.depOk : ["departed", "enroute", "landed"].includes(a.status) && !/not yet/.test(a.statusText || "");
   const hadArr = a.arrOk !== undefined ? !!a.arrOk : a.status === "landed" && !/not yet/.test(a.statusText || "");
+  if (b.offblk && !a.offblk && !b.depOk && !b.arrOk && !(a.depOk)) P("status", `🚕 Left the gate ${hmL(b.offblk, f.origin?.tz)} · taxiing (not airborne yet)`);
   if (b.depOk && !hadDep && !b.arrOk) P("status", `🛫 Took off${b.dep ? " " + hmL(b.dep, f.origin?.tz) : ""}${b.depOk === "adsb" ? " · seen airborne on ADS-B" : ""}`);
   if (b.arrOk && !hadArr) P("status", `🛬 Landed${b.arr ? " " + hmL(b.arr, f.destination?.tz) : ""}${b.arrOk === "adsb" ? " · seen on the ground by ADS-B" : ""}`);
   return m; }

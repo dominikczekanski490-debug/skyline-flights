@@ -53,14 +53,26 @@ export const tzOffset = (tz?: string, at = new Date()) => { if (!tz) return 0; c
 // Live ADS-B snapshot saved on the flight by the refresh loop; ignored once older than 5 minutes.
 export const liveOf = (f: any) => f?.live && Date.now() - (f.live.at || 0) < 5 * 60e3 ? f.live : null;
 // One status vocabulary for every card, from the airport feed + ADS-B. Never guessed from the clock alone.
+// v41 OOOI ladder: Off-block (gate) -> Taxiing; Departed only with wheels-off evidence (feed runway time, ADS-B take-off log,
+// feed "airborne" wording, or matched live ADS-B airborne >80 kt). Landed = wheels on; Taxiing in = ADS-B on the ground moving; Arrived = on-block wording.
+export const airborneEv = (f: Flight, lv?: any): string | null => { const d: any = f.dep || {}; const past = (t?: string | null) => !!t && Date.parse(t) <= Date.now() + 120e3;
+  if (d.takeoff && past(d.takeoff)) return "adsb-log"; if (d.airborneText) return "feed";
+  if (lv && typeof lv.alt === "number" && (lv.gs || 0) > 80 && !lv.onGround) return "adsb-live";
+  if (d.actual && past(d.actual) && d.actualKind !== "offblock") return "feed"; return null; };
 export function statusOf(f: Flight, lv?: any): { label: string; cls: "ok" | "bad" | "air" | "warn" } {
-  const d = delay(f.dep); const s = f.status || "";
+  const d = delay(f.dep); const s = f.status || ""; const D: any = f.dep || {}; const tx = f.statusText || "";
   if (s === "cancelled") return { label: "Cancelled", cls: "bad" };
   if (s === "diverted") return { label: "Diverted", cls: "bad" };
-  if (s === "landed" || f.arr?.actual) return { label: "Landed", cls: "ok" };
-  if (s === "enroute" || (lv && typeof lv.alt === "number" && s !== "landed")) return { label: "En route", cls: "air" };
-  if (s === "departed" || (f.dep?.actual && Date.parse(f.dep.actual) <= Date.now())) return { label: "Departed", cls: "air" };
-  { const t = Date.parse(f.dep?.estimated || f.dep?.scheduled || ""); if (!f.dep?.actual && t && Date.now() - t > 40 * 60e3 && /boarding|gate|scheduled|delayed|^$/.test(s)) return { label: "Departed (est.)", cls: "air" }; }
+  if (s === "landed" || f.arr?.actual) { if (/arrived|on.?block|at (the )?gate|in block/i.test(tx)) return { label: "Arrived", cls: "ok" };
+    if (lv && lv.onGround && (lv.gs || 0) > 3 && (lv.gs || 0) < 50) return { label: "Taxiing in", cls: "ok" }; return { label: "Landed", cls: "ok" }; }
+  const ev = airborneEv(f, lv);
+  if (ev && (s === "enroute" || (lv && typeof lv.alt === "number"))) return { label: "En route", cls: "air" };
+  if (ev) return { label: "Departed", cls: "air" };
+  if (s === "enroute" && !D.actualKind) return { label: "En route", cls: "air" };
+  if (D.actualKind === "offblock" && D.actual && Date.parse(D.actual) <= Date.now() + 120e3) {
+    const m = (Date.now() - Date.parse(D.actual)) / 6e4; return m > 40 ? { label: "Departed (est.)", cls: "air" } : { label: m < 4 ? "Pushback" : "Taxiing", cls: "warn" }; }
+  if (s === "departed" && !D.actual && !f.staleInferred) return { label: "Departed", cls: "air" };
+  { const t = Date.parse(f.dep?.estimated || f.dep?.scheduled || ""); if (!f.dep?.actual && t && Date.now() - t > 40 * 60e3 && /boarding|gate|scheduled|delayed|departed|^$/.test(s)) return { label: "Departed (est.)", cls: "air" }; }
   if (s === "boarding") return { label: /final/i.test(f.statusText || "") ? "Final call" : /closing/i.test(f.statusText || "") ? "Gate closing" : "Boarding", cls: "warn" };
   if (s === "gate") return { label: /closed/i.test(f.statusText || "") ? "Gate closed" : "Go to gate", cls: "warn" };
   if (s === "delayed" || (d != null && d >= 15)) return { label: d != null && d > 0 ? `Delayed +${d}m` : "Delayed", cls: "bad" };

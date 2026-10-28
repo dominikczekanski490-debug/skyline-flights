@@ -18,7 +18,8 @@ export function changeMsgs(o: any, n: any): { kind: string; text: string }[] { c
   const hadD = o.evidence ? !!o.evidence.dep : false, hadA = o.evidence ? !!o.evidence.arr : false;
   if (n.status === "cancelled" && o.status !== "cancelled") m.push({ kind: "cancel", text: "❌ Cancelled" });
   if (n.dep?.gate && n.dep.gate !== o.dep?.gate) m.push({ kind: "gate", text: `🚪 Gate ${o.dep?.gate ? o.dep.gate + " → " : ""}${n.dep.gate}` });
-  if (n.evidence?.dep && !hadD && !n.evidence?.arr && o.evidence) m.push({ kind: "status", text: `🛫 Took off${n.dep?.actual ? " " + hm(n.dep.actual, n.origin?.tz) : ""}` });
+  if (n.dep?.actualKind === "offblock" && n.dep?.actual && !o.dep?.actual && !n.evidence?.dep) m.push({ kind: "status", text: `🚕 Left the gate ${hm(n.dep.actual, n.origin?.tz)} · taxiing, not airborne yet` });
+  if (n.evidence?.dep && !hadD && !n.evidence?.arr && o.evidence) m.push({ kind: "status", text: `🛫 Took off${n.dep?.takeoff || (n.dep?.actual && n.dep?.actualKind !== "offblock") ? " " + hm(n.dep.takeoff || n.dep.actual, n.origin?.tz) : ""}` });
   if (n.evidence?.arr && !hadA && o.evidence) m.push({ kind: "status", text: `🛬 Landed${n.arr?.actual ? " " + hm(n.arr.actual, n.destination?.tz) : ""}` });
   const t = n.statusText || ""; if (t && t !== o.statusText && /boarding|final call|last call|gate (open|closed)|go to gate/i.test(t) && !/depart|land|airborne|en route/i.test(t)) m.push({ kind: "status", text: `🚪 ${t} (airport feed)` });
   return m; }

@@ -11,3 +11,13 @@ const noSch: any = withEstArr({ ...f, arr: { estimated: at(13, 40), etaSource: "
 ok(noSch.arr.estimated === at(13, 40), "ADS-B estimate kept when no published arrival");
 ok(statusOf({ ...f, status: "scheduled" }).label === "Departed", "actual departure beats stale 'scheduled'");
 ok(statusOf({ ...f, status: "scheduled", arr: { actual: at(12) } }).label === "Landed", "actual arrival -> Landed");
+// v41 OOOI: off-block is not take-off
+{ const now = Date.now(), iso = (m: number) => new Date(now + m * 6e4).toISOString();
+  const ob: any = { id: "y", number: "FR555", date: "x", dep: { scheduled: iso(-30), actual: iso(-10), actualKind: "offblock" }, arr: { scheduled: iso(120) }, status: "departed" };
+  ok(statusOf(ob).label === "Taxiing", "off-block 10 min ago, no airborne evidence -> Taxiing (got " + statusOf(ob).label + ")");
+  ok(statusOf({ ...ob, dep: { ...ob.dep, actual: iso(-2) } }).label === "Pushback", "off-block 2 min ago -> Pushback");
+  ok(statusOf({ ...ob, dep: { ...ob.dep, takeoff: iso(-1) } }).label === "Departed", "ADS-B take-off log -> Departed");
+  ok(statusOf(ob, { alt: 3000, gs: 180, lat: 1, lon: 1 }).label === "En route", "live airborne >80kt -> En route");
+  ok(statusOf(ob, { alt: "ground", gs: 15, onGround: true }).label === "Taxiing", "live on ground taxiing -> still Taxiing");
+  ok(statusOf({ ...ob, dep: { ...ob.dep, actual: iso(-50) } }).label === "Departed (est.)", "off-block 50 min ago -> Departed (est.) labelled");
+  ok(statusOf({ ...ob, status: "landed", arr: { actual: iso(-1) }, statusText: "Arrived" }).label === "Arrived", "on-block wording -> Arrived"); }
