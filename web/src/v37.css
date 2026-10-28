@@ -1,5 +1,5 @@
 .walk .wpick{padding:8px 14px;align-items:center}
-.wview{position:relative;height:42vh;min-height:240px;background:#0b0f17}.wmap{position:absolute;inset:0}
+.wview{position:relative;height:42vh;min-height:240px;background:var(--bg)}.wmap{position:absolute;inset:0}
 .schem{width:100%;height:100%}.schem polygon{fill:#2a3550;stroke:#5b6b8f}.schem polyline{fill:none;stroke:#ffd400;stroke-width:3;stroke-dasharray:6 4}.schem circle{fill:#ffd400}.schem circle.on{fill:#fff;stroke:#ffd400;stroke-width:3}
 .wsign{position:absolute;top:12px;left:12px;background:#ffd400;color:#111;font-weight:800;padding:6px 12px;border-radius:4px;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
 .wbadge{position:absolute;bottom:8px;left:8px;right:8px;font-size:10px;color:#fff;background:rgba(0,0,0,.55);padding:4px 8px;border-radius:6px}

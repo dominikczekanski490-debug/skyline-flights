@@ -1,4 +1,4 @@
-.fs36{position:fixed;inset:0;z-index:310;background:var(--bg);display:flex;flex-direction:column;color:var(--fg)}
+.fs36{position:fixed;inset:0;z-index:310;background:var(--bg);display:flex;flex-direction:column;color:var(--text)}
 .fs36h{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;border-bottom:1px solid var(--line,rgba(255,255,255,.08))}
 .fs36b{flex:1;overflow:auto;padding:12px 14px calc(env(safe-area-inset-bottom) + 24px)}
 .fs36b pre{white-space:pre-wrap;word-break:break-all;font-size:11px;background:rgba(127,127,127,.12);padding:6px 8px;border-radius:8px;margin:6px 0}
