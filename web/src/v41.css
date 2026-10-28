@@ -79,3 +79,4 @@ html[data-skin=eink] .alive-map g{color:#000!important}html[data-skin=eink] .ali
 .dg-list{margin:6px 0;padding-left:18px}.dg-list li{margin:4px 0}.dg a{color:var(--acc)}
 html[data-skin=eink] .dg-facts>div{background:#fff;border:1px solid #000}html[data-skin=eink] .dg a{color:#000;text-decoration:underline}
 html[data-skin=eink] i.alive-k{background:#000!important;border:1px solid #000}html[data-skin=eink] i.alive-k-ground{background:#888!important}html[data-skin=eink] i.alive-k-departure{background:#fff!important;border-width:2px}html[data-skin=eink] i.alive-k-overflight{background:#fff!important}
+.bl-g section{margin:10px 0}.bl-g h4{margin:0 0 4px;font-size:14px}.bl-fx input{width:90px;margin-left:4px;padding:8px;min-height:40px;border-radius:10px;border:1px solid color-mix(in srgb,var(--text) 25%,transparent);background:transparent;color:var(--text);font:inherit}.bl-warn{color:var(--warn)}html[data-skin=eink] .bl-warn{color:#000;font-weight:700}
