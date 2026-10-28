@@ -1,3 +1,4 @@
+import { Ground, Essentials } from "./v46";
 import { DelayExplainer } from "./v42";
 import { AuroraCard, RouteAurora } from "./aurora";
 import "./aurora.css";
@@ -259,16 +260,19 @@ function SearchView({ x, push, setFlights, close }: any) {
   const [q, setQ] = useState(""); const [date, setDate] = useState(today()); const [res, setRes] = useState<any>(null); const [busy, setBusy] = useState(false); const [aps, setAps] = useState<Ap[]>([]);
   const [mode, setMode] = useState<"flight" | "route" | "airport">("flight"); const [to, setTo] = useState("");
   useEffect(() => { if (mode !== "flight" && q.length >= 2) api("/airports/search?q=" + q).then(setAps).catch(() => {}); else setAps([]); }, [q, mode]);
-  const go = async () => { setBusy(true); setRes(null); try { if (mode === "flight") setRes(await api(`/flight/${q.replace(/\s/g, "")}?date=${date}`)); else if (mode === "route") setRes({ list: (await api(`/route?from=${q}&to=${to}&date=${date}`)).flights }); } catch (e: any) { setRes({ error: e.message, needsKey: e.needsKey }); } setBusy(false); };
+  const [recent, setRecent] = useState<any[]>(() => { try { return JSON.parse(localStorage.getItem("sk.recent") || "[]"); } catch { return []; } });
+  const remember = (r: any) => { const l = [r, ...recent.filter(x => !(x.mode === r.mode && x.q === r.q && x.to === r.to))].slice(0, 6); setRecent(l); localStorage.setItem("sk.recent", JSON.stringify(l)); };
+  const go = async (o?: any) => { const m = o?.mode || mode, qq = o?.q ?? q, tt = o?.to ?? to; if (!qq) return; setBusy(true); setRes(null); try { if (m === "flight") { setRes(await api(`/flight/${qq.replace(/\s/g, "")}?date=${date}`)); remember({ mode: m, q: qq }); } else if (m === "route") { setRes({ list: (await api(`/route?from=${qq}&to=${tt}&date=${date}`)).flights }); remember({ mode: m, q: qq, to: tt }); } } catch (e: any) { setRes({ error: e.message, needsKey: e.needsKey }); } setBusy(false); };
   const add = (f: Flight, friend?: boolean) => { const n = { ...f, id: f.id || `${f.number}-${date}`, date }; mark("add " + n.number); const up = (l: Flight[]) => [...l.filter(y => !(y.id === n.id && !!y.friend === !!friend)), friend ? { ...n, friend: "Friend" } : n];
     try { save(up(load())); } catch { /* quota */ } setFlights(up); close(); toast(`${n.number} added to ${friend ? "Friends" : "My Flights"}`, 2500); };
   return <><Head title="Add a flight" sub="Track live by number, route or airport" right={x} />
     <div className="sk-seg">{(["flight", "route", "airport"] as const).map(m => <button key={m} className={mode === m ? "on" : ""} onClick={() => { setMode(m); setRes(null); }}>{m === "flight" ? Ic.ticket : m === "route" ? Ic.route : Ic.tower}<span>{m === "flight" ? "Flight no." : m === "route" ? "Route" : "Airport"}</span></button>)}</div>
     <div className="px col g8"><label className="sk-field"><span>{Ic.search}</span><input autoFocus placeholder={mode === "flight" ? "e.g. LS965, FR2141, BA1393" : "From airport (e.g. MAN)"} value={q} onChange={e => setQ(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && go()} /></label>
       {mode === "route" && <label className="sk-field"><span>{Ic.pin}</span><input placeholder="To airport (optional, e.g. LCA)" value={to} onChange={e => setTo(e.target.value.toUpperCase())} /></label>}
-      {mode !== "airport" && <><div className="row g8"><label className="sk-field grow"><span>{Ic.cal}</span><input type="date" value={date} onChange={e => setDate(e.target.value)} /></label><button className="sk-go press" onClick={go}>{busy ? <i className="sk-spin" /> : Ic.search}<span>{busy ? "Searching" : "Search"}</span></button></div>
+      {mode !== "airport" && <><div className="row g8"><label className="sk-field grow"><span>{Ic.cal}</span><input type="date" value={date} onChange={e => setDate(e.target.value)} /></label><button className="sk-go press" onClick={() => go()}>{busy ? <i className="sk-spin" /> : Ic.search}<span>{busy ? "Searching" : "Search"}</span></button></div>
       <div className="lab-chips">{[0, 1].map(o => { const v = new Date(Date.now() + o * 864e5).toLocaleDateString("en-CA", { timeZone: "Europe/London" }); return <button key={o} className={date === v ? "on" : ""} onClick={() => setDate(v)}>{o ? "Tomorrow" : "Today"}</button>; })}</div></>}</div>
     {mode !== "flight" && aps.length > 0 && <div className="mt8">{aps.map(a => <div key={a.iata} className="lrow" onClick={() => mode === "airport" ? push({ t: "board", iata: a.iata }) : (setQ(a.iata), setAps([]))}><span className="code">{a.iata}</span><div><b>{a.name}</b><div className="muted sm">{a.city}, {a.country}</div></div></div>)}</div>}
+    {!res && !busy && mode !== "airport" && recent.length > 0 && <div className="px mt8"><div className="row between"><small className="muted">Recent searches</small><button className="linkbtn xs muted" onClick={() => { setRecent([]); localStorage.removeItem("sk.recent"); }}>Clear</button></div><div className="rs-chips">{recent.map((r, i) => <button key={i} onClick={() => { setMode(r.mode); setQ(r.q); setTo(r.to || ""); go(r); }}>{r.mode === "route" ? `${r.q}→${r.to || "any"}` : r.q}</button>)}</div></div>}
     {res?.error && <div className="note warn">{res.error}{res.needsKey && " — this airport needs a free AeroDataBox key (Settings)."}</div>}
     {res?.flight && <div className="mt8"><FlightCard f={{ ...res.flight, date }} onClick={() => push({ t: "flight", f: { ...res.flight, date } })} />
       <div className="muted sm px">Sources: {res.sources.join(", ")}{res.flight.scheduleUnknown && " — schedule times need an AeroDataBox key for this airport"}</div>
@@ -355,7 +359,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <Facts f={f} ac={ac} />
     <Progress f={f} lv={lv} />
     <Timeline f={f} />
-    <Prediction f={f} inb={inb} />{!f.example && <><DestGuide f={f} /><BeforeLand f={f} /></>}
+    <Prediction f={f} inb={inb} />{!f.example && <><DestGuide f={f} /><BeforeLand f={f} /><Ground f={f} /><Essentials f={f} /></>}
     <SecHead ic={Ic.bolt} title="Actions" sub="Share, plan and check the risks" />
     <div className="sk-acts three"><ActBtn ic={Ic.image} onClick={() => shareImage(f)}>Share image</ActBtn><ActBtn ic={Ic.cal} onClick={() => icsOf([f], f.number + ".ics")}>Calendar</ActBtn>{!f.example && <ActBtn ic={Ic.globe} onClick={() => push({ t: "trip", f })}>Trip view</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.tower} onClick={() => push({ t: "guide", iata: f.origin!.iata })}>{f.origin.iata} guide</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.life} onClick={() => push({ t: "labs", id: "rescue", f })}>Backup flights</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.cloud} onClick={() => push({ t: "labs", id: "wx", apt: f.origin!.iata })}>{f.origin.iata} weather</ActBtn>}{!f.example && <ActBtn ic={Ic.shield} onClick={() => push({ t: "labs", id: "risk", f })}>Trip risk</ActBtn>}</div>
     {!f.example && <CompCard f={f} />}
