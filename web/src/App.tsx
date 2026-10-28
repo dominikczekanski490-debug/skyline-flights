@@ -1,5 +1,6 @@
 import { Ground, Essentials } from "./v46";
 import { Outdoors, Quakes, AirlineFacts, CityDist } from "./v47";
+import { AirportToday } from "./v48";
 import { DelayExplainer } from "./v42";
 import { AuroraCard, RouteAurora } from "./aurora";
 import "./aurora.css";
@@ -360,7 +361,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <Facts f={f} ac={ac} />
     <Progress f={f} lv={lv} />
     <Timeline f={f} />
-    <Prediction f={f} inb={inb} />{!f.example && <><DestGuide f={f} /><BeforeLand f={f} /><CityDist f={f} /><Ground f={f} /><Essentials f={f} /><Outdoors f={f} /><Quakes f={f} /><AirlineFacts f={f} /></>}
+    <Prediction f={f} inb={inb} />{!f.example && <><DestGuide f={f} /><BeforeLand f={f} /><AirportToday f={f} /><CityDist f={f} /><Ground f={f} /><Essentials f={f} /><Outdoors f={f} /><Quakes f={f} /><AirlineFacts f={f} /></>}
     <SecHead ic={Ic.bolt} title="Actions" sub="Share, plan and check the risks" />
     <div className="sk-acts three"><ActBtn ic={Ic.image} onClick={() => shareImage(f)}>Share image</ActBtn><ActBtn ic={Ic.cal} onClick={() => icsOf([f], f.number + ".ics")}>Calendar</ActBtn>{!f.example && <ActBtn ic={Ic.globe} onClick={() => push({ t: "trip", f })}>Trip view</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.tower} onClick={() => push({ t: "guide", iata: f.origin!.iata })}>{f.origin.iata} guide</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.life} onClick={() => push({ t: "labs", id: "rescue", f })}>Backup flights</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.cloud} onClick={() => push({ t: "labs", id: "wx", apt: f.origin!.iata })}>{f.origin.iata} weather</ActBtn>}{!f.example && <ActBtn ic={Ic.shield} onClick={() => push({ t: "labs", id: "risk", f })}>Trip risk</ActBtn>}</div>
     {!f.example && <CompCard f={f} />}
@@ -439,14 +440,14 @@ function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => voi
 }
 function Board({ iata, x, push, term0 }: any) {
   const [info, setInfo] = useState(() => /[#&]info\b/.test(location.hash)); const [term, setTerm] = useState(() => !!term0 || /term=1/.test(location.hash));
-  const [dir, setDir] = useState("dep"); const [date, setDate] = useState(today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState(""); const [earlier, setEarlier] = useState(false);
+  const [dir, setDir] = useState("dep"); const [date, setDate] = useState(today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState(""); const [earlier, setEarlier] = useState(false); const [qf, setQf] = useState("");
   const isGr = FRAPORT_GR.has(iata); const [gr, setGr] = useState(() => localStorage.getItem("sk.grboard") !== "off");
   useEffect(() => setD(null), [iata, dir, date]);
   const poll = usePoll(() => api(`/board/${iata}?dir=${dir}&date=${date}`).then(setD).catch(e => setD((p: any) => p && !p.error ? p : { error: e.message, needsKey: e.needsKey, airport: e.airport || p?.airport })), [iata, dir, date]);
   const ap = d?.airport; const adj = useRef(false); // v23: open on the airport's local "today" (e.g. Greece/Turkey are past midnight before London)
   useEffect(() => { if (adj.current || !ap?.tz || date !== today()) return; adj.current = true; try { const loc = new Date().toLocaleDateString("en-CA", { timeZone: ap.tz }); if (loc !== date) setDate(loc); } catch {} }, [ap?.tz]);
   const [, tick] = useState(0); useEffect(() => { const t = setInterval(() => tick(n => n + 1), 30e3); return () => clearInterval(t); }, []);
-  const list = (d?.flights || []).filter((f: any) => (!airline || f.airline?.iata === airline) && (!q || JSON.stringify([f.number, f.destination?.city, f.origin?.city]).toLowerCase().includes(q.toLowerCase())))
+  const list = (d?.flights || []).filter((f: any) => (!airline || f.airline?.iata === airline) && (!q || JSON.stringify([f.number, f.destination?.city, f.origin?.city]).toLowerCase().includes(q.toLowerCase())) && (!qf || (qf === "board" ? (!f.dep?.actual && f.status !== "departed" && f.status !== "cancelled" && Math.abs(+new Date(f.dep?.estimated || f.dep?.scheduled) - Date.now()) < 90 * 60e3 && /board|final|gate open|go to gate/i.test(String(f.dep?.gateAction || f.statusText || ""))) : qf === "late" ? (delay(dir === "dep" ? f.dep : f.arr) ?? 0) >= 15 : f.status === "cancelled")))
     .sort((a: any, b: any) => a.liveOnly ? 0 : ((dir === "dep" ? a.dep : a.arr).scheduled < (dir === "dep" ? b.dep : b.arr).scheduled ? -1 : 1));
   const nowIdx = list.findIndex((f: any) => +new Date((dir === "dep" ? f.dep : f.arr).scheduled) > Date.now() - 30 * 60e3);
   useEffect(() => { if (nowIdx > 0 && date === today()) setTimeout(() => document.getElementById("brow-now")?.scrollIntoView({ block: "start" }), 50); }, [d]);
@@ -459,6 +460,7 @@ function Board({ iata, x, push, term0 }: any) {
     {term && <TerminalBoard iata={iata} dir={dir} date={date} onDir={setDir} onClose={() => setTerm(false)} onOpen={f => { setTerm(false); if (history.state?.tb) history.back(); push({ t: "flight", f: { ...f, date } }); }} />}
     {info ? <><AirportLive iata={iata} /><AirportInfo iata={iata} /></> : <>
     <div className="px"><label className="sk-field"><span>{Ic.search}</span><input placeholder="Filter city or flight" value={q} onChange={e => setQ(e.target.value)} /></label></div>
+    {d?.flights?.length > 0 && !d.liveOnly && <div className="px row g6 mt8 qf">{([["", "All"], ...(dir === "dep" ? [["board", "Boarding now"]] : []), ["late", "Delayed 15+"], ["cx", "Cancelled"]] as [string, string][]).map(([k, l]) => <button key={k} className={"chip" + (qf === k ? " blue" : "")} onClick={() => setQf(k)}>{l}{k ? ` · ${(d.flights as any[]).filter((f: any) => k === "board" ? (!f.dep?.actual && f.status !== "departed" && f.status !== "cancelled" && Math.abs(+new Date(f.dep?.estimated || f.dep?.scheduled) - Date.now()) < 90 * 60e3 && /board|final|gate open|go to gate/i.test(String(f.dep?.gateAction || f.statusText || ""))) : k === "late" ? (delay(dir === "dep" ? f.dep : f.arr) ?? 0) >= 15 : f.status === "cancelled").length}` : ""}</button>)}</div>}
     {!d && <div>{[0,1,2,3,4,5,6].map(i => <div key={i} className="sk-row"><div className="skel" style={{ width: 52 }} /><div className="grow"><div className="skel" style={{ width: (60 + (i * 37) % 30) + "%" }} /><div className="skel" style={{ width: "35%", height: 10, marginTop: 8 }} /></div><div className="skel" style={{ width: 54 }} /></div>)}</div>}
     {d && !d.error && d.sourceKind && d.sourceKind !== "live" && <div className="px"><span className={"srcb " + (d.sourceKind === "official" ? "off" : "")}>{d.sourceKind === "official" ? "OFFICIAL AIRPORT FEED" : "AERODATABOX"}</span> <span className="faint sm">{d.source}{d.site ? ` · ${d.site}` : ""} · real scheduled, estimated & actual times</span></div>}
     {d?.error && <div className="note warn">{d.needsKey ? `Free real-time boards are available for MAN, STN, EMA, FRA, SYD and 45 Norwegian (Avinor) airports. For ${iata}, add a free AeroDataBox key in Settings.` : d.error}</div>}
