@@ -73,3 +73,9 @@ html[data-skin=eink] .pk-grad,html[data-skin=eink] .pk-t,html[data-skin=eink] .p
 html[data-skin=eink] .offl{background:#fff;color:#000;border-bottom:2px solid #000}
 html[data-skin=eink] .spot-st>div,html[data-skin=eink] .tv-wx>div{background:#fff;border:1px solid #000}html[data-skin=eink] .spot-st b{color:#000}
 html[data-skin=eink] .alive-map g{color:#000!important}html[data-skin=eink] .alive-map .alive-overflight path{fill:#fff;stroke:#000;stroke-width:1}html[data-skin=eink] .alive-map .alive-ground path{fill:#888}html[data-skin=eink] .alive-row span[style]{color:#000!important}html[data-skin=eink] .alive-k{border:1px solid #000}
+.dg summary{cursor:pointer;min-height:44px;display:flex;flex-direction:column;justify-content:center;list-style:none}.dg summary::-webkit-details-marker{display:none}
+.dg-ph{display:flex;gap:8px;overflow-x:auto;margin-top:8px;scroll-snap-type:x mandatory}.dg-ph figure{margin:0;flex:0 0 85%;scroll-snap-align:start}.dg-ph img{width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:10px;display:block}
+.dg-facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.dg-facts>div{display:flex;flex-direction:column;padding:8px;border-radius:10px;background:color-mix(in srgb,var(--text) 6%,transparent)}.dg-facts small{color:var(--muted);font-size:11px}
+.dg-list{margin:6px 0;padding-left:18px}.dg-list li{margin:4px 0}.dg a{color:var(--acc)}
+html[data-skin=eink] .dg-facts>div{background:#fff;border:1px solid #000}html[data-skin=eink] .dg a{color:#000;text-decoration:underline}
+html[data-skin=eink] .alive-k{background:#000!important}

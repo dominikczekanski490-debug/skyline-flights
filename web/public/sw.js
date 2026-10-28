@@ -1,4 +1,4 @@
-const C = "skyline-v24"; const IMG = "skyline-img-v17"; const IMG_MAX = 200; const API = "skyline-api-v1"; const API_MAX = 150;
+const C = "skyline-v25"; const IMG = "skyline-img-v17"; const IMG_MAX = 200; const API = "skyline-api-v1"; const API_MAX = 150;
 self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(C).then(c => c.addAll(["/", "/manifest.webmanifest", "/icon-192.png"]))); });
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C && k !== IMG && k !== API).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 // Navigations are network-first (15 s budget for a sleeping free server) so the phone never stays on an old build;
@@ -8,9 +8,9 @@ self.addEventListener("fetch", e => { const u = new URL(e.request.url);
   if (e.request.method === "GET" && (u.pathname === "/api/photo" && u.origin === location.origin || /(^|\.)plnspttrs\.net$|(^|\.)wikimedia\.org$/.test(u.hostname))) { e.respondWith(caches.open(IMG).then(async c => { const hit = await c.match(e.request);
     const net = fetch(e.request).then(async r => { if (r.ok || r.type === "opaque") { await c.put(e.request, r.clone()); const k = await c.keys(); for (const x of k.slice(0, Math.max(0, k.length - IMG_MAX))) await c.delete(x); } return r; }).catch(() => hit);
     return hit || net; })); return; }
-  // v43 offline mode: read-only /api GETs are network-first (10 s); on failure the last good copy is served, marked x-sk-offline: 1.
+  // v43 offline mode: read-only /api GETs are network-first; only when the request fails (no network) the last good copy is served, marked x-sk-offline: 1.
   if (e.request.method === "GET" && u.origin === location.origin && u.pathname.startsWith("/api/") && !/^\/api\/(push|share|health)/.test(u.pathname)) { e.respondWith(caches.open(API).then(async c => {
-    try { const r = await Promise.race([fetch(e.request), new Promise((_, rej) => setTimeout(() => rej(new Error("t")), 10000))]); if (r.ok) { c.put(e.request, r.clone()); const k = await c.keys(); for (const x of k.slice(0, Math.max(0, k.length - API_MAX))) await c.delete(x); } return r; }
+    try { const r = await fetch(e.request); if (r.ok) { c.put(e.request, r.clone()); const k = await c.keys(); for (const x of k.slice(0, Math.max(0, k.length - API_MAX))) await c.delete(x); } return r; }
     catch (err) { const hit = await c.match(e.request); if (!hit) throw err; const h = new Headers(hit.headers); h.set("x-sk-offline", "1"); return new Response(await hit.blob(), { status: 200, headers: h }); } })); return; }
   if (e.request.method !== "GET" || u.pathname.startsWith("/api/") || u.pathname === "/version.json" || u.origin !== location.origin) return;
   const net = fetch(e.request, e.request.mode === "navigate" ? { cache: "no-store" } : undefined).then(r => { if (r.ok) { const cp = r.clone(); caches.open(C).then(c => c.put(e.request.mode === "navigate" ? "/" : e.request, cp)); } return r; });

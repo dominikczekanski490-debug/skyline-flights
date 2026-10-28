@@ -1795,6 +1795,30 @@ async function airportFacts(c) { const a = AP[c]; if (!a) return null;
     return { iata: c, icao: a.icao || null, name: a.name, qid, operator, owners, opened, photo, sources: ["Wikidata" + (qid ? " " + qid : ""), "Wikimedia Commons"] }; }); }
 api.get("/airport/:iata/facts", wrap(async (req, res) => { const f = await airportFacts(req.params.iata.toUpperCase()); f ? res.json(f) : res.status(404).json({ error: "Unknown airport" }); }));
 
+// ---- v44 Destination guide: Wikidata/Wikipedia facts, Commons photos, sights, major cities, airlines seen on the route in Skyline's own data. Cached 7 days. ----
+const wdq = q => getJSON("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(q), { headers: WDUA }).then(j => j.results?.bindings || []).catch(() => []);
+async function destGuide(c) { const a = AP[c]; if (!a) return null;
+  return cached("dest1:" + c, 7 * 86400, async () => {
+    const b = await wdq(`SELECT ?city ?cityLabel ?pop ?ctry ?ctryLabel ?tzLabel ?curLabel ?img ?art WHERE { ?ap wdt:P238 "${c}"; wdt:P931 ?city. OPTIONAL{?city wdt:P1082 ?pop} OPTIONAL{?city wdt:P17 ?ctry. OPTIONAL{?ctry wdt:P38 ?cur}} OPTIONAL{?city wdt:P421 ?tz} OPTIONAL{?city wdt:P18 ?img} OPTIONAL{?art schema:about ?city; schema:isPartOf <https://en.wikipedia.org/>} SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } LIMIT 40`);
+    const v = k => [...new Set(b.map(x => x[k]?.value).filter(Boolean))].filter(x => !/^Q\d+$/.test(x));
+    const cityQ = b[0]?.city?.value.split("/").pop() || null, ctryQ = b.find(x => x.ctry)?.ctry.value.split("/").pop() || null;
+    const pops = b.map(x => +x.pop?.value).filter(Boolean); const art = v("art")[0];
+    let summary = null; if (art) { try { const j = await getJSON("https://en.wikipedia.org/api/rest_v1/page/summary/" + art.split("/wiki/")[1], { headers: WDUA }); summary = { text: j.extract, url: j.content_urls?.desktop?.page || art, title: j.title }; } catch {} }
+    let langs = [], sights = [], cities = [];
+    if (ctryQ) { const L = await wdq(`SELECT DISTINCT ?lLabel WHERE { wd:${ctryQ} wdt:P37 ?l. SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }`); langs = [...new Set(L.map(x => x.lLabel?.value))].filter(Boolean).slice(0, 6);
+      const C = await wdq(`SELECT ?c ?cLabel (MAX(?p) AS ?pop) WHERE { ?c wdt:P17 wd:${ctryQ}; wdt:P31 ?t; wdt:P1082 ?p. VALUES ?t { wd:Q515 wd:Q1549591 wd:Q1637706 wd:Q5119 wd:Q200250 } FILTER NOT EXISTS { ?c wdt:P576 [] } SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } GROUP BY ?c ?cLabel ORDER BY DESC(?pop) LIMIT 6`);
+      cities = C.map(x => ({ name: x.cLabel?.value, pop: +x.pop?.value, qid: x.c.value.split("/").pop() })).filter(x => x.name && !/^Q\d+$/.test(x.name)); }
+    if (cityQ) { const S = await wdq(`SELECT ?s ?sLabel ?sDescription ?n WHERE { ?s wdt:P131 wd:${cityQ}; wdt:P31/wdt:P279? ?t; wikibase:sitelinks ?n. VALUES ?t { wd:Q570116 wd:Q33506 wd:Q16970 wd:Q23413 wd:Q22698 wd:Q4989906 wd:Q207694 wd:Q2977 wd:Q44539 wd:Q12280 } SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } ORDER BY DESC(?n) LIMIT 30`);
+      const seen = new Set(); sights = S.filter(x => { const k = x.s.value; if (seen.has(k) || /^Q\d+$/.test(x.sLabel?.value || "Q1")) return false; seen.add(k); return true; }).slice(0, 8).map(x => ({ name: x.sLabel.value, desc: x.sDescription?.value || null, url: "https://www.wikidata.org/wiki/" + x.s.value.split("/").pop() })); }
+    let photos = []; try { const cn = v("cityLabel")[0] || a.city; const p18 = v("img").map(u => "File:" + decodeURIComponent(u.split("/").pop()));
+      const j = await getJSON("https://commons.wikimedia.org/w/api.php?action=query&format=json&list=search&srnamespace=6&srlimit=15&srsearch=" + encodeURIComponent(cn + " skyline OR panorama OR view OR old town"), { headers: WDUA }).catch(() => null);
+      const tk = String(cn).toLowerCase().split(/[^\p{L}]+/u).filter(t => t.length >= 4); const cand = [...p18, ...(j?.query?.search || []).map(r => r.title).filter(t => tk.some(k => t.toLowerCase().includes(k)))].filter((t, i, A) => A.indexOf(t) === i && !/map|logo|flag|coat|\.svg|\.pdf|diagram|plan/i.test(t)).slice(0, 10);
+      photos = (await commonsInfo(cand)).filter(i => OK_LIC.test(i.licence) && i.w >= 600 && i.w >= i.h).slice(0, 4); } catch {}
+    return { iata: c, city: v("cityLabel")[0] || a.city || null, cityQ, population: pops.length ? Math.max(...pops) : null, country: v("ctryLabel")[0] || a.country || null, timezone: v("tzLabel").length ? v("tzLabel").slice(0, 2) : a.tz ? [a.tz] : [], currency: v("curLabel").slice(0, 2), languages: langs, summary, sights, cities, photos, lat: a.lat, lon: a.lon,
+      sources: ["Wikidata" + (cityQ ? " " + cityQ : ""), summary ? "Wikipedia" : null, photos.length ? "Wikimedia Commons" : null].filter(Boolean), at: Date.now() }; }); }
+api.get("/dest/:iata", wrap(async (req, res) => { const c = req.params.iata.toUpperCase(); const g = await destGuide(c); if (!g) return res.status(404).json({ error: "Unknown airport" });
+  const o = String(req.query.from || "").toUpperCase(); const al = {}; if (o) for (const k in HIST) for (const x of Object.values(HIST[k])) if (x.o === o && x.t === c) { const p = (k.match(/^[A-Z0-9]{2}(?=\d)|^[A-Z]{3}/) || [k.slice(0, 2)])[0]; (al[p] ||= new Set()).add(k); }
+  res.json({ ...g, airlinesSeen: Object.entries(al).map(([code, s]) => ({ code, flights: [...s].slice(0, 6), n: s.size })).sort((a, b) => b.n - a.n), airlinesNote: "Seen in Skyline data (last 60 days of recorded boards), not a full schedule" }); }));
 // ---- v42 Family sharing: read-only live link, no login. Token in Upstash (or memory when no KV), expires 4 h after landing (max 72 h). ----
 const SHARES = new Map();
 const shareKey = t => "sk_share_" + t;

@@ -1,0 +1,21 @@
+// v44: destination guide on flight detail. Collapsible, fetched only when opened, cached server-side 7 days. Real sources only.
+import { useEffect, useState } from "react";
+import { api, type Flight } from "./lib";
+const WX: Record<number, string> = { 0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Fog", 48: "Fog", 51: "Drizzle", 53: "Drizzle", 55: "Drizzle", 61: "Light rain", 63: "Rain", 65: "Heavy rain", 71: "Snow", 73: "Snow", 75: "Heavy snow", 80: "Showers", 81: "Showers", 82: "Heavy showers", 95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm" };
+const nf = (n: number) => n >= 1e6 ? (n / 1e6).toFixed(1) + "m" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(n);
+const clean = (s: string) => s.replace(/^City of /, "").replace(/ city$/, "");
+export function DestGuide({ f }: { f: Flight }) { const c = f.destination?.iata; const [open, setOpen] = useState(false); const [d, setD] = useState<any>(null); const [w, setW] = useState<any>(null); const [e, setE] = useState("");
+  useEffect(() => { if (!open || d || !c) return; api(`/dest/${c}?from=${f.origin?.iata || ""}`).then(j => { setD(j); if (j.lat) api(`/weather?lat=${j.lat}&lon=${j.lon}`).then(setW).catch(() => {}); }).catch(x => setE(x.message)); }, [open, c]);
+  if (!c) return null;
+  return <details className="card m0 mt8 dg" onToggle={e => setOpen((e.target as HTMLDetailsElement).open)}><summary><b>Destination guide · {f.destination?.city || c}</b><span className="muted sm"> tap to {open ? "close" : "open"}</span></summary>
+    {e && <div className="bad sm mt8">Couldn't load the guide: {e}</div>}{open && !d && !e && <div className="muted sm mt8">Loading from Wikidata, Wikipedia and Commons…</div>}
+    {d && <>
+      {d.photos?.length > 0 && <div className="dg-ph">{d.photos.map((p: any) => <figure key={p.title}><img loading="lazy" src={p.url} alt={p.title.replace(/^File:|\.\w+$/g, "")} /><figcaption className="faint xs"><a href={p.page} target="_blank" rel="noopener">{p.author}</a> · {p.licenceUrl ? <a href={p.licenceUrl} target="_blank" rel="noopener">{p.licence}</a> : p.licence} · Wikimedia Commons</figcaption></figure>)}</div>}
+      {d.summary && <p className="sm mt8">{d.summary.text} <a href={d.summary.url} target="_blank" rel="noopener">Wikipedia</a></p>}
+      <div className="dg-facts">{([["City", d.city], ["Population", d.population ? d.population.toLocaleString("en-GB") : null], ["Country", d.country], ["Time zone", d.timezone?.join(", ")], ["Currency", d.currency?.join(", ")], ["Languages", d.languages?.join(", ")]] as [string, any][]).filter(x => x[1]).map(([k, v]) => <div key={k}><small>{k}</small><b>{v}</b></div>)}</div>
+      {w?.daily && <><h4 className="mt12">Weather, next days</h4><div className="tv-wx">{w.daily.time.slice(0, 5).map((t: string, i: number) => <div key={t}><small>{new Date(t + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric" })}</small><b>{Math.round(w.daily.temperature_2m_max[i])}°/{Math.round(w.daily.temperature_2m_min[i])}°</b><small>{WX[w.daily.weather_code[i]] || "—"}</small></div>)}</div><div className="faint xs">Open-Meteo</div></>}
+      {d.sights?.length > 0 && <><h4 className="mt12">Where to visit</h4><ul className="dg-list">{d.sights.map((s: any) => <li key={s.url}><a href={s.url} target="_blank" rel="noopener">{s.name}</a>{s.desc && <span className="muted sm"> — {s.desc}</span>}</li>)}</ul><div className="faint xs">Most-linked places in {d.city} on Wikidata</div></>}
+      {d.cities?.length > 0 && <><h4 className="mt12">Major cities in {d.country}</h4>{d.cities.map((x: any) => <div key={x.qid} className="row between sm"><span>{clean(x.name)}</span><b>{nf(x.pop)}</b></div>)}</>}
+      <h4 className="mt12">Airlines on {f.origin?.iata}→{c}</h4>{d.airlinesSeen?.length ? d.airlinesSeen.map((a: any) => <div key={a.code} className="row between sm"><span><b>{a.code}</b> <span className="muted">{a.flights.join(", ")}</span></span><span className="muted">{a.n} flight no.</span></div>) : <div className="muted sm">None recorded yet.</div>}<div className="faint xs">{d.airlinesNote}. No prices.</div>
+      <div className="faint xs mt12">Sources: {d.sources.join(" · ")} · Open-Meteo · cached up to 7 days</div></>}
+  </details>; }

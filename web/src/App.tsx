@@ -28,6 +28,7 @@ import { TerminalBoard, status as boardStatus } from "./terminal";
 import { mark, toast, Boundary } from "./guard";
 import { PlaneFrom, useAircraft } from "./inbound";
 import { Alternatives, FlightStory, PassCard, JetLag } from "./v20";
+import { DestGuide } from "./v44";
 import { OnlineOnly, TripView, OfflineBanner, AirportLive, SpotterLog } from "./v43";
 import { AssistantFeed, TodayCard, NLSearch, CompCard, shareImage, exportIcs as icsOf, AirportGuide } from "./assist";
 import { NextHero, PlaneHere, Facts, GlobalSearch, DayOf, phaseOf } from "./big";
@@ -356,7 +357,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <Facts f={f} ac={ac} />
     <Progress f={f} lv={lv} />
     <Timeline f={f} />
-    <Prediction f={f} inb={inb} />
+    <Prediction f={f} inb={inb} />{!f.example && <DestGuide f={f} />}
     <SecHead ic={Ic.bolt} title="Actions" sub="Share, plan and check the risks" />
     <div className="sk-acts three"><ActBtn ic={Ic.image} onClick={() => shareImage(f)}>Share image</ActBtn><ActBtn ic={Ic.cal} onClick={() => icsOf([f], f.number + ".ics")}>Calendar</ActBtn>{!f.example && <ActBtn ic={Ic.globe} onClick={() => push({ t: "trip", f })}>Trip view</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.tower} onClick={() => push({ t: "guide", iata: f.origin!.iata })}>{f.origin.iata} guide</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.life} onClick={() => push({ t: "labs", id: "rescue", f })}>Backup flights</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.cloud} onClick={() => push({ t: "labs", id: "wx", apt: f.origin!.iata })}>{f.origin.iata} weather</ActBtn>}{!f.example && <ActBtn ic={Ic.shield} onClick={() => push({ t: "labs", id: "risk", f })}>Trip risk</ActBtn>}</div>
     {!f.example && <CompCard f={f} />}
