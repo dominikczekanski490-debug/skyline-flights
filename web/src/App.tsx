@@ -1,3 +1,4 @@
+import { DelayExplainer } from "./v42";
 import { AuroraCard, RouteAurora } from "./aurora";
 import "./aurora.css";
 import { AircraftCard, WhatsNew22, HomeWidgets, Overhead22, Wrapped22, Connections22 } from "./v22";
@@ -304,14 +305,14 @@ function Gauge({ d }: { d: number }) {
     <motion.path d="M20 100a80 80 0 0 1 160 0" stroke="url(#pgg)" strokeWidth="12" fill="none" strokeLinecap="round" strokeDasharray={L} initial={{ strokeDashoffset: L }} animate={{ strokeDashoffset: L * (1 - t) }} transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }} /></svg>;
 }
 function CountUp({ v }: { v: number }) { const [n, setN] = useState(0); useEffect(() => { let r = 0; const s = performance.now(); const f = (t: number) => { const k = Math.min(1, (t - s) / 900); setN(Math.round(v * (1 - Math.pow(1 - k, 3)))); if (k < 1) r = requestAnimationFrame(f); }; r = requestAnimationFrame(f); return () => cancelAnimationFrame(r); }, [v]); return <>{n}</>; }
-function Prediction({ f }: { f: Flight }) {
+function Prediction({ f, inb }: { f: Flight; inb?: any }) {
   const [p, setP] = useState<any>(null); const [err, setErr] = useState("");
   useEffect(() => { if (!f.example) api(`/predict/${f.number}?date=${f.date}`).then(setP).catch(e => setErr(e.message)); }, [f.id, f.statusText]);
   if (f.example) return null;
   if (!p) return <div className="pcard"><div className="phead"><span className="ptitle">✦ Delay Forecast</span></div>{err ? <div className="muted sm">{err}</div> : <><div className="skel" style={{ height: 110, marginTop: 12 }} /><div className="skel" style={{ height: 60, marginTop: 10 }} /></>}</div>;
-  const d = p.predictedDelay ?? 0; const c = p.cancelled ? "#ff453a" : d >= 45 ? "#ff453a" : d >= 15 ? "#ff9f0a" : "#30d158";
-  const bars = [["On time", "under 15 min", p.probs.onTime, "#30d158"], ["15+ min late", "", p.probs.late15, "#ff9f0a"], ["45+ min late", "", p.probs.late45, "#ff453a"], ["Cancelled", "", p.probs.cancel, "#bf5af2"], ["Diverted", "", p.probs.divert, "#64d2ff"]];
-  return <><PredictCard f={f} p={p} /><div className="pcard" style={{ ["--pc" as any]: c }}>
+  const d = p.predictedDelay ?? 0; const c = p.cancelled ? "var(--bad)" : d >= 45 ? "var(--bad)" : d >= 15 ? "var(--warn)" : "var(--ok)";
+  const bars = [["On time", "under 15 min", p.probs.onTime, "var(--ok)"], ["15+ min late", "", p.probs.late15, "var(--warn)"], ["45+ min late", "", p.probs.late45, "var(--bad)"], ["Cancelled", "", p.probs.cancel, "var(--acc2,#7cf3d6)"], ["Diverted", "", p.probs.divert, "var(--acc,#8ab4ff)"]];
+  return <><PredictCard f={f} p={p} /><DelayExplainer f={f} p={p} inb={inb} /><div className="pcard" style={{ ["--pc" as any]: c }}>
     <div className="phead"><span className="ptitle">✦ Delay Forecast</span><span className={"pconf " + p.confidence}><i />{p.confidence[0].toUpperCase() + p.confidence.slice(1)} confidence</span></div>
     <div className="phero"><Gauge d={d} /><div className="pfig"><div className="pnum" style={{ color: c }}>{p.cancelled ? "Cancelled" : d >= 5 ? <>+<CountUp v={d} /><small>min</small></> : "On time"}</div>{p.range && !p.cancelled && <div className="prng">Likely {p.range[0] < 0 ? p.range[0] : "+" + p.range[0]} to +{p.range[1]} min</div>}</div></div>
     {p.summary && <div className="psum2">{p.summary}</div>}
@@ -352,7 +353,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <Facts f={f} ac={ac} />
     <Progress f={f} lv={lv} />
     <Timeline f={f} />
-    <Prediction f={f} />
+    <Prediction f={f} inb={inb} />
     <SecHead ic={Ic.bolt} title="Actions" sub="Share, plan and check the risks" />
     <div className="sk-acts three"><ActBtn ic={Ic.image} onClick={() => shareImage(f)}>Share image</ActBtn><ActBtn ic={Ic.cal} onClick={() => icsOf([f], f.number + ".ics")}>Calendar</ActBtn>{f.origin?.iata && <ActBtn ic={Ic.tower} onClick={() => push({ t: "guide", iata: f.origin!.iata })}>{f.origin.iata} guide</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.life} onClick={() => push({ t: "labs", id: "rescue", f })}>Backup flights</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.cloud} onClick={() => push({ t: "labs", id: "wx", apt: f.origin!.iata })}>{f.origin.iata} weather</ActBtn>}{!f.example && <ActBtn ic={Ic.shield} onClick={() => push({ t: "labs", id: "risk", f })}>Trip risk</ActBtn>}</div>
     {!f.example && <CompCard f={f} />}
