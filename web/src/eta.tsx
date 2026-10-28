@@ -10,7 +10,7 @@ export function etaOf(f: Flight, live?: any): Eta | null {
   if (lv && typeof lv.lat === "number" && d?.lat != null && (lv.gs || 0) > 80 && !lv.onGround) { const rem = km(lv.lat, lv.lon, d.lat, d.lon); const at = lv.at || Date.now(); return mk(at + (rem / (lv.gs * 1.852) + 8 / 60) * 3600e3, "adsb", `Live ADS-B · ${Math.round(rem)} km to go at ${Math.round(lv.gs)} kt`); }
   if (a.estimated && !a.etaSource && !a.estimatedOnly) return mk(+new Date(a.estimated), "official", "Official estimate" + (f.source ? ` (${f.source})` : ""));
   if (a.estimated && a.etaSource) return mk(+new Date(a.estimated), "adsb", "Live ADS-B (last fix)");
-  const g = withEstArr(f); const b = best(g.arr); if (b) return mk(+new Date(b), (g.arr as any).estimatedOnly ? "skyline" : "official", (g.arr as any).estimatedOnly ? "Skyline estimate · typical block time from departure" : "Scheduled");
+  const g: any = withEstArr(f); const b = best(g.arr); if (b) { const s0 = g.arr.scheduled ? +new Date(g.arr.scheduled) : null; return { ...mk(+new Date(b), g.arr.estimated ? "skyline" : "official", g.arr.etaMethod || (g.arr.estimated ? "Skyline estimate · typical block time from departure" : g.arr.schedEst ? "Skyline estimate · typical block time (no published arrival time)" : "Scheduled")), delay: s0 && !g.arr.schedEst ? Math.round((+new Date(b) - s0) / 60000) : null }; }
   return null; }
 export const useTick = (ms = 15000) => { const [, s] = useState(0); useEffect(() => { const t = setInterval(() => s(x => x + 1), ms); return () => clearInterval(t); }, [ms]); };
 export function EtaLine({ f, live, compact }: { f: Flight; live?: any; compact?: boolean }) {

@@ -75,7 +75,11 @@ export default function App() {
   const flRef = useRef(flights); flRef.current = flights;
   useEffect(() => { let busy = false; const tick = async () => { if (busy || document.visibilityState !== "visible") return; busy = true;
     const now = flRef.current.filter(f => !f.example && f.date >= new Date(Date.now() - 86400e3).toISOString().slice(0, 10));
-    let batch: any = {}; try { batch = (await api(`/flights?ids=${now.map(f => `${f.number}@${f.date}`).join(",")}`)).flights || {}; } catch (e) { console.warn("batch", e); }
+    // The server answers at most 20 ids per call: before, any flight past the 20th was never refreshed and kept saying "Scheduled".
+    // Unfinished flights go first; ones that landed over 3 h ago are skipped; the rest go in chunks of 20.
+    const done = (f: any) => f.arr?.actual && Date.now() - Date.parse(f.arr.actual) > 3 * 3600e3;
+    const ids = [...new Set(now.filter(f => !done(f)).sort((a: any, b: any) => (a.status === "landed" ? 1 : 0) - (b.status === "landed" ? 1 : 0) || Date.parse(best(a.dep) || a.date) - Date.parse(best(b.dep) || b.date)).map(f => `${f.number}@${f.date}`))];
+    let batch: any = {}; for (let i = 0; i < ids.length; i += 20) { try { Object.assign(batch, (await api(`/flights?ids=${ids.slice(i, i + 20).join(",")}`)).flights || {}); } catch (e) { console.warn("batch", e); } }
     for (const f of now) { try { const r = batch[`${f.number}@${f.date}`]; if (!r || r.error) continue; setLive(l => ({ ...l, [f.id]: r.live || null }));
       if (r.flight && !f.manual) { const keep = (a: any = {}, b: any = {}) => { const o = { ...a }; for (const k in b) if (b[k] != null && b[k] !== "") o[k] = b[k]; return o; };
         const n: Flight = { ...f, ...r.flight, dep: keep(f.dep, r.flight.dep), arr: keep(f.arr, r.flight.arr), id: f.id, date: f.date, notes: f.notes, friend: f.friend, checkedAt: Date.now(), live: r.live ? { ...r.live, at: Date.now() } : null, aircraft: { ...f.aircraft, ...r.flight.aircraft, ...(r.live ? { reg: r.live.reg, hex: r.live.hex, model: r.live.type } : {}) } } as any;

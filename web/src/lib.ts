@@ -20,10 +20,19 @@ export const delay = (t: Times) => { const b = t.actual || t.estimated; return t
 export const dur = (m: number) => { m = Math.abs(Math.round(m)); const d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60), mm = m % 60; return d ? `${d}d ${h}h` : h ? `${h}h${mm ? " " + mm + "m" : ""}` : `${mm}m`; };
 export const lateLabel = (d: number | null) => d == null ? "" : d >= 5 ? `${dur(d)} Late` : d <= -5 ? `${dur(d)} Early` : "On Time";
 export const lateColor = (d: number | null) => d == null ? "var(--muted)" : d >= 45 ? "var(--red)" : d >= 15 ? "var(--orange)" : d >= 5 ? "var(--orange)" : "var(--green)";
-export function withEstArr(f: Flight): Flight { // fill missing arrival with labelled estimate
-  if (f.arr?.scheduled || !f.dep?.scheduled) return f; const m = estDurMin(f.origin, f.destination); if (!m) return f;
-  const s = new Date(+new Date(f.dep.scheduled) + m * 60000).toISOString(); const b = best(f.dep); const e = b ? new Date(+new Date(b) + m * 60000).toISOString() : undefined;
-  return { ...f, arr: { ...f.arr, scheduled: s, estimated: e, estimatedOnly: true } as any };
+// Schedules carry padding, so airlines usually win back part of a departure delay in the air.
+// Skyline model (labelled estimate): recover up to ~10% of the block time, never more than the delay itself.
+export const PAD = 0.1;
+export const recoveryMin = (depDelay: number, blockMin: number) => depDelay > 0 ? Math.min(depDelay, Math.round(blockMin * PAD)) : 0;
+export function withEstArr(f: Flight): Flight { // fill or model the arrival estimate; never overrides an official or ADS-B estimate
+  const A: any = f.arr || {}; if (A.actual || !f.dep?.scheduled) return f;
+  const dd = delay(f.dep); const hasSch = !!A.scheduled;
+  const m = hasSch ? Math.round((+new Date(A.scheduled) - +new Date(f.dep.scheduled)) / 60000) : estDurMin(f.origin, f.destination); if (!m || m < 0) return f;
+  const s = hasSch ? A.scheduled : new Date(+new Date(f.dep.scheduled) + m * 60000).toISOString();
+  if (A.estimated) return hasSch ? f : { ...f, arr: { ...A, scheduled: s, estimatedOnly: true, schedEst: true } as any };
+  if (dd == null) return hasSch ? f : { ...f, arr: { ...A, scheduled: s, estimatedOnly: true, schedEst: true } as any };
+  const rec = recoveryMin(dd, m); const e = new Date(+new Date(s) + (dd - rec) * 60000).toISOString();
+  return { ...f, arr: { ...A, scheduled: s, estimated: e, estimatedOnly: true, schedEst: !hasSch, etaMethod: `Skyline estimate: ${hasSch ? "scheduled" : "typical"} block time ${dur(m)} from the ${f.dep.actual ? "actual" : "expected"} departure${rec ? `, minus about ${rec} min usually recovered in the air (schedule padding)` : ""}` } as any };
 }
 // storage
 const K = "skyline.flights.v1";
@@ -48,9 +57,9 @@ export function statusOf(f: Flight, lv?: any): { label: string; cls: "ok" | "bad
   const d = delay(f.dep); const s = f.status || "";
   if (s === "cancelled") return { label: "Cancelled", cls: "bad" };
   if (s === "diverted") return { label: "Diverted", cls: "bad" };
-  if (s === "landed") return { label: "Landed", cls: "ok" };
+  if (s === "landed" || f.arr?.actual) return { label: "Landed", cls: "ok" };
   if (s === "enroute" || (lv && typeof lv.alt === "number" && s !== "landed")) return { label: "En route", cls: "air" };
-  if (s === "departed") return { label: "Departed", cls: "air" };
+  if (s === "departed" || (f.dep?.actual && Date.parse(f.dep.actual) <= Date.now())) return { label: "Departed", cls: "air" };
   { const t = Date.parse(f.dep?.estimated || f.dep?.scheduled || ""); if (!f.dep?.actual && t && Date.now() - t > 40 * 60e3 && /boarding|gate|scheduled|delayed|^$/.test(s)) return { label: "Departed (est.)", cls: "air" }; }
   if (s === "boarding") return { label: /final/i.test(f.statusText || "") ? "Final call" : /closing/i.test(f.statusText || "") ? "Gate closing" : "Boarding", cls: "warn" };
   if (s === "gate") return { label: /closed/i.test(f.statusText || "") ? "Gate closed" : "Go to gate", cls: "warn" };
