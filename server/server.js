@@ -1744,3 +1744,31 @@ app.listen(PORT, "0.0.0.0", () => console.log("Skyline on :" + PORT));
 
 process.on("unhandledRejection", e => console.error("[unhandledRejection]", e?.message || e));
 process.on("uncaughtException", e => console.error("[uncaughtException]", e?.message || e));
+
+// ---- v41 Airport facts: operator (verified static table first, Wikidata P137 second), owner, opening year, Commons terminal photo ----
+const OPERATOR = { MAN: "Manchester Airports Group", STN: "Manchester Airports Group", EMA: "Manchester Airports Group", LHR: "Heathrow Airport Holdings", FRA: "Fraport AG",
+  LCA: "Hermes Airports", PFO: "Hermes Airports", IST: "İGA Airport Operation", VIE: "Flughafen Wien AG", BUD: "Budapest Airport Zrt.", WAW: "Polish Airports State Enterprise (PPL)",
+  MUC: "Flughafen München GmbH", BER: "Flughafen Berlin Brandenburg GmbH", DUS: "Flughafen Düsseldorf GmbH", PRG: "Letiště Praha, a. s.", KEF: "Isavia", SYD: "Sydney Airport Corporation",
+  MLA: "Malta International Airport plc", ABZ: "AGS Airports", DUB: "daa", ORK: "daa", AMS: "Royal Schiphol Group", CDG: "Groupe ADP", ORY: "Groupe ADP", LGW: "Gatwick Airport Limited" };
+for (const c of Object.keys(FRAPORT_GR)) OPERATOR[c] = "Fraport Greece"; for (const c of AVINOR) OPERATOR[c] = "Avinor"; for (const c of SWEDAVIA) OPERATOR[c] = "Swedavia"; for (const c of FINAVIA) OPERATOR[c] = "Finavia"; for (const c of AENA_CODES) OPERATOR[c] ||= "Aena";
+const WDUA = { "user-agent": "Skyline/1.0 (flight tracker; open-data facts)" };
+async function commonsInfo(titles) { if (!titles.length) return []; const u = "https://commons.wikimedia.org/w/api.php?action=query&format=json&prop=imageinfo&iiprop=url|extmetadata|size&iiurlwidth=900&titles=" + encodeURIComponent(titles.join("|"));
+  const j = await getJSON(u, { headers: WDUA }); return Object.values(j.query?.pages || {}).map(p => { const i = p.imageinfo?.[0]; if (!i) return null; const m = i.extmetadata || {}; const strip = s => String(s || "").replace(/<[^>]+>/g, "").trim();
+    return { title: p.title, url: i.thumburl || i.url, page: i.descriptionurl, w: i.width, h: i.height, author: strip(m.Artist?.value) || "Unknown author", licence: strip(m.LicenseShortName?.value), licenceUrl: m.LicenseUrl?.value || null }; }).filter(Boolean); }
+const OK_LIC = /^(cc|public domain|pd|cc0|attribution)/i; const GOOD_T = /terminal|entrance|building|exterior|front|airport|aerodrome|flughafen|aeroporto|aeropuerto|lufthavn|αεροδρ/i; const BAD_T = /\bim terminal|inside|interior|innen|lounge|check-in|baggage|map|logo|diagram|chart|plan|\.svg|\.pdf|aircraft|boeing|airbus|cockpit|tail|runway/i;
+async function airportFacts(c) { const a = AP[c]; if (!a) return null;
+  return cached("apfacts2:" + c, 7 * 86400, async () => {
+    const q = `SELECT ?a ?opLabel ?ownLabel ?open ?img WHERE { ?a wdt:P238 "${c}". OPTIONAL{?a wdt:P137 ?op} OPTIONAL{?a wdt:P127 ?own} OPTIONAL{?a wdt:P1619 ?open} OPTIONAL{?a wdt:P18 ?img} SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }`;
+    let wd = []; try { wd = (await getJSON("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(q), { headers: WDUA })).results?.bindings || []; } catch {}
+    const uniq = k => [...new Set(wd.map(b => b[k]?.value).filter(Boolean))]; const qid = uniq("a")[0]?.split("/").pop() || null;
+    const wdOps = uniq("opLabel").filter(x => !/^Q\d+$/.test(x)); const owners = uniq("ownLabel").filter(x => !/^Q\d+$/.test(x)); const opened = uniq("open").map(x => +x.slice(0, 4)).filter(Boolean).sort()[0] || null;
+    const st = OPERATOR[c]; const operator = st ? { name: st, how: "Skyline verified table" + (wdOps.length ? (wdOps.some(x => x.toLowerCase().includes(st.toLowerCase().split(" ")[0].toLowerCase())) ? " · matches Wikidata" : " · Wikidata lists " + wdOps.join(", ")) : "") } : wdOps.length ? { name: wdOps.join(" / "), how: "Wikidata (operator, P137) · not independently verified" } : null;
+    // photo: Commons search for the terminal/entrance; Wikidata image (P18) as a candidate too. Only openly licensed bitmaps with a terminal-like title.
+    let photo = null; try { const short = String(a.name || "").replace(/ (International )?Airport.*/i, "").trim(); const toks = [a.city, short].filter(Boolean).flatMap(x => String(x).toLowerCase().split(/[^\p{L}]+/u)).filter(t => t.length >= 4 && !/airport|international/.test(t)); const cands = [];
+      for (const s of [a.city && a.city + " airport terminal", short + " airport terminal", a.city && a.city + " airport"].filter(Boolean)) { const j = await getJSON("https://commons.wikimedia.org/w/api.php?action=query&format=json&list=search&srnamespace=6&srlimit=10&srsearch=" + encodeURIComponent(s + " filetype:bitmap"), { headers: WDUA }).catch(() => null);
+        for (const r of j?.query?.search || []) if (!cands.includes(r.title) && toks.some(t => r.title.toLowerCase().includes(t))) cands.push(r.title); if (cands.filter(t => /terminal|entrance|building|exterior/i.test(t)).length >= 3) break; }
+      const p18 = uniq("img").map(u => "File:" + decodeURIComponent(u.split("/").pop())); const titles = [...cands.filter(t => /terminal|entrance|building|exterior/i.test(t)), ...p18, ...cands].filter((t, i, A) => A.indexOf(t) === i && !BAD_T.test(t)).slice(0, 12);
+      const info = await commonsInfo(titles); const ord = t => titles.indexOf(t); const pick = info.filter(i => OK_LIC.test(i.licence) && i.w >= 600 && i.w >= i.h * 0.9).sort((x, y) => ord(x.title) - ord(y.title))[0];
+      if (pick) photo = { ...pick, kind: /terminal|entrance|building|exterior/i.test(pick.title) ? "Terminal" : "Airport", how: p18.includes(pick.title) ? "Wikidata image (P18)" : "Wikimedia Commons search" }; } catch {}
+    return { iata: c, icao: a.icao || null, name: a.name, qid, operator, owners, opened, photo, sources: ["Wikidata" + (qid ? " " + qid : ""), "Wikimedia Commons"] }; }); }
+api.get("/airport/:iata/facts", wrap(async (req, res) => { const f = await airportFacts(req.params.iata.toUpperCase()); f ? res.json(f) : res.status(404).json({ error: "Unknown airport" }); }));

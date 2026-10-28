@@ -91,7 +91,7 @@ export function AirportInfo({ iata }: { iata: string }) {
   if (!d) return <div className="card"><div className="skel" style={{ width: "60%" }} /><div className="skel mt8" style={{ width: "40%" }} /></div>;
   if (d.error) return <div className="note warn">{d.error}</div>;
   const a = d.airport, w = d.weather;
-  return <><div className="card"><h3>{a.name}</h3><div className="muted sm">{a.city}, {a.country} · {a.iata} / {a.icao}</div>
+  return <><AirportFacts iata={iata} /><div className="card"><h3>{a.name}</h3><div className="muted sm">{a.city}, {a.country} · {a.iata} / {a.icao}</div>
     <div className="mgrid mt8"><Cell icon={X.clock} k="Local time" v={fClock(new Date().toISOString(), a.tz)} /><Cell icon={I.globe} k="Time zone" v={a.tz?.replace("_", " ")} />
       {d.sun && <><Cell icon={X.sunrise} k="Sunrise" v={fLocalWall(d.sun.sunrise)} /><Cell icon={X.sunset} k="Sunset" v={fLocalWall(d.sun.sunset)} /></>}
       {w && <><Cell icon={wxSvg(w.weather_code)} k="Weather now" v={`${fTemp(w.temperature_2m)} · ${wxText(w.weather_code)}`} /><Cell icon={X.wind} k="Wind" v={`${compass(w.wind_direction_10m)} ${Math.round(w.wind_speed_10m)} kt`} /></>}
@@ -101,6 +101,16 @@ export function AirportInfo({ iata }: { iata: string }) {
     {d.runways?.length ? <div className="card"><h3>Runways</h3><div className="muted sm">{d.runways.length} active · OurAirports</div>
       {d.runways.map((r: any) => <div key={r.le + r.he} className="rwy"><span className="mic">{X.runway}</span><div className="grow"><b>{r.le}{r.he ? " / " + r.he : ""}</b><div className="faint sm">{surf(r.surface)}{r.lighted ? " · lit" : ""}{r.heading ? ` · ${Math.round(r.heading)}°` : ""}</div></div>
         <div className="right"><b>{r.lengthFt ? (getUnits().dist === "km" ? `${Math.round(r.lengthFt * .3048).toLocaleString()} m` : `${r.lengthFt.toLocaleString()} ft`) : "—"}</b><div className="faint sm">{r.widthFt ? (getUnits().dist === "km" ? `${Math.round(r.widthFt * .3048)} m wide` : `${r.widthFt} ft wide`) : ""}</div></div></div>)}</div> : null}</>;
+}
+function AirportFacts({ iata }: { iata: string }) {
+  const [f, setF] = useState<any>(null); useEffect(() => { setF(null); api(`/airport/${iata}/facts`).then(setF).catch(() => setF({ error: 1 })); }, [iata]);
+  if (!f) return <div className="card apfacts"><div className="skel" style={{ height: 160, borderRadius: 14 }} /><div className="skel mt8" style={{ width: "50%" }} /></div>;
+  if (f.error) return null; const p = f.photo;
+  return <div className="card apfacts">{p && <figure className="apphoto"><img src={p.url} alt={`${p.kind} of ${f.name}`} loading="lazy" decoding="async" width={p.w} height={p.h} />
+      <figcaption><b>{p.kind === "Terminal" ? "Terminal / entrance" : "Airport photo"}</b> · <a href={p.page} target="_blank" rel="noopener">{p.author}</a> · {p.licenceUrl ? <a href={p.licenceUrl} target="_blank" rel="noopener">{p.licence}</a> : p.licence} · Wikimedia Commons</figcaption></figure>}
+    <div className="mgrid mt8"><Cell icon={I.globe} k="Operator" v={f.operator?.name || "Operator not verified"} />{f.owners?.length ? <Cell icon={X.award} k="Owner" v={f.owners.join(", ")} /> : null}
+      {f.opened && <Cell icon={X.clock} k="Opened" v={String(f.opened)} />}<Cell icon={X.radar} k="IATA / ICAO" v={`${f.iata} / ${f.icao || "—"}`} /></div>
+    <div className="faint sm mt8">Operator: {f.operator?.how || "no verified source"}{f.qid ? <> · facts from <a href={`https://www.wikidata.org/wiki/${f.qid}`} target="_blank" rel="noopener">Wikidata {f.qid}</a></> : null}{p ? ` · photo via ${p.how}` : " · no openly licensed photo found"}</div></div>;
 }
 const surf = (s: string) => ({ ASP: "Asphalt", CON: "Concrete", GRS: "Grass", GRE: "Gravel", "ASP-CON": "Asphalt/concrete" } as any)[s?.toUpperCase()] || s || "Surface unknown";
 

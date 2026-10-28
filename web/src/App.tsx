@@ -430,7 +430,7 @@ function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => voi
     <div className="b2r"><b>{f.number.replace(/^([A-Z0-9]{2})(?=\d)/, "$1 ")}</b><div className="b2p">{pills.map(x => <span key={x}>{x}</span>)}</div></div></div>;
 }
 function Board({ iata, x, push, term0 }: any) {
-  const [info, setInfo] = useState(false); const [term, setTerm] = useState(() => !!term0 || /term=1/.test(location.hash));
+  const [info, setInfo] = useState(() => /[#&]info\b/.test(location.hash)); const [term, setTerm] = useState(() => !!term0 || /term=1/.test(location.hash));
   const [dir, setDir] = useState("dep"); const [date, setDate] = useState(today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState(""); const [earlier, setEarlier] = useState(false);
   const isGr = FRAPORT_GR.has(iata); const [gr, setGr] = useState(() => localStorage.getItem("sk.grboard") !== "off");
   useEffect(() => setD(null), [iata, dir, date]);
