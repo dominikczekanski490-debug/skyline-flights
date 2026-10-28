@@ -1379,11 +1379,11 @@ function diff(a, b, f) { const m = []; if (!a) return m; const P = (kind, text) 
   if (b.gate && b.gate !== a.gate) P("gate", `🚪 Gate ${a.gate ? a.gate + " → " : ""}${b.gate}`);
   if (b.term && a.term && b.term !== a.term) P("gate", `🏢 Terminal ${a.term} → ${b.term}`);
   const est = b.dlyAct ? "" : " (estimated)";
-  if (b.dly != null && (a.dly ?? 0) + 10 <= b.dly && b.dly >= 15) P("delay", `⏱ Delayed ${b.dly} min${est}`);
+  if (b.dly != null && (a.dly ?? 0) + 10 <= b.dly && b.dly >= 15) { P("delay", `⏱ Delayed ${b.dly} min${est}`); m[m.length - 1].dly = b.dly; }
   if (b.dly != null && a.dly != null && a.dly >= 15 && b.dly <= a.dly - 15) P("delay", `✅ Delay down to ${Math.max(0, b.dly)} min${est}`);
   if (b.belt && b.belt !== a.belt) P("belt", `🧳 Bags on belt ${b.belt}`);
   { const ph = x => { const t = (x || "").toLowerCase(); return /final call|last call/.test(t) ? "Final call" : /gate closed|closing/.test(t) ? "Gate closed" : /boarding/.test(t) ? "Boarding" : /go to gate|gate open/.test(t) ? "Gate open" : null; };
-    const pa = ph(a.statusText), pb = ph(b.statusText); if (pb && pb !== pa && !b.depOk) P("status", `🚪 ${pb} (airport feed)`); }
+    const pa = ph(a.statusText), pb = ph(b.statusText); if (pb && pb !== pa && !b.depOk) P("board", `🚪 ${pb} (airport feed)`); }
   const hadDep = a.depOk !== undefined ? !!a.depOk : ["departed", "enroute", "landed"].includes(a.status) && !/not yet/.test(a.statusText || "");
   const hadArr = a.arrOk !== undefined ? !!a.arrOk : a.status === "landed" && !/not yet/.test(a.statusText || "");
   if (b.offblk && !a.offblk && !b.depOk && !b.arrOk && !(a.depOk)) P("status", `🚕 Left the gate ${hmL(b.offblk, f.origin?.tz)} · taxiing (not airborne yet)`);
@@ -1398,18 +1398,26 @@ function richPush(f, msgs, k) { const c = x => x?.city || x?.iata || "?"; const 
   return { title: `✈ ${f.number} · ${c(f.origin)} → ${c(f.destination)}`, body: msgs.map(x => x.text).join(" · ") + (ctx.length ? "\n" + ctx.join(" · ") : ""), tag: k, kind, renotify: true,
     url: "/#flight=" + encodeURIComponent(f.id || k), icon: "/icon-192.png", badge: "/badge-72.png", at: Date.now(), flight: f.number }; }
 // prefs: { events: { cancel, gate, delay, belt, status }: bool, quiet: { on, from: "22:00", to: "07:00", tz } } — cancellations always break quiet hours
-function filterPrefs(m, p) { if (!p || !m.length) return m; const ev = p.events || {}; const kind = x => x.kind;
-  let out = m.filter(x => ev[kind(x)] !== false);
-  if (p.quiet?.on && p.quiet.from && p.quiet.to) { const hm = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: p.quiet.tz || "Europe/London" });
-    const q = p.quiet.from <= p.quiet.to ? hm >= p.quiet.from && hm < p.quiet.to : hm >= p.quiet.from || hm < p.quiet.to; if (q) out = out.filter(x => kind(x) === "cancel"); }
+// v43: + delayMin threshold (only for new-delay alerts), per-flight mute list, separate "board" type, and quiet-hours digest:
+// non-cancel alerts suppressed in quiet hours are held and sent as one summary push when quiet hours end.
+const inQuiet = p => { if (!p?.quiet?.on || !p.quiet.from || !p.quiet.to) return false; const hm = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: p.quiet.tz || "Europe/London" });
+  return p.quiet.from <= p.quiet.to ? hm >= p.quiet.from && hm < p.quiet.to : hm >= p.quiet.from || hm < p.quiet.to; };
+function filterPrefs(m, p, key, s) { if (!p || !m.length) return m; const ev = p.events || {};
+  if ((p.muted || []).includes(key)) return m.filter(x => x.kind === "cancel");
+  let out = m.filter(x => ev[x.kind === "board" && ev.board === undefined ? "status" : x.kind] !== false).filter(x => !(x.kind === "delay" && x.dly != null && x.dly < (+p.delayMin || 15)));
+  if (inQuiet(p)) { const held = out.filter(x => x.kind !== "cancel"); if (held.length && s && p.quiet.digest !== false) { (s.held ||= []).push(...held.map(x => ({ key, text: x.text, at: Date.now() }))); s.held = s.held.slice(-40); } out = out.filter(x => x.kind === "cancel"); }
   return out; }
+async function flushHeld(id, s) { if (!s.held?.length || inQuiet(s.prefs)) return; const by = {}; for (const h of s.held) (by[h.key.replace(/\d{4}-\d\d-\d\d$/, "")] ||= []).push(h.text.replace(/ \(.*?\)$/, ""));
+  const body = Object.entries(by).map(([k, t]) => `${k}: ${t.slice(-3).join(" · ")}`).join("\n"); s.held = [];
+  const pl = { title: "🌙 While you were in quiet hours", body, tag: "quiet-digest", kind: "status", renotify: true, url: "/", icon: "/icon-192.png", badge: "/badge-72.png", at: Date.now() };
+  (s.inbox ||= []).unshift(pl); s.inbox.length = Math.min(s.inbox.length, 30); await sendPush(id, s, pl, { topic: "quietdigest" }).catch(() => {}); }
 async function watch() { await ready; const cache = {};
   for (const [id, s] of Object.entries(STATE.subs)) { const keep = [];
     for (const w of s.flights) { if (w.date < new Date(Date.now() - 36 * 3600e3).toISOString().slice(0, 10)) continue; keep.push(w);
-      try { const k = w.number + w.date; const r = cache[k] ||= await findFlight(w.number, w.date); if (!r.flight) continue; const n = snapOf(r.flight, r.live); const msg = filterPrefs(diff(w.snap, n, r.flight), s.prefs); w.snap = n;
+      try { const k = w.number + w.date; const r = cache[k] ||= await findFlight(w.number, w.date); if (!r.flight) continue; const n = snapOf(r.flight, r.live); const msg = filterPrefs(diff(w.snap, n, r.flight), s.prefs, w.number + w.date, s); w.snap = n;
         if (msg.length) { const pl = richPush(r.flight, msg, k); (s.inbox ||= []).unshift(pl); s.inbox.length = Math.min(s.inbox.length, 30); await sendPush(id, s, pl, { topic: k.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) }); }
       } catch {} }
-    if (STATE.subs[id]) STATE.subs[id].flights = keep; }
+    if (STATE.subs[id]) { STATE.subs[id].flights = keep; await flushHeld(id, STATE.subs[id]).catch(() => {}); } }
   saveState(); }
 setInterval(watch, 4 * 60e3); setTimeout(watch, 20e3);
 // keep-warm self ping (Render free sleeps after ~15 min without inbound traffic)
