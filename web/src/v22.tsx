@@ -9,7 +9,7 @@ const HOW: Record<string, string> = { given: "from the flight feed", "observed-a
 
 export function AircraftCard({ f, hex, reg }: { f: Flight; hex?: string; reg?: string }) {
   const [d, setD] = useState<any>(null); const [err, setErr] = useState("");
-  useEffect(() => { let on = true; const go = () => api(`/plane-card?number=${encodeURIComponent(f.number)}&date=${f.date}&o=${f.origin?.iata || ""}&d=${f.destination?.iata || ""}&dep=${f.dep?.actual || f.dep?.scheduled || ""}&arr=${f.arr?.actual || f.arr?.estimated || f.arr?.scheduled || ""}&status=${f.status || ""}&hex=${hex || ""}&reg=${reg || ""}`).then(r => on && setD(r)).catch(e => on && setErr(e.message));
+  useEffect(() => { let on = true; const go = () => api(`/plane-card?number=${encodeURIComponent(f.number)}&date=${f.date}&arrActual=${f.arr?.actual || ""}&depActual=${f.dep?.actual || ""}&o=${f.origin?.iata || ""}&d=${f.destination?.iata || ""}&dep=${f.dep?.actual || f.dep?.scheduled || ""}&arr=${f.arr?.actual || f.arr?.estimated || f.arr?.scheduled || ""}&status=${f.status || ""}&hex=${hex || ""}&reg=${reg || ""}`).then(r => on && setD(r)).catch(e => on && setErr(e.message));
     go(); const t = setInterval(go, 90e3); return () => { on = false; clearInterval(t); }; }, [f.id, hex, reg]);
   const [tp, stp] = useState<any>(null);
   useEffect(() => { if (!d || d.photo?.src) return; const t = d.icaoType || d.typicalType; const al = (d.callsign || "").slice(0, 3); if (!t && !al) return; api(`/photo?al=${al}&type=${t || ""}&aln=${encodeURIComponent((f as any).airline?.name || "")}&tn=${encodeURIComponent(d.type || "")}${d.reg ? "&reg=" + d.reg : ""}`).then(r => stp(r?.src ? r : null)).catch(() => {}); }, [d?.reg, d?.typicalType, d?.photo?.src]);
