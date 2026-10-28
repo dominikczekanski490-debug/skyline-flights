@@ -46,7 +46,7 @@ if (typeof window !== "undefined" && !(window as any).__skOff) { (window as any)
   window.fetch = async (...a: Parameters<typeof fetch>) => { const r = await of(...a); try { const u = String(a[0] instanceof Request ? a[0].url : a[0]); if (u.includes("/api/")) dispatchEvent(new CustomEvent("sk-offline", { detail: r.headers.get("x-sk-offline") === "1" })); } catch {} return r; }; }
 
 // ---------- (h) Airport live map ----------
-const CLS: Record<string, [string, string]> = { ground: ["On the ground", "var(--muted)"], approach: ["Approaching", "var(--ok, #3c6)"], departure: ["Departing", "var(--acc2, var(--acc))"], holding: ["Holding", "var(--warn, #fa3)"], overflight: ["Passing", "color-mix(in srgb, var(--text) 45%, transparent)"] };
+const CLS: Record<string, [string, string]> = { ground: ["On the ground", "var(--muted)"], approach: ["Approaching", "var(--ok, #3c6)"], departure: ["Departing", "var(--warn)"], holding: ["Holding", "var(--warn, #fa3)"], overflight: ["Passing", "color-mix(in srgb, var(--text) 45%, transparent)"] };
 export function AirportLive({ iata }: { iata: string }) { const [d, setD] = useState<any>(null); const [e, setE] = useState(""); const [sel, setSel] = useState("all");
   useEffect(() => { let s = true; const go = () => api(`/airport/${iata}/traffic`).then(j => { if (s) { setD(j); setE(""); } }).catch(x => s && setE(x.message)); go(); const t = setInterval(() => document.visibilityState === "visible" && go(), 20000); return () => { s = false; clearInterval(t); }; }, [iata]);
   const L = useMemo(() => (d?.list || []).filter((a: any) => sel === "all" || a.cls === sel), [d, sel]);
