@@ -56,3 +56,4 @@ html[data-skin=eink] .pk{border:2px solid #000!important}html[data-skin=eink] .p
 .eta-d.bad,.eta .bad,.eta-d.late{color:var(--bad)!important}.eta-d.ok,.eta-d.early{color:var(--ok)!important}
 html[data-skin=eink] .eta,html[data-skin=eink] .eta *,html[data-skin=eink] .banner,html[data-skin=eink] .banner *,html[data-skin=eink] .dex,html[data-skin=eink] .cxd *{background:#fff!important;color:#000!important;-webkit-text-fill-color:#000!important;border-color:#000!important}
 html[data-skin=eink] .eta,html[data-skin=eink] .banner{border:2px solid #000!important}
+html[data-skin=eink] .pk-grad,html[data-skin=eink] .pk-t,html[data-skin=eink] .pk-min,html[data-skin=eink] .pk-chain *,html[data-skin=eink] .pk-lab,html[data-skin=eink] .pk-conf,html[data-skin=eink] .pk-tx{border:0!important}
