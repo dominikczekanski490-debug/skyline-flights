@@ -38,6 +38,8 @@ import { api, today, dist, fmtT, fmtD, best, delay, dur, lateLabel, lateColor, w
 import { liveOf, statusOf } from "./lib";
 import { AirlineTile } from "./brand";
 import { EtaLine } from "./eta";
+import { GreekBoard, FRAPORT_GR } from "./v41gr";
+import "./v41.css";
 import { Tracked, isTracked, finishStale } from "./tracked";
 import { EXAMPLE } from "./example";
 import { Timeline, Progress, WeatherCard, AirportInfo, PassportMore, PasteImport, exportIcs, UnitsCard, AlertPrefsCard } from "./more";
@@ -429,6 +431,7 @@ function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => voi
 function Board({ iata, x, push, term0 }: any) {
   const [info, setInfo] = useState(false); const [term, setTerm] = useState(() => !!term0 || /term=1/.test(location.hash));
   const [dir, setDir] = useState("dep"); const [date, setDate] = useState(today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState(""); const [earlier, setEarlier] = useState(false);
+  const isGr = FRAPORT_GR.has(iata); const [gr, setGr] = useState(() => localStorage.getItem("sk.grboard") !== "off");
   useEffect(() => setD(null), [iata, dir, date]);
   const poll = usePoll(() => api(`/board/${iata}?dir=${dir}&date=${date}`).then(setD).catch(e => setD((p: any) => p && !p.error ? p : { error: e.message, needsKey: e.needsKey, airport: e.airport || p?.airport })), [iata, dir, date]);
   const ap = d?.airport; const adj = useRef(false); // v23: open on the airport's local "today" (e.g. Greece/Turkey are past midnight before London)
@@ -440,7 +443,7 @@ function Board({ iata, x, push, term0 }: any) {
   useEffect(() => { if (nowIdx > 0 && date === today()) setTimeout(() => document.getElementById("brow-now")?.scrollIntoView({ block: "start" }), 50); }, [d]);
   const airlines = [...new Set((d?.flights || []).map((f: any) => f.airline?.iata))].filter(Boolean) as string[];
   return <>{iata === "MAN" && <Man3DBtn />}{iata === "MAN" && <WalkBtn />}<div className="head"><div><div className="row g6 bh-tags">{[iata, ap?.icao, new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: ap?.tz || "Europe/London" }) + " " + (ap?.tz === "Europe/London" ? "GMT" : "local")].map(t => <span key={t} className="tag">{t}</span>)}</div><h1 className="h1s">{ap?.city || iata}</h1><div className="muted sm">{ap ? [ap.name, ap.country].filter(Boolean).join(", ").toUpperCase() : d?.error ? "" : "Loading airport…"}</div></div>{x}</div>
-    <div className="chips bh-chips"><div className="sk-seg mini"><button className={!term ? "on" : ""}>{Ic.list}<span>List</span></button><button onClick={() => setTerm(true)}>{Ic.board}<span>FIDS</span></button></div><button className={"sk-pill " + (info ? "on" : "")} onClick={() => setInfo(v => !v)}>{info ? Ic.list : Ic.info}<span>{info ? "Board" : "Info"}</span></button><button className="sk-pill" onClick={() => navigator.share?.({ url: location.href, title: `${iata} board` })}>{Ic.share}<span>Share</span></button>
+    <div className="chips bh-chips"><div className="sk-seg mini"><button className={!term ? "on" : ""}>{Ic.list}<span>List</span></button><button onClick={() => setTerm(true)}>{Ic.board}<span>FIDS</span></button></div>{isGr && <button className={"sk-pill " + (gr ? "on" : "")} onClick={() => { localStorage.setItem("sk.grboard", gr ? "off" : "on"); setGr(!gr); }}><span>🇬🇷 Airport style</span></button>}<button className={"sk-pill " + (info ? "on" : "")} onClick={() => setInfo(v => !v)}>{info ? Ic.list : Ic.info}<span>{info ? "Board" : "Info"}</span></button><button className="sk-pill" onClick={() => navigator.share?.({ url: location.href, title: `${iata} board` })}>{Ic.share}<span>Share</span></button>
       <select className="chip" value={date} onChange={e => setDate(e.target.value)}>{[-1, 0, 1, 2].map(o => { const v = new Date(Date.now() + o * 864e5).toLocaleDateString("en-CA", { timeZone: "Europe/London" }); return <option key={v} value={v}>{["Yesterday", "Today", "Tomorrow", fmtD(v)][o + 1]}</option>; })}</select>
             <select className="chip" value={airline} onChange={e => setAirline(e.target.value)}><option value="">Airline: All</option>{airlines.sort().map(a => <option key={a}>{a}</option>)}</select></div>
     <div className="px"><div className="sk-seg big">{([["dep", "Departures", Ic.plane], ["arr", "Arrivals", Ic.land]] as const).map(([k, l, ic]) => <button key={k} className={dir === k ? "on" : ""} onClick={() => setDir(k)}>{ic}<span>{l}</span></button>)}</div></div>
@@ -459,6 +462,7 @@ function Board({ iata, x, push, term0 }: any) {
     {(() => { const tOf = (f: any) => +new Date(best(dir === "dep" ? f.dep : f.arr) || (dir === "dep" ? f.dep : f.arr).scheduled || 0);
       const cut = Date.now() - 150 * 60e3; const old = date === today() && !q ? list.filter((f: any) => !f.liveOnly && tOf(f) < cut) : []; const L = earlier ? list : list.filter((f: any) => !old.includes(f));
       let lastH = ""; const tz = ap?.tz || "Europe/London";
+      if (isGr && gr && d?.flights) return <>{old.length > 0 && <button className="chip b2earlier" onClick={() => setEarlier(v => !v)}>{earlier ? "Hide earlier flights" : `Show ${old.length} earlier flights`}</button>}<GreekBoard ap={ap} dir={dir} list={L} onOpen={f => push({ t: "flight", f: { ...f, date } })} /></>;
       return <div className="board b2">{old.length > 0 && <button className="chip b2earlier" onClick={() => setEarlier(v => !v)}>{earlier ? "Hide earlier flights" : `Show ${old.length} earlier flights`}</button>}
         {L.map((f: any, i: number) => { const h = f.liveOnly ? "Live" : new Date((dir === "dep" ? f.dep : f.arr).scheduled || tOf(f)).toLocaleTimeString("en-GB", { hour: "2-digit", timeZone: tz }) + ":00"; const hd = h !== lastH; lastH = h;
           return <div key={f.id + i} id={i === nowIdx ? "brow-now" : undefined}>{hd && <div className="b2h">{h}</div>}<BoardRow f={f} dir={dir} onClick={() => push({ t: "flight", f: { ...f, date } })} /></div>; })}</div>; })()}</>}</>;
