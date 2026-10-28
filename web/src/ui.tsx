@@ -1,3 +1,4 @@
+import { AuroraSky } from "./aurorasky";
 import { motion, useMotionValue, animate, type PanInfo } from "framer-motion";
 import { useEffect, type ReactNode } from "react";
 export const I = { // tiny inline icon set (original drawings)
@@ -39,7 +40,7 @@ export function Sheet({ children, snaps = [0.42, 0.94], initial = 1, onClose, z 
   const end = (_: any, i: PanInfo) => { const proj = y.get() + i.velocity.y * 0.18;
     if (onClose && proj > H() * 0.8) { animate(y, H(), { duration: 0.22 }).then(onClose); return; }
     let b = snaps[0], bd = 1e9; for (const s of snaps) { const d = Math.abs(yFor(s) - proj); if (d < bd) { bd = d; b = s; } } animate(y, yFor(b), spring); };
-  return <motion.div className="sheet" style={{ zIndex: z, y }}>
+  return <motion.div className="sheet" style={{ zIndex: z, y }}><AuroraSky />
     <motion.div className="sheet-head" onPan={(_, i) => y.set(Math.max(yFor(snaps.at(-1)!) - 20, y.get() + i.delta.y))} onPanEnd={end}><div className="grabber" />{header}</motion.div>
     <div className="sheet-body">{children}</div>
   </motion.div>;
