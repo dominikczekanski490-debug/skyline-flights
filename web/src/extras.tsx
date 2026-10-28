@@ -82,12 +82,18 @@ export async function importBackup(file: File) { const j = JSON.parse(await file
 const enc = (o: any) => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const dec = (s: string) => JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g, "+").replace(/_/g, "/")))));
 export const shareLink = (f: Flight, from = localStorage.getItem("sk.name") || "") => location.origin + "/s/" + enc({ n: f.number, d: f.date, o: f.origin?.iata, t: f.destination?.iata, by: from || undefined, x: Math.round(((best(f.arr) ? +new Date(best(f.arr)!) : +new Date(f.date + "T23:59:00Z")) + 6 * 3600e3) / 1000) });
+export async function makeShareLink(f: Flight) { try { const j = await api("/share", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ number: f.number, date: f.date, name: localStorage.getItem("sk.name") || "" }) }); if (j?.token) return location.origin + "/s/t." + j.token; } catch {} return shareLink(f); }
 export const parseShare = (url: string) => { const m = url.match(/\/s\/([A-Za-z0-9_-]+)/); return m ? dec(m[1]) : null; };
 
 export function SharedView({ id }: { id: string }) {
-  const s = useMemo(() => { try { return dec(id); } catch { return null; } }, [id]);
+  const tok = id.startsWith("t.") ? id.slice(2) : null; const [ts, setTs] = useState<any>(null);
+  const s0 = useMemo(() => { if (tok) return null; try { return dec(id); } catch { return null; } }, [id]);
+  const s: any = tok ? (ts ? { n: ts.flight?.number, d: ts.flight?.date, by: ts.name || undefined, x: Math.round(+new Date(ts.expires) / 1000), gone: ts.gone } : null) : s0;
   const [r, setR] = useState<any>(null); const [err, setErr] = useState("");
-  useEffect(() => { if (!s) return; const go = () => api(`/flight/${s.n}?date=${s.d}`).then(setR).catch(e => setErr(e.message)); go(); const t = setInterval(go, 60e3); return () => clearInterval(t); }, [id]);
+  useEffect(() => { if (tok) { const go = () => api(`/share/${tok}`).then(j => { setTs(j); setR({ flight: { ...j.flight, id: j.flight?.number + j.flight?.date } }); }).catch(e => setTs({ gone: e.message, expires: 0, flight: {} })); go(); const t = setInterval(go, 60e3); return () => clearInterval(t); }
+    if (!s) return; const go = () => api(`/flight/${s.n}?date=${s.d}`).then(setR).catch(e => setErr(e.message)); go(); const t = setInterval(go, 60e3); return () => clearInterval(t); }, [id]);
+  if (tok && !ts) return <div className="share"><div className="shcard"><div className="skel" style={{ height: 120 }} /></div></div>;
+  if (tok && ts?.gone) return <div className="share"><div className="shcard"><b>This share link has expired</b><div className="muted sm">Server links stop 4 hours after the flight lands. Ask the sender for a new one.</div></div></div>;
   if (!s) return <div className="share"><div className="shcard"><b>Link not recognised</b></div></div>;
   if (s.x && Date.now() / 1000 > s.x) return <div className="share"><div className="shcard"><b>This share link has expired</b><div className="muted sm">Live links stop 6 hours after the flight lands. Ask {s.by || "the sender"} for a new one.</div></div></div>;
   const f: Flight | undefined = r?.flight; const dd = f ? delay(f.dep) : null, da = f ? delay(f.arr) : null; const lv = r?.live;

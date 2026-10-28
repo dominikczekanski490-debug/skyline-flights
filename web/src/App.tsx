@@ -45,7 +45,7 @@ import { Tracked, isTracked, finishStale } from "./tracked";
 import { EXAMPLE } from "./example";
 import { Timeline, Progress, WeatherCard, AirportInfo, PassportMore, PasteImport, exportIcs, UnitsCard, AlertPrefsCard } from "./more";
 import { AskSkyline, LockView, RouteWeather, useInsights } from "./v21";
-import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, shareLink, parseShare, LeaveCard, PassportExtras, DepartureDay, UpdateBanner, PushChecklist, BUILD, localNotify, testLocal, notifEnv } from "./extras";
+import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, makeShareLink, parseShare, LeaveCard, PassportExtras, DepartureDay, UpdateBanner, PushChecklist, BUILD, localNotify, testLocal, notifEnv } from "./extras";
 
 type Ov = { t: "ask" } | { t: "lock" } | { t: "flight"; f: Flight } | { t: "board"; iata: string; term?: boolean; dir?: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" } | { t: "tools"; id?: string } | { t: "features" } | { t: "labs"; id?: string; apt?: string; f?: Flight } | { t: "dayof"; f: Flight } | { t: "guide"; iata: string } | { t: "overhead" } | { t: "wrapped" } | { t: "conn" };
 const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <AirlineTile a={a} className="card-tile" mode="colour" style={{ width: Math.round(s * 2.4), height: s }} />;
@@ -335,7 +335,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   const until = best(f.dep) ? (+new Date(best(f.dep)!) - Date.now()) / 60000 : 0;
   const banner = f.status === "cancelled" ? ["Cancelled", "red"] : f.status === "landed" ? [`Arrived ${da != null ? lateLabel(da) : ""}`, da && da > 14 ? "red" : "green"] : f.status === "enroute" ? [`En route${lv?.eta ? ", ETA " + fmtT(lv.eta, f.destination?.tz) : ""}`, "blue"] : f.status === "departed" || (f.dep as any).actualKind === "offblock" ? (() => { const S = statusOf(f, lv); const D: any = f.dep; return /Taxiing|Pushback/.test(S.label) ? [`${S.label} · left gate ${fmtT(D.actual, f.origin?.tz)}`, "blue"] : [S.label + " " + (D.takeoff ? fmtT(D.takeoff, f.origin?.tz) : D.actualKind === "offblock" ? "" : D.actual ? fmtT(D.actual, f.origin?.tz) : ""), "blue"]; })() : until > 0 ? [`Gate Departure in ${dur(until)}`, dd && dd > 14 ? "red" : "green"] : [f.statusText || "Scheduled", "green"];
   const tz = tzOffset(f.destination?.tz) - tzOffset(f.origin?.tz);
-  const shareUrl = () => shareLink(f);
+
   const h = flights.filter((x: Flight) => x.origin?.iata === f.origin?.iata && x.destination?.iata === f.destination?.iata && !x.friend);
   return <div className="fd"><EtaLine f={f} live={lv} />{(f.origin?.iata === "MAN" || f.destination?.iata === "MAN") && <Man3DBtn />}
     {f.example && <div className="exlabel">Example data — not a real flight record</div>}
@@ -384,7 +384,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <div className="card cal"><b className="row g8">{I.cal} Calendar Sync</b><div className="muted sm">Add this flight to your calendar (.ics works with Apple/Google Calendar)</div><button className="secondary mt8" onClick={() => download(`${f.number}.ics`, ics([f]))}>Add to Calendar</button></div>
     <a className="report" href={`mailto:?subject=Skyline data issue ${f.number} ${f.date}`}>ⓘ Report Data Issue</a>
     <div style={{ height: 100 }} />
-    <div className="fbar"><div className="pill small"><button onClick={() => navigator.share ? navigator.share({ title: `${f.number} ${f.origin?.iata}→${f.destination?.iata}`, url: shareUrl() }) : (navigator.clipboard.writeText(shareUrl()), alert("Share link copied"))}>{I.share}</button>
+    <div className="fbar"><div className="pill small"><button aria-label="Share a live read-only link" onClick={async () => { const u = await makeShareLink(f); navigator.share ? navigator.share({ title: `${f.number} ${f.origin?.iata}→${f.destination?.iata}`, text: "Follow my flight live (no login, expires 4 h after landing)", url: u }).catch(() => {}) : (navigator.clipboard.writeText(u), alert("Live link copied · expires 4 hours after landing")); }}>{I.share}</button>
       <button onClick={() => { const n = prompt("Diverted to (IATA), or leave blank"); if (n !== null) api("/airport/" + n).then(a => upd({ ...f, diverted: a })).catch(() => upd({ ...f, diverted: undefined })); }}>{I.edit}</button>
       <button onClick={() => { if (confirm("Remove this flight?")) { setFlights((l: Flight[]) => l.filter(x => x.id !== f.id)); close(); } }}>{I.more}</button></div>
       {!tracked ? <button className="primary" onClick={() => { setFlights((l: Flight[]) => [...l, f]); syncPush([...flights, f], true).catch(() => {}); }}>＋ Track Flight</button> : <button className="primary" onClick={() => push({ t: "board", iata: f.origin?.iata })}>{f.origin?.iata} Board</button>}</div>

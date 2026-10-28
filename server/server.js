@@ -1772,3 +1772,18 @@ async function airportFacts(c) { const a = AP[c]; if (!a) return null;
       if (pick) photo = { ...pick, kind: /terminal|entrance|building|exterior/i.test(pick.title) ? "Terminal" : "Airport", how: p18.includes(pick.title) ? "Wikidata image (P18)" : "Wikimedia Commons search" }; } catch {}
     return { iata: c, icao: a.icao || null, name: a.name, qid, operator, owners, opened, photo, sources: ["Wikidata" + (qid ? " " + qid : ""), "Wikimedia Commons"] }; }); }
 api.get("/airport/:iata/facts", wrap(async (req, res) => { const f = await airportFacts(req.params.iata.toUpperCase()); f ? res.json(f) : res.status(404).json({ error: "Unknown airport" }); }));
+
+// ---- v42 Family sharing: read-only live link, no login. Token in Upstash (or memory when no KV), expires 4 h after landing (max 72 h). ----
+const SHARES = new Map();
+const shareKey = t => "sk_share_" + t;
+async function shareGet(t) { if (KV_URL) return kvRead(shareKey(t)); return SHARES.get(t) || null; }
+async function sharePut(t, v, ttlS) { if (KV_URL) { const r = await fetch(KV_URL.replace(/\/$/, "") + "/set/" + shareKey(t) + "?EX=" + Math.max(60, Math.round(ttlS)), { method: "POST", ...KVH(), body: JSON.stringify(v) }); return r.ok; } SHARES.set(t, v); setTimeout(() => SHARES.delete(t), ttlS * 1000).unref?.(); return true; }
+api.post("/share", express.json({ limit: "2kb" }), wrap(async (req, res) => { const n = String(req.body?.number || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8), d = String(req.body?.date || "").slice(0, 10);
+  if (!/^[A-Z0-9]{2,3}\d{1,5}[A-Z]?$/.test(n) || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return res.status(400).json({ error: "Need a flight number and date" });
+  const t = crypto.randomBytes(12).toString("base64url"); const v = { number: n, date: d, name: String(req.body?.name || "").slice(0, 30), created: Date.now(), maxExp: Date.now() + 72 * 3600e3 };
+  await sharePut(t, v, 72 * 3600); res.json({ token: t, expiresNote: "Expires 4 hours after landing (at most 72 hours)" }); }));
+api.get("/share/:tok", wrap(async (req, res) => { const t = String(req.params.tok).replace(/[^A-Za-z0-9_-]/g, ""); const v = await shareGet(t); if (!v || Date.now() > v.maxExp) return res.status(410).json({ error: "This link has expired" });
+  const f = await findFlight(v.number, v.date).catch(() => null); const fl = f?.flight || f?.flights?.[0] || f; const landed = fl?.arr?.actual; const exp = landed ? Math.min(v.maxExp, +new Date(landed) + 4 * 3600e3) : v.maxExp;
+  if (Date.now() > exp) return res.status(410).json({ error: "This link has expired (the flight landed more than 4 hours ago)" });
+  if (landed && !v.exp) { v.exp = exp; await sharePut(t, v, (exp - Date.now()) / 1000); }
+  res.set("cache-control", "no-store").json({ flight: fl ? { number: fl.number, airline: fl.airline, origin: fl.origin, destination: fl.destination, dep: fl.dep, arr: fl.arr, status: fl.status, statusText: fl.statusText, aircraft: fl.aircraft, routeBlock: fl.routeBlock, date: v.date } : null, name: v.name, expires: new Date(exp).toISOString() }); }));
