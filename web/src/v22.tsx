@@ -1,3 +1,4 @@
+import { ConnDetail } from "./v42";
 // v22: aircraft card for any flight, home widgets, plane overhead, Wrapped, connection checker, What's new.
 import { useEffect, useMemo, useState } from "react";
 import { api, best, delay, dist, estDurMin, fmtT, fmtD, load, withEstArr, type Flight } from "./lib";
@@ -124,12 +125,12 @@ export function Wrapped22({ x }: { x: any }) {
 }
 
 export function Connections22({ flights, x }: { flights: Flight[]; x: any }) {
-  const mine = flights.filter(f => !f.friend && !f.example); const auto = connections(mine); const [a, setA] = useState(""); const [b, setB] = useState("");
-  const A = mine.find(f => f.id === a), B = mine.find(f => f.id === b);
+  const mine = flights.filter(f => !f.friend && !f.example); const auto = connections(mine).map(c => ({ ...c, same: true })); const [a, setA] = useState(""); const [b, setB] = useState("");
+  const [open, setOpen] = useState(""); const A = mine.find(f => f.id === a), B = mine.find(f => f.id === b);
   const man = A && B ? (() => { const arr = best(withEstArr(A).arr), dep = best(B.dep); if (!arr || !dep) return null; const buf = Math.round((+new Date(dep) - +new Date(arr)) / 60000); const intl = A.origin?.country !== B.destination?.country; const mct = intl ? 75 : 50; return { a: A, b: B, buf, mct, risk: buf < 0 ? "missed" : buf < mct ? "high" : buf < mct + 30 ? "tight" : "ok", same: A.destination?.iata === B.origin?.iata }; })() : null;
-  const Row = (c: any) => <div key={c.a.id + c.b.id} className={"cx-row " + c.risk}><div className="cx-legs"><b>{c.a.number}</b> {c.a.origin?.iata} → <b>{c.a.destination?.iata}</b> → {c.b.destination?.iata} <b>{c.b.number}</b></div>
+  const Row = (c: any) => <div key={c.a.id + c.b.id} className={"cx-row " + c.risk} onClick={() => setOpen(o => o === c.a.id + c.b.id ? "" : c.a.id + c.b.id)}><div className="cx-legs"><b>{c.a.number}</b> {c.a.origin?.iata} → <b>{c.a.destination?.iata}</b> → {c.b.destination?.iata} <b>{c.b.number}</b></div>
     <div className="cx-bar"><i style={{ width: `${Math.max(4, Math.min(100, c.buf / (c.mct * 2) * 100))}%` }} /><s style={{ left: `${50}%` }} /></div>
-    <div className="cx-meta"><b>{c.buf < 0 ? `Missed by ${-c.buf} min` : `${Math.floor(c.buf / 60)}h ${c.buf % 60}m layover`}</b><span>{c.risk === "ok" ? "Comfortable" : c.risk === "tight" ? "Tight, keep moving" : c.risk === "high" ? "High risk" : "Missed"} · typical minimum {c.mct} min (general guidance, not the airport's official MCT)</span>{c.same === false && <span className="bad">Different airports: allow a transfer</span>}</div></div>;
+    <div className="cx-meta"><b>{c.buf < 0 ? `Missed by ${-c.buf} min` : `${Math.floor(c.buf / 60)}h ${c.buf % 60}m layover`}</b><span>{c.risk === "ok" ? "Comfortable" : c.risk === "tight" ? "Tight, keep moving" : c.risk === "high" ? "High risk" : "Missed"} · typical minimum {c.mct} min (general guidance, not the airport's official MCT)</span>{c.same === false && <span className="bad">Different airports: allow a transfer</span>}</div>{open === c.a.id + c.b.id ? <ConnDetail c={c} /> : <div className="faint xs">Tap for risk %, explanation and what-if</div>}</div>;
   return <div className="v22-page"><div className="v22-top"><div><h1>Connections</h1><span>Uses live times: the estimated arrival vs the next departure</span></div>{x}</div>
     <div className="v22-sh px"><span>Found in your flights</span></div>{auto.length ? auto.map(Row) : <div className="v22-empty">No connecting flights found. A connection is when one flight lands where the next one departs within 24h.</div>}
     <div className="v22-sh px"><span>Check any two flights</span></div>
