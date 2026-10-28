@@ -10,11 +10,9 @@ import { AirportPulse } from "./v24";
 import { PredictCard, FindMyPlane } from "./predict";
 import { Livery, PLANE_CREDITS, useFlightPhoto, photoLabel } from "./livery";
 import { usePoll, Refreshed, TRACK_MS, markTracked, LiveLine } from "./refresh";
-import { Labs, LABS, Ic, SecHead, ActBtn } from "./v25";
-import { LABS2 } from "./v28";
-import { LABS3 } from "./v29";
-import { LABS4 } from "./v32";
-import { LABS5 } from "./v39";
+import { Ic, SecHead, ActBtn } from "./v25";
+const Labs = lazy(() => import("./labs"));
+let labCount = 0; setTimeout(() => import("./labs").then(m => { labCount = m.LAB_COUNT; }), 4000);
 import { applySkin, SkinPicker } from "./themes";
 import { NotifInbox, NotifPreviews, changeMsgs, flightTitle, contextLine, addInbox } from "./v34";
 import "./v34.css";
@@ -60,8 +58,8 @@ export default function App() {
   const [live, setLive] = useState<Record<string, any>>({});
   const [mapStyle, setMapStyle] = useState(localStorage.getItem("sk.map2") || "dark");
   const [radar, setRadar] = useState(false); const [locate, setLocate] = useState(0);
-  useEffect(() => { const tb = location.hash.match(/tab=(mine|friends|tracked|passport)/); if (tb) setTab(tb[1] as any); const v = location.hash.match(/ov=(overhead|wrapped|conn|ask|settings|search|trip|spots)/); if (v) setOv([{ t: v[1] } as Ov]); const lb = location.hash.match(/labs=?(\w*)/); if (lb) setOv([{ t: "labs", id: lb[1] || undefined }]); const fm = location.hash.match(/flight=([\w-]+)/); if (fm) { const f = load().find(x => x.id === fm[1]); if (f) setOv([{ t: "flight", f }]); } }, []);
-  useEffect(() => { const h = () => { const fm = location.hash.match(/flight=([\w-]+)/); const f = fm && load().find(x => x.id === decodeURIComponent(fm[1])); if (f) setOv([{ t: "flight", f }]); const v = location.hash.match(/ov=(overhead|wrapped|conn|ask|settings|search|trip|spots)/); if (v) setOv([{ t: v[1] } as Ov]); const b = location.hash.match(/board=([A-Za-z]{3})/); if (b) setOv([{ t: "board", iata: b[1].toUpperCase() }]); }; window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
+  useEffect(() => { const tb = location.hash.match(/tab=(mine|friends|tracked|passport)/); if (tb) setTab(tb[1] as any); const v = location.hash.match(/ov=(overhead|wrapped|conn|ask|settings|search|trip|spots|labs|tools)/); if (v) setOv([{ t: v[1] } as Ov]); const lb = location.hash.match(/labs=?(\w*)/); if (lb) setOv([{ t: "labs", id: lb[1] || undefined }]); const fm = location.hash.match(/flight=([\w-]+)/); if (fm) { const f = load().find(x => x.id === fm[1]); if (f) setOv([{ t: "flight", f }]); } }, []);
+  useEffect(() => { const h = () => { const fm = location.hash.match(/flight=([\w-]+)/); const f = fm && load().find(x => x.id === decodeURIComponent(fm[1])); if (f) setOv([{ t: "flight", f }]); const v = location.hash.match(/ov=(overhead|wrapped|conn|ask|settings|search|trip|spots|labs|tools)/); if (v) setOv([{ t: v[1] } as Ov]); const b = location.hash.match(/board=([A-Za-z]{3})/); if (b) setOv([{ t: "board", iata: b[1].toUpperCase() }]); }; window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
   useEffect(() => { const m = location.hash.match(/board=([A-Za-z]{3})/); if (m) setOv([{ t: "board", iata: m[1].toUpperCase() }]); const a = location.hash.match(/airports=(\w+)/); if (a) setOv([{ t: "airports", mode: a[1] }]); }, []);
   const [why, setWhy] = useState<any>(null); (window as any).__why = (f: any) => { navigator.vibrate?.(8); setWhy(f); };
   const [theme, setTheme] = useState(localStorage.getItem("sk.theme") || "dark");
@@ -103,7 +101,7 @@ export default function App() {
   return <div className="app"><OnlineOnly><WarmBanner /></OnlineOnly><UpdateBanner /><OfflineBanner />{why && <WhySheet f={why} close={() => setWhy(null)} />}
     <MapView flights={mapFlights} live={live} style={mapStyle} radar={radar} focus={focus} locate={locate} onPlane={id => { const f = flights.find(x => x.id === id); f && push({ t: "flight", f }); }} />
     <div className="maptint" /><div className="aurora" />
-    <div className="mapbtns"><button onClick={() => setMapStyle(MAP_STYLES[(MAP_STYLES.indexOf(mapStyle) + 1) % MAP_STYLES.length])}>{I.layers}</button><button className={radar ? "on" : ""} onClick={() => setRadar(!radar)}>{I.cloud}</button><button onClick={() => setLocate(Date.now())}>{I.locate}</button></div>
+    <div className="mapbtns"><button aria-label="Change map style" onClick={() => setMapStyle(MAP_STYLES[(MAP_STYLES.indexOf(mapStyle) + 1) % MAP_STYLES.length])}>{I.layers}</button><button aria-label="Weather radar" aria-pressed={radar} className={radar ? "on" : ""} onClick={() => setRadar(!radar)}>{I.cloud}</button><button aria-label="Show my location" onClick={() => setLocate(Date.now())}>{I.locate}</button></div>
     <Sheet snaps={[0.3, 0.55, 0.94]} initial={1} z={5}>
       {tab === "tracked" && <Tracked flights={flights.filter(f => !f.friend)} setFlights={setFlights} open={f => push({ t: "flight", f })} />}
       {tab === "mine" && <MyFlights list={active.filter(f => !f.friend && !isTracked(f))} open={f => push({ t: "flight", f })} push={push} />}
@@ -114,13 +112,13 @@ export default function App() {
     <WhatsNew22 />
     {!ov.length && <nav className="tabbar"><div className="pill"><i className="tabind" style={{ transform: `translateX(${["mine","friends","tracked","passport"].indexOf(tab) * 100}%)` }} />
       {([["mine", "My Flights", I.plane], ["friends", "Friends", I.friends], ["tracked", "Tracked", I.clock], ["passport", "Passport", I.passport]] as const).map(([k, l, ic]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{ic}<span>{l}</span></button>)}
-    </div><button className="searchbtn" onClick={() => push({ t: "search" })}>{I.search}</button></nav>}
+    </div><button className="searchbtn" aria-label="Search" onClick={() => push({ t: "search" })}>{I.search}</button></nav>}
     {ov.map((o, i) => <Boundary key={i + o.t} label="screen"><Overlay o={o} z={20 + i} close={pop} push={push} flights={flights} setFlights={setFlights} upd={upd} live={live} theme={theme} setTheme={setTheme} tab={tab} /></Boundary>)}
   </div>;
 }
 
 function Head({ title, sub, right }: { title: ReactNode; sub?: ReactNode; right?: ReactNode }) { return <div className="head"><div><h1>{title}</h1>{sub && <div className="sub">{sub}</div>}</div><div className="row g8">{right}</div></div>; }
-const Avatar = ({ onClick }: { onClick?: () => void }) => <button className="avatar" onClick={onClick}>D</button>;
+const Avatar = ({ onClick }: { onClick?: () => void }) => <button className="avatar" aria-label="Settings" onClick={onClick}>D</button>;
 
 function Thumb({ f, type }: { f: Flight; type?: string }) {
   const p = useFlightPhoto(type ? { ...f, aircraft: { ...f.aircraft, model: type } } : f); if (!p?.src) return null;
@@ -154,7 +152,7 @@ function FlightCard({ f, onClick, pred }: { f: Flight; onClick: () => void; pred
 function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => void; push: (o: Ov) => void }) {
   useInsights(list);
   return <>
-    <Head title="My Flights" right={<><RoundBtn onClick={() => push({ t: "airports" })}>{I.share}</RoundBtn><Avatar onClick={() => push({ t: "settings" })} /></>} />
+    <Head title="My Flights" right={<><RoundBtn label="Airports" onClick={() => push({ t: "airports" })}>{I.share}</RoundBtn><Avatar onClick={() => push({ t: "settings" })} /></>} />
     <Greeting />
     <GlobalSearch push={push} onFlight={f => push({ t: "flight", f })} />
     {(() => { const nx = list.filter(f => !f.example && phaseOf(f) !== "cancelled" && !(f.status === "landed" && Date.now() - +new Date(f.arr.actual || f.arr.scheduled || 0) > 3 * 3600e3)).sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1)[0];
@@ -163,7 +161,7 @@ function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => 
     <TodayCard flights={list} />
     <AssistantFeed flights={list} push={push} />
     <NLSearch open={f => push({ t: "flight", f })} />
-    <div className="qa">{([[I.alert, "Disruptions", "Live delay scores", () => push({ t: "airports", mode: "disruptions" }), "r"], [I.grid, "Tools", `${TOOLS.length} aviation tools`, () => push({ t: "tools" }), "b"], [I.spark, "Skyline Labs", `${LABS.length + LABS2.length + LABS3.length + LABS4.length + LABS5.length} insights & tools`, () => push({ t: "labs" }), "v"], [I.globe, "UK & Ireland", "Every airport board", () => push({ t: "airports", mode: "uk" }), "b"], [I.takeoff, "MAN board", "Departures now", () => push({ t: "board", iata: "MAN" }), "g"], [I.globe, "Trips", "Timeline & weather", () => push({ t: "trip" }), "g"], [I.plane, "Spotter log", "Planes seen & flown", () => push({ t: "spots" }), "b"], [I.sliders, "Settings", "Keys & theme", () => push({ t: "settings" }), "v"]] as const).map(([ic, t, s, fn, c]) => <button key={t} className={"qtile press q" + c} onClick={fn}><span className="qic">{ic}</span><b>{t}</b><small>{s}</small></button>)}</div>
+    <div className="qa">{([[I.alert, "Disruptions", "Live delay scores", () => push({ t: "airports", mode: "disruptions" }), "r"], [I.grid, "Tools", `${TOOLS.length} aviation tools`, () => push({ t: "tools" }), "b"], [I.spark, "Skyline Labs", labCount ? `${labCount} insights & tools` : "Insights & tools", () => push({ t: "labs" }), "v"], [I.globe, "UK & Ireland", "Every airport board", () => push({ t: "airports", mode: "uk" }), "b"], [I.takeoff, "MAN board", "Departures now", () => push({ t: "board", iata: "MAN" }), "g"], [I.globe, "Trips", "Timeline & weather", () => push({ t: "trip" }), "g"], [I.plane, "Spotter log", "Planes seen & flown", () => push({ t: "spots" }), "b"], [I.sliders, "Settings", "Keys & theme", () => push({ t: "settings" }), "v"]] as const).map(([ic, t, s, fn, c]) => <button key={t} className={"qtile press q" + c} onClick={fn}><span className="qic">{ic}</span><b>{t}</b><small>{s}</small></button>)}</div>
     {!list.length ? <div className="empty16 rise"><div className="e-ic">{I.plane}</div><b>Your next trip starts here</b><span>Search a flight number like BA1387 or a route to start tracking it live.</span>
       <button className="primary mt16" onClick={() => push({ t: "search" })}>{I.search} Add a flight</button>
       <div className="row g8 mt12 wrap center"><button className="chip" onClick={() => push({ t: "board", iata: "MAN" })}>Manchester board</button><button className="chip" onClick={() => push({ t: "airports" })}>Airport delays</button></div></div>
@@ -201,7 +199,7 @@ function Passport({ flights, setFlights, open, push }: { flights: Flight[]; setF
   const imp = (e: any) => { const file = e.target.files[0]; if (!file) return; file.text().then(async (t: string) => { const rows = file.name.endsWith(".ics") ? parseIcs(t) : parseCsv(t); const out: Flight[] = [];
     for (const r of rows) out.push(await manualFlight(r.number, r.date, r.from, r.to)); setFlights((l: Flight[]) => [...l, ...out]); alert(`Imported ${out.length} flights`); }); };
   return <>
-    <Head title="Passport" right={<><RoundBtn onClick={() => navigator.share?.({ title: "My Skyline Passport", text: `${L.length} flights • ${s.mi.toLocaleString()} mi • ${s.ap} airports` })}>{I.share}</RoundBtn><Avatar onClick={() => push({ t: "settings" })} /></>} />
+    <Head title="Passport" right={<><RoundBtn label="Share" onClick={() => navigator.share?.({ title: "My Skyline Passport", text: `${L.length} flights • ${s.mi.toLocaleString()} mi • ${s.ap} airports` })}>{I.share}</RoundBtn><Avatar onClick={() => push({ t: "settings" })} /></>} />
     <div className="segs">{["All", ...years].map(y => <button key={y} className={yr === y ? "on" : ""} onClick={() => setYr(y)}>{y === "All" ? "All-Time" : y}</button>)}</div>
     {ex && <div className="exlabel">Example data — sample flights so you can see the layout. <button onClick={() => setFlights((l: Flight[]) => l.filter(f => !f.example))}>Remove</button></div>}
     <div className="pcard passport"><div className="row between"><div><div className="ptitle">{yr === "All" ? "ALL-TIME" : yr} SKYLINE PASSPORT</div><div className="psub">PASSPORT · PASS · PASAPORTE</div></div><span className="pp-emb">{Ic.globe}</span></div>
@@ -234,7 +232,7 @@ async function manualFlight(number: string, date: string, from?: string, to?: st
 // ---------------- overlays ----------------
 function Overlay(p: { o: Ov; z: number; close: () => void; push: (o: Ov) => void; flights: Flight[]; setFlights: any; upd: (f: Flight) => void; live: any; theme: string; setTheme: any; tab: string }) {
   const { o, z, close } = p;
-  const x = <RoundBtn onClick={close}>{I.close}</RoundBtn>;
+  const x = <RoundBtn label="Close" onClick={close}>{I.close}</RoundBtn>;
   if (o.t === "search") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><SearchView {...p} x={x} /></Sheet>;
   if (o.t === "flight") return <Sheet z={z} onClose={close} snaps={[0.5, 0.94]} initial={0} header={<div className="head fhead"><div className="row g10"><Logo a={o.f.airline} /><div><div className="muted sm">{o.f.number} • {fmtD(o.f.date, { weekday: "short", day: "numeric", month: "short" }).toUpperCase()}</div><h2>{o.f.origin?.city} to {o.f.diverted ? <s>{o.f.destination?.city}</s> : o.f.destination?.city}</h2></div></div>{x}</div>}>
     <FlightDetail f={p.flights.find(f => f.id === o.f.id) || o.f} {...p} /><div className="px"><RouteAurora f={o.f} /></div></Sheet>;
@@ -250,7 +248,7 @@ function Overlay(p: { o: Ov; z: number; close: () => void; push: (o: Ov) => void
   if (o.t === "spots") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><SpotterLog x={x} /></Sheet>;
   if (o.t === "guide") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><AirportGuide iata={o.iata} x={x} /></Sheet>;
   if (o.t === "dayof") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><DayOf f={p.flights.find(f => f.id === o.f.id) || o.f} push={p.push} x={x} /></Sheet>;
-  if (o.t === "labs") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Head title="Labs" right={x} /><div className="px"><Labs id={o.id} apt={o.apt} f={o.f} open={f => p.push({ t: "flight", f })} /></div></Sheet>;
+  if (o.t === "labs") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Head title="Labs" right={x} /><div className="px"><Suspense fallback={<p className="muted">Loading Labs…</p>}><Labs id={o.id} apt={o.apt} f={o.f} open={f => p.push({ t: "flight", f })} /></Suspense></div></Sheet>;
   if (o.t === "features") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Head title="What's new" right={x} /><div className="px"><FeatureList /></div></Sheet>;
   if (o.t === "paste") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Head title="Import booking" right={x} /><PasteImport add={(fl: Flight[]) => { p.setFlights((l: Flight[]) => [...l, ...fl.filter(n => !l.some(y => y.id === n.id))]); close(); }} /></Sheet>;
   if (o.t === "addpast") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><AddPast x={x} done={(f: Flight) => { p.setFlights((l: Flight[]) => [...l, f]); close(); }} /></Sheet>;
@@ -539,7 +537,7 @@ function AirportStatus({ x, push, flights, seg }: any) {
       {issues(a) && <div className={"sm " + (s === 2 ? "red" : "orange")}>{issues(a)}</div>}
       {a.unavailable ? (a.live ? <div><span className="srcb live">LIVE TRAFFIC</span><div className="grid3 st"><div><label>ON GROUND</label><div>{a.live.ground}</div></div><div><label>CLIMBING OUT</label><div>↗ {a.live.departing}</div></div><div><label>APPROACHING</label><div>↘ {a.live.arriving}</div></div></div><div className="faint sm">Real ADS-B counts • delays need an AeroDataBox key</div></div> : <div className="faint sm">Live traffic loading… • delay stats need an AeroDataBox key</div>) : <div className="grid3 st"><div><label>ON TIME</label><div>↗ {a.dep?.onTime ?? "–"}%</div><div>↘ {a.arr?.onTime ?? "–"}%</div></div><div><label>AVG. DELAY</label><div>{a.dep?.avgDelay ?? "–"}m</div><div>{a.arr?.avgDelay ?? "–"}m</div></div><div><label>CANCELED</label><div>{a.dep?.cancelled ?? 0}%</div><div>{a.arr?.cancelled ?? 0}%</div></div></div>}</div></div>; };
   const A = d?.airports || []; const favs = A.filter((a: any) => fav.includes(a.airport.iata) || mine.has(a.airport.iata));
-  return <><Head title="Airports" right={<><RoundBtn onClick={() => navigator.share?.({ title: "Airport delays", url: location.href })}>{I.share}</RoundBtn>{x}</>} />{seg}
+  return <><Head title="Airports" right={<><RoundBtn label="Share" onClick={() => navigator.share?.({ title: "Airport delays", url: location.href })}>{I.share}</RoundBtn>{x}</>} />{seg}
     <div className="chips"><span className="chip plain">Now ⌄</span>{["All", "Europe", "North America", "Asia", "Oceania", "Africa", "South America"].map(r => <button key={r} className={"chip" + (region === r ? " on" : " plain")} onClick={() => setRegion(r)}>{r}</button>)}</div>
     <div className="px"><b>For You</b><div className="muted sm">Favorites and airports from your active flights</div>{!favs.length && <div className="faint">No Favorites – Tap ★ in an airport to favorite</div>}</div>{favs.map(row)}
     {!d && <div>{[0,1,2,3,4,5,6].map(i => <div key={i} className="sk-row"><div className="skel" style={{ width: 52 }} /><div className="grow"><div className="skel" style={{ width: (60 + (i * 37) % 30) + "%" }} /><div className="skel" style={{ width: "35%", height: 10, marginTop: 8 }} /></div><div className="skel" style={{ width: 54 }} /></div>)}</div>}

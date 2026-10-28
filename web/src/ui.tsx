@@ -29,8 +29,8 @@ export const I = { // tiny inline icon set (original drawings)
   spark: <svg viewBox="0 0 24 24" width="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M12 3l2 6.2L20 12l-6 2.8L12 21l-2-6.2L4 12l6-2.8z" /></svg>,
   more: <svg viewBox="0 0 24 24" width="22"><circle cx="5" cy="12" r="2" fill="currentColor" /><circle cx="12" cy="12" r="2" fill="currentColor" /><circle cx="19" cy="12" r="2" fill="currentColor" /></svg>,
 };
-export function RoundBtn({ onClick, children, accent }: { onClick?: () => void; children: ReactNode; accent?: boolean }) {
-  return <button className={"round" + (accent ? " accent" : "")} onClick={onClick}>{children}</button>;
+export function RoundBtn({ onClick, children, accent, label }: { onClick?: () => void; children: ReactNode; accent?: boolean; label?: string }) {
+  return <button className={"round" + (accent ? " accent" : "")} onClick={onClick} aria-label={label}>{children}</button>;
 }
 /** iOS-style draggable bottom sheet. snaps = fraction of viewport height visible. Drag from the header. */
 export function Sheet({ children, snaps = [0.42, 0.94], initial = 1, onClose, z = 10, header }: { children: ReactNode; snaps?: number[]; initial?: number; onClose?: () => void; z?: number; header?: ReactNode }) {

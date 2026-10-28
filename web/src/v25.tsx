@@ -1,10 +1,7 @@
 // v25: Skyline Labs — 15 "smart" features (all rule-based or simple statistics on live data; NO LLM) + 10 utilities.
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, load, type Flight } from "./lib";
-import { LABS2, LabsHome, AirportPicker, Ic2 } from "./v28";
-import { LABS3 } from "./v29";
-import { LABS4 } from "./v32";
-import { LABS5 } from "./v39";
+import { AirportPicker } from "./v28";
 
 // ---------- design-system icons (original, 24px stroke set) ----------
 const sv = (d: string, extra?: ReactNode) => <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={d} />{extra}</svg>;
@@ -79,12 +76,12 @@ export function getBoard(iata: string, dir = "dep", off = 0) { const k = iata + 
 const dayOff = () => +(sessionStorage.getItem("sk.labs.day") || 0);
 function useBoard(iata: string, dir = "dep") { const [s, set] = useState<{ d?: any; e?: string; ld: boolean }>({ ld: true }); const off = dayOff();
   useEffect(() => { if (!/^[A-Z]{3}$/.test(iata)) return; let on = true; set({ ld: true }); getBoard(iata, dir, off).then(d => on && set({ d, ld: false })).catch(e => on && set({ e: String(e.message || e), ld: false })); return () => { on = false; }; }, [iata, dir, off]); return s; }
-function DaySeg({ on }: { on: () => void }) { const d = dayOff(); const set = (n: number) => { sessionStorage.setItem("sk.labs.day", String(n)); on(); };
+export function DaySeg({ on }: { on: () => void }) { const d = dayOff(); const set = (n: number) => { sessionStorage.setItem("sk.labs.day", String(n)); on(); };
   return <div className="lab-seg"><button className={d === -1 ? "on" : ""} onClick={() => set(-1)}>Yesterday</button><button className={d === 0 ? "on" : ""} onClick={() => set(0)}>Today</button></div>; }
 const pulseList = (): string[] => ls("sk.pulse", ["SKG", "BUD", "IST", "LCA"]);
 
 // ---------- small UI primitives ----------
-const Kind = ({ k }: { k: string }) => <span className={"lab-kind k-" + k.toLowerCase()}>{k}</span>;
+export const Kind = ({ k }: { k: string }) => <span className={"lab-kind k-" + k.toLowerCase()}>{k}</span>;
 const Stat = ({ l, v, tone }: { l: string; v: ReactNode; tone?: string }) => <div className={"lab-stat " + (tone || "")}><b>{v}</b><span>{l}</span></div>;
 const Note = ({ children }: { children: ReactNode }) => <div className="lab-note">{children}</div>;
 const Src = ({ d }: { d: any }) => d ? <div className="lab-src">Data: {d.provider || d.source || "live board"}{d.sourceKind && d.sourceKind !== "official" ? " (not an official timetable)" : ""}</div> : null;
@@ -275,7 +272,7 @@ function LastOut({ apt: a0 }: any) { const [apt, setApt] = useApt("l", a0); cons
     return <>{R.map(r => <div key={r.k} className="lab-row"><b className="mono">{r.k}</b><span>{r.c}<small className="faint"> {r.n}×</small></span><span className="faint">first {hm(r.first.dep?.scheduled, d.tz)}</span><b>last {hm(r.last.dep?.scheduled, d.tz)}</b></div>)}<Note>Last non-cancelled departure to each destination today, from the live board.</Note></>; }}</Gate></>; }
 
 // ---------- registry ----------
-const BOARDY = new Set(["heat", "best", "trend", "outlier", "ask", "peaks", "score", "route", "csv", "dest", "mix", "cmp", "gates", "last", "waves"]);
+export const BOARDY = new Set(["heat", "best", "trend", "outlier", "ask", "peaks", "score", "route", "csv", "dest", "mix", "cmp", "gates", "last", "waves"]);
 type Lab = { id: string; n: string; d: string; k: "Statistical" | "Rule-based" | "Utility"; ic: string; el: (p: any) => ReactNode };
 export const LABS: Lab[] = [
   { id: "heat", n: "Delay heatmap", d: "Airline × time-of-day delays today", k: "Statistical", ic: "heat", el: p => <Heatmap {...p} /> },
@@ -305,9 +302,6 @@ export const LABS: Lab[] = [
   { id: "last", n: "Last flight out", d: "First and last departure per destination", k: "Utility", ic: "moon", el: p => <LastOut {...p} /> },
 ];
 
-export function Labs({ id, apt, f, open }: { id?: string; apt?: string; f?: any; open?: (f: any) => void }) { const [sel, ss] = useState<string | null>(id || null); const [rk, srk] = useState(0); const ALL: any[] = [...LABS, ...LABS2, ...LABS3, ...LABS4, ...LABS5]; const t = ALL.find(x => x.id === sel);
-  if (t) return <div className="lab-tool"><button className="lab-back" onClick={() => ss(null)}>{Ic.back} Labs</button><div className="lab-th"><span className={"lab-ic k-" + t.k.split("-")[0].toLowerCase()}>{Ic[t.ic] || Ic2[t.ic]}</span><div><h2>{t.n}</h2><Kind k={t.k} /></div></div>{BOARDY.has(t.id) && <DaySeg on={() => srk(x => x + 1)} />}<Fragment key={rk}>{t.el({ apt, f, open })}</Fragment></div>;
-  return <LabsHome all={ALL} pick={ss} />; }
 
 // v26 design-system primitives
 export function SecHead({ ic, title, sub, right }: { ic?: ReactNode; title: ReactNode; sub?: ReactNode; right?: ReactNode }) {
