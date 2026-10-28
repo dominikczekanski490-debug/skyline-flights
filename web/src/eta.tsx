@@ -7,7 +7,10 @@ export function etaOf(f: Flight, live?: any): Eta | null {
   const a: any = f.arr || {}; const sch = a.scheduled ? +new Date(a.scheduled) : null; const mk = (t: number, kind: Eta["kind"], src: string): Eta => ({ t: new Date(t).toISOString(), kind, src, delay: sch ? Math.round((t - sch) / 60000) : null });
   if (a.actual) return mk(+new Date(a.actual), "actual", "Actual arrival");
   const lv = live || liveOf(f); const d: any = f.destination;
-  if (lv && typeof lv.lat === "number" && d?.lat != null && (lv.gs || 0) > 80 && !lv.onGround) { const rem = km(lv.lat, lv.lon, d.lat, d.lon); const at = lv.at || Date.now(); return mk(at + (rem / (lv.gs * 1.852) + 8 / 60) * 3600e3, "adsb", `Live ADS-B · ${Math.round(rem)} km to go at ${Math.round(lv.gs)} kt`); }
+  if (lv && typeof lv.lat === "number" && d?.lat != null && (lv.gs || 0) > 80 && !lv.onGround) { const rem = km(lv.lat, lv.lon, d.lat, d.lon); const at = lv.at || Date.now(); const t = at + (rem / (lv.gs * 1.852) + 8 / 60) * 3600e3;
+    // official first: a published estimate wins; live speed is shown as a cross-check
+    if (a.estimated && !a.etaSource && !a.estimatedOnly) { const off = +new Date(a.estimated); const df = Math.round((t - off) / 6e4); return mk(off, "official", `Official estimate · live speed says ${Math.abs(df) < 3 ? "the same" : (df > 0 ? "+" : "") + df + " min"} (${Math.round(rem)} km to go at ${Math.round(lv.gs)} kt)`); }
+    return mk(t, "adsb", `Skyline estimate · live speed: ${Math.round(rem)} km great-circle to go at ${Math.round(lv.gs)} kt ground speed + 8 min approach`); }
   if (a.estimated && !a.etaSource && !a.estimatedOnly) return mk(+new Date(a.estimated), "official", "Official estimate" + (f.source ? ` (${f.source})` : ""));
   if (a.estimated && a.etaSource) return mk(+new Date(a.estimated), "adsb", "Live ADS-B (last fix)");
   const g: any = withEstArr(f); const b = best(g.arr); if (b) { const s0 = g.arr.scheduled ? +new Date(g.arr.scheduled) : null; return { ...mk(+new Date(b), g.arr.estimated ? "skyline" : "official", g.arr.etaMethod || (g.arr.estimated ? "Skyline estimate · typical block time from departure" : g.arr.schedEst ? "Skyline estimate · typical block time (no published arrival time)" : "Scheduled")), delay: s0 && !g.arr.schedEst ? Math.round((+new Date(b) - s0) / 60000) : null }; }

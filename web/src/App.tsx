@@ -37,7 +37,7 @@ import { Sheet, RoundBtn, I, Badge } from "./ui";
 import { api, today, dist, fmtT, fmtD, best, delay, dur, lateLabel, lateColor, withEstArr, load, save, ics, download, wxIcon, tzOffset, estDurMin, type Flight, type Ap } from "./lib";
 import { liveOf, statusOf } from "./lib";
 import { AirlineTile } from "./brand";
-import { EtaLine } from "./eta";
+import { EtaLine, etaOf } from "./eta";
 import { GreekBoard, FRAPORT_GR } from "./v41gr";
 import "./v41.css";
 import { Tracked, isTracked, finishStale } from "./tracked";
@@ -409,7 +409,7 @@ function TimeBlock({ dir, a, t, d, badge, est }: any) {
   const shown = t.actual || t.estimated || t.scheduled; const changed = t.scheduled && shown && fmtT(shown, a?.tz) !== fmtT(t.scheduled, a?.tz);
   return <div className="tb"><div className="muted row g6">{dir === "dep" ? I.dep : I.arr}<b className="text">{a?.iata} • {a?.city || a?.name}</b> ›</div>
     <div className="row between"><div><div className="row g8 base"><span className="huge2" style={{ color: d != null ? lateColor(d) : undefined }}>{fmtT(shown, a?.tz)}</span>{changed && <s className="faint">{fmtT(t.scheduled, a?.tz)}</s>}</div>
-      <small style={{ color: lateColor(d) }}>{lateLabel(d)}{est && <span className="faint"> • estimated from distance</span>}</small></div>{badge}</div></div>;
+      <small style={{ color: lateColor(d) }}>{lateLabel(d)}{est && <span className="faint"> • {(t as any).etaConf ? "Skyline estimate · " + (t as any).etaConf : "Skyline estimate"}</span>}</small></div>{badge}</div></div>;
 }
 
 function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => void }) {
@@ -425,7 +425,8 @@ function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => voi
     <div className="b2t"><b className={late ? "lt" : ""}>{fmtT(late ? t.actual || t.estimated : t.scheduled, tz)}</b>{late && <s>{fmtT(t.scheduled, tz)}</s>}</div>
     <div className="b2logo"><Logo a={f.airline} s={18} /></div>
     <div className="grow b2m"><div className="b2c">{a?.city || a?.name || a?.iata}<span className="b2i">{a?.iata}</span></div>
-      <div className="b2s"><span className={"b2chip " + chipK}>{bs.txt}</span>{d != null && d >= 5 && !/cancel/i.test(bs.txt) && <span className="b2chip delay">+{d}m</span>}{f.pred && f.pred.d >= 10 && f.status !== "cancelled" && <span className="aibadge sm" onClick={e => { e.stopPropagation(); (window as any).__why?.(f); }}>AI +{f.pred.d}m</span>}</div></div>
+      <div className="b2s"><span className={"b2chip " + chipK}>{bs.txt}</span>{d != null && d >= 5 && !/cancel/i.test(bs.txt) && <span className="b2chip delay">+{d}m</span>}{f.pred && f.pred.d >= 10 && f.status !== "cancelled" && <span className="aibadge sm" onClick={e => { e.stopPropagation(); (window as any).__why?.(f); }}>AI +{f.pred.d}m</span>}{(() => { if (f.status === "cancelled" || (dir === "arr" && t.actual)) return null; const e = etaOf(f); if (!e || (dir === "arr" && e.kind === "official" && e.src === "Scheduled")) return null;
+        return <span className={"b2chip eta k-" + e.kind} title={e.src}>{dir === "dep" ? "Arr " : ""}{e.kind === "actual" ? "landed " : ""}{fmtT(e.t, f.destination?.tz)}{e.kind === "adsb" || e.kind === "skyline" ? " est." : ""}</span>; })()}</div></div>
     <div className="b2r"><b>{f.number.replace(/^([A-Z0-9]{2})(?=\d)/, "$1 ")}</b><div className="b2p">{pills.map(x => <span key={x}>{x}</span>)}</div></div></div>;
 }
 function Board({ iata, x, push, term0 }: any) {

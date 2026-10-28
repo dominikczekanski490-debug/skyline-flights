@@ -938,6 +938,12 @@ function flogPut(f) { if (!f?.number || !(f.dep?.scheduled || f.arr?.scheduled))
     sources: [...new Set([...(p.sources || []), f.source].filter(Boolean))] };
   if (!p.at && ++FLOG_N % 200 === 0) { const ks = Object.keys(L); if (ks.length > FLOG_MAX) ks.sort((a, b) => L[a].at - L[b].at).slice(0, ks.length - FLOG_MAX).forEach(k => delete L[k]); } }
 let FLOG_N = 0;
+// v41 route history: observed block times (dep actual -> arr actual) per origin-destination(-airline) from the flight log. Median, >=3 samples.
+let RB = { at: 0, ix: {} };
+function routeBlock(o, d, al) { if (!o || !d) return null; if (Date.now() - RB.at > 10 * 60e3) { const ix = {}; for (const e of Object.values(STATE.flog || {})) { const a = Date.parse(e.dep?.actual || ""), b = Date.parse(e.arr?.actual || "");
+      if (!a || !b || !e.origin?.iata || !e.destination?.iata) continue; const m = (b - a) / 6e4; if (m < 15 || m > 20 * 60) continue; const k = e.origin.iata + "-" + e.destination.iata; (ix[k] ||= []).push(m); if (e.airline?.iata) (ix[k + "-" + e.airline.iata] ||= []).push(m); } RB = { at: Date.now(), ix }; }
+  const med = L => { const x = [...L].sort((p, q) => p - q); return Math.round(x.length % 2 ? x[x.length >> 1] : (x[x.length / 2 - 1] + x[x.length / 2]) / 2); };
+  for (const k of [o + "-" + d + "-" + al, o + "-" + d]) { const L = RB.ix[k]; if (L && L.length >= 3) return { med: med(L), n: L.length, scope: k.split("-").length > 2 ? "airline" : "route" }; } return null; }
 const flogGet = (num, ymd) => STATE.flog?.[num + "|" + ymd];
 setInterval(() => { const L = STATE.flog || {}; for (const k in L) if (Date.now() - L[k].at > FLOG_KEEP) delete L[k]; }, 3600e3);
 // ADS-B observed landing/take-off at an airport for a callsign, within a time window.
@@ -958,6 +964,7 @@ api.get("/board/:iata", wrap(async (req, res) => { const iata = req.params.iata.
     const p = predictCore(f, dir === "dep" ? { wxDep: wxAt(wx, t), aptStats: st } : { wxArr: wxAt(wx, t) }); f.pred = { d: p.predictedDelay, on: p.probs.onTime, c: p.confidence, top: p.top, summary: p.summary, factors: p.factors.slice(0, 4) }; }
   // v12.1: only log flights with an outcome (actual time / departed / landed / cancelled); logging every scheduled row of big boards grew state to 7 MB+ and OOMed 512 MB hosts.
   for (const f of b.flights) if (!f.liveOnly && (f.dep?.actual || f.arr?.actual || ["landed", "departed", "cancelled"].includes(f.status))) flogPut(f);
+  for (const f of b.flights) { const r = routeBlock(f.origin?.iata, f.destination?.iata, f.airline?.iata); if (r) f.routeBlock = r; }
   warmPhotos(b.flights); const officialUrl = b.sourceKind === "official" ? undefined : AIRPORT_SITE[a.iata]; res.json({ airport: airportOut(a), dir, ...b, officialUrl, flights: staleFix(b.flights || [], dir) }); }));
 
 
@@ -1014,6 +1021,7 @@ async function findFlight(number, ymd) {
       const a2 = !F2.arr?.actual && obsEvent(F2.destination?.iata, "arr", c2, sd, sd + 20 * 3600e3); if (a2) { F2.arr = { ...F2.arr, actual: new Date(a2.t).toISOString(), actualSource: "ADS-B observed" + (a2.approx ? " (approx.)" : "") }; F2.status = "landed"; F2.statusText = "Landed (observed by ADS-B)"; } } }
   if (result.flight) { const F2 = result.flight; for (const s2 of ["dep", "arr"]) { const t = F2[s2] || (F2[s2] = {}); const ref = t.actual || t.estimated; t.delayMin = ref && t.scheduled ? Math.round((new Date(ref) - new Date(t.scheduled)) / 60e3) : null; }
     if (["landed", "departed"].includes(F2.status) || F2.arr?.actual || F2.dep?.actual) flogPut(F2); }
+  if (result.flight) { const r = routeBlock(result.flight.origin?.iata, result.flight.destination?.iata, result.flight.airline?.iata); if (r) result.flight.routeBlock = r; }
   if (result.flight) { const F2 = result.flight; const de = depEvidence(F2, result.live), ae = arrEvidence(F2, result.live); F2.evidence = { dep: de, arr: ae };
     // v34: never state departed/landed as fact without evidence (a feed actual time or matched live ADS-B).
     if (["departed", "enroute"].includes(F2.status) && !de) { F2.status = "departed"; F2.unconfirmed = true; F2.statusText = "Departed per airport feed · not yet seen airborne"; }

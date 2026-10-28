@@ -31,8 +31,10 @@ export function withEstArr(f: Flight): Flight { // fill or model the arrival est
   const s = hasSch ? A.scheduled : new Date(+new Date(f.dep.scheduled) + m * 60000).toISOString();
   if (A.estimated) return hasSch ? f : { ...f, arr: { ...A, scheduled: s, estimatedOnly: true, schedEst: true } as any };
   if (dd == null) return hasSch ? f : { ...f, arr: { ...A, scheduled: s, estimatedOnly: true, schedEst: true } as any };
+  { const rb: any = (f as any).routeBlock; const ref = f.dep.actual || f.dep.estimated; if (rb && rb.n >= 3 && ref) { const e2 = new Date(+new Date(ref) + rb.med * 60000).toISOString();
+    return { ...f, arr: { ...A, scheduled: s, estimated: e2, estimatedOnly: true, schedEst: !hasSch, etaConf: "from route history", etaMethod: `Skyline estimate · from route history: median ${dur(rb.med)} gate-to-landing over ${rb.n} ${rb.scope === "airline" ? "flights by this airline" : "flights"} on this route seen in Skyline data, from the ${f.dep.actual ? "actual" : "expected"} departure` } as any }; } }
   const rec = recoveryMin(dd, m); const e = new Date(+new Date(s) + (dd - rec) * 60000).toISOString();
-  return { ...f, arr: { ...A, scheduled: s, estimated: e, estimatedOnly: true, schedEst: !hasSch, etaMethod: `Skyline estimate: ${hasSch ? "scheduled" : "typical"} block time ${dur(m)} from the ${f.dep.actual ? "actual" : "expected"} departure${rec ? `, minus about ${rec} min usually recovered in the air (schedule padding)` : ""}` } as any };
+  return { ...f, arr: { ...A, scheduled: s, estimated: e, estimatedOnly: true, schedEst: !hasSch, etaConf: "from schedule", etaMethod: `Skyline estimate · from schedule: ${hasSch ? "scheduled" : "typical"} block time ${dur(m)} from the ${f.dep.actual ? "actual" : "expected"} departure${rec ? `, minus about ${rec} min usually recovered in the air (schedule padding)` : ""}` } as any };
 }
 // storage
 const K = "skyline.flights.v1";
