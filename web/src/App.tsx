@@ -28,7 +28,7 @@ import { TerminalBoard, status as boardStatus } from "./terminal";
 import { mark, toast, Boundary } from "./guard";
 import { PlaneFrom, useAircraft } from "./inbound";
 import { Alternatives, FlightStory, PassCard, JetLag } from "./v20";
-import { TripView, OfflineBanner, AirportLive, SpotterLog } from "./v43";
+import { OnlineOnly, TripView, OfflineBanner, AirportLive, SpotterLog } from "./v43";
 import { AssistantFeed, TodayCard, NLSearch, CompCard, shareImage, exportIcs as icsOf, AirportGuide } from "./assist";
 import { NextHero, PlaneHere, Facts, GlobalSearch, DayOf, phaseOf } from "./big";
 import { useRef, useEffect, useMemo, useState, lazy, Suspense, type ReactNode } from "react";
@@ -99,7 +99,7 @@ export default function App() {
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", v); window.removeEventListener("focus", v); }; }, [active.map(f => f.id).join()]);
   const top = ov.at(-1); const focus = top?.t === "flight" ? top.f : null;
   const mapFlights = focus ? [focus] : tab === "passport" ? flights.filter(f => !f.friend) : tab === "friends" ? flights.filter(f => f.friend) : active.filter(f => !f.friend);
-  return <div className="app"><WarmBanner /><UpdateBanner /><OfflineBanner />{why && <WhySheet f={why} close={() => setWhy(null)} />}
+  return <div className="app"><OnlineOnly><WarmBanner /></OnlineOnly><UpdateBanner /><OfflineBanner />{why && <WhySheet f={why} close={() => setWhy(null)} />}
     <MapView flights={mapFlights} live={live} style={mapStyle} radar={radar} focus={focus} locate={locate} onPlane={id => { const f = flights.find(x => x.id === id); f && push({ t: "flight", f }); }} />
     <div className="maptint" /><div className="aurora" />
     <div className="mapbtns"><button onClick={() => setMapStyle(MAP_STYLES[(MAP_STYLES.indexOf(mapStyle) + 1) % MAP_STYLES.length])}>{I.layers}</button><button className={radar ? "on" : ""} onClick={() => setRadar(!radar)}>{I.cloud}</button><button onClick={() => setLocate(Date.now())}>{I.locate}</button></div>

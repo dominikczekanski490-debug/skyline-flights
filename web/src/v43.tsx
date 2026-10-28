@@ -91,3 +91,4 @@ export function SpotterLog({ x }: { x: any }) { const [L, setL] = useState<Spot[
       {types.size > 0 && <><h4 className="mt12">Types</h4>{top(types).map(([k, v]) => <div key={k} className="row between sm"><span>{k}</span><b>{v}</b></div>)}</>}
       <div className="faint xs mt12">Counted only from planes you logged and flights you tracked.</div></div>}
   </div></>; }
+export function OnlineOnly({ children }: { children: any }) { return useOnline() ? children : null; }
