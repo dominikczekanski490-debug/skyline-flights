@@ -10,3 +10,21 @@
 .grb-al>*{border-radius:3px}.grb-r{font-weight:700;font-size:10.5px;padding:3px 4px;border-radius:3px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .grb-r.red{background:#d61f26;color:#fff}.grb-r.green{background:#1f9d43;color:#fff}.grb-r.amber{color:#b45309}.grb-r.white{color:#0b2a6b}.grb-r i{font-style:normal;font-weight:600;color:#475a85;font-size:10px}
 .grb-empty{background:#fff;padding:18px;text-align:center}.grb-src{color:#b9cdf5;font-size:10px;padding:6px 10px}
+/* v41 board + aurora readability. Aurora sky is a fixed layer of the sheet (never scrolls); mountains hug the bottom edge only. */
+html[data-skin=aurora] .nl-mtn{top:auto;bottom:0;height:7%}
+html[data-skin=aurora] .nl-cur{height:62%}
+html[data-skin=aurora] .nl-scrim{background:linear-gradient(180deg,rgba(2,4,15,.05),rgba(2,4,15,.35) 45%,rgba(2,4,15,.7))}
+html[data-skin=aurora] .sheet-body .card,html[data-skin=aurora] .brow2,html[data-skin=aurora] .brow,html[data-skin=aurora] .note,html[data-skin=aurora] .sk-field,html[data-skin=aurora] .ftrow,html[data-skin=aurora] .site-link{background:rgba(6,13,30,.94)!important;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+html[data-skin=aurora] .b2h{background:rgba(4,9,22,.96)!important;color:#b9c8e0}
+html[data-skin=aurora] .sheet-body .px,html[data-skin=aurora] .sheet-body>.faint,html[data-skin=aurora] .board-meta{background:rgba(4,9,22,.82);border-radius:10px;padding-top:4px;padding-bottom:4px}
+html[data-skin=aurora] .sheet-body .faint{color:#a9b8d0}
+html[data-skin=aurora] .sheet-body .muted{color:#c3cfe2}
+html[data-skin=aurora] .photo-credit,html[data-skin=aurora] .credit,html[data-skin=aurora] .livery small{color:#dfe8f5!important;background:rgba(2,6,16,.78);padding:2px 6px;border-radius:6px}
+/* board rows: chips aligned, delay + ETA chips, 44px tap targets, off-screen rows skipped by the browser (content-visibility) */
+.brow2{min-height:56px;content-visibility:auto;contain-intrinsic-size:auto 64px}
+.b2chip.eta{background:color-mix(in srgb,var(--blue,#3b82f6) 14%,transparent);color:var(--text);font-variant-numeric:tabular-nums}
+.b2chip.eta.k-skyline,.b2chip.eta.k-adsb{border:1px dashed color-mix(in srgb,var(--blue,#3b82f6) 55%,transparent)}
+.b2p span{min-width:34px;text-align:center}
+.sk-pill,.chip,.sk-seg button{min-height:36px}
+.press{transition:transform .12s ease}.press:active{transform:scale(.975)}
+html[data-anim=off] .press:active{transform:none}
