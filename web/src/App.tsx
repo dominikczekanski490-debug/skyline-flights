@@ -1,3 +1,5 @@
+import { AuroraCard, RouteAurora } from "./aurora";
+import "./aurora.css";
 import { AircraftCard, WhatsNew22, HomeWidgets, Overhead22, Wrapped22, Connections22 } from "./v22";
 import "./v22.css";
 import { DiscoverCarousel, trackPing, AcarsFeed } from "./v36";
@@ -152,7 +154,7 @@ function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => 
     <GlobalSearch push={push} onFlight={f => push({ t: "flight", f })} />
     {(() => { const nx = list.filter(f => !f.example && phaseOf(f) !== "cancelled" && !(f.status === "landed" && Date.now() - +new Date(f.arr.actual || f.arr.scheduled || 0) > 3 * 3600e3)).sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1)[0];
       return nx ? <><NextHero f={nx} open={() => open(nx)} dayof={() => push({ t: "dayof", f: nx })} /><div className="px pf-hero"><PlaneFrom f={nx} compact /></div></> : null; })()}
-    <div className="px"><HomeWidgets flights={list} push={push} /><AirportPulse push={push} /></div><DiscoverCarousel push={push} /><AcarsEntry />
+    <div className="px"><AuroraHome flights={list} /><HomeWidgets flights={list} push={push} /><AirportPulse push={push} /></div><DiscoverCarousel push={push} /><AcarsEntry />
     <TodayCard flights={list} />
     <AssistantFeed flights={list} push={push} />
     <NLSearch open={f => push({ t: "flight", f })} />
@@ -230,7 +232,7 @@ function Overlay(p: { o: Ov; z: number; close: () => void; push: (o: Ov) => void
   const x = <RoundBtn onClick={close}>{I.close}</RoundBtn>;
   if (o.t === "search") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><SearchView {...p} x={x} /></Sheet>;
   if (o.t === "flight") return <Sheet z={z} onClose={close} snaps={[0.5, 0.94]} initial={0} header={<div className="head fhead"><div className="row g10"><Logo a={o.f.airline} /><div><div className="muted sm">{o.f.number} • {fmtD(o.f.date, { weekday: "short", day: "numeric", month: "short" }).toUpperCase()}</div><h2>{o.f.origin?.city} to {o.f.diverted ? <s>{o.f.destination?.city}</s> : o.f.destination?.city}</h2></div></div>{x}</div>}>
-    <FlightDetail f={p.flights.find(f => f.id === o.f.id) || o.f} {...p} /></Sheet>;
+    <FlightDetail f={p.flights.find(f => f.id === o.f.id) || o.f} {...p} /><div className="px"><RouteAurora f={o.f} /></div></Sheet>;
   if (o.t === "board") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Board iata={o.iata} x={x} push={p.push} term0={o.term} /></Sheet>;
   if (o.t === "airports") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Airports x={x} push={p.push} flights={p.flights} initial={o.mode} /></Sheet>;
   if (o.t === "tools") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Head title="Tools" right={x} /><div className="px"><ToolsHub open={o.id} /></div></Sheet>;
@@ -595,3 +597,5 @@ function AcarsEntry() { const [o, setO] = useState(false); return <div className
 
 const WalkL = lazy(() => import("./v37"));
 function WalkBtn() { const [o, setO] = useState(() => /walk=1/.test(location.hash)); return <><button className="card press" style={{ width: "100%", textAlign: "left", marginBottom: 8 }} onClick={() => setO(true)}><b>🚶 Terminal walkthrough</b> <span className="m3beta">BETA</span><div className="muted sm">Walk from the station to the gate in T2 or T3, with the live departures board</div></button>{o && <Suspense fallback={null}><WalkL onClose={() => setO(false)} /></Suspense>}</>; }
+
+function AuroraHome({ flights }: { flights: any[] }) { const now = Date.now(); const nx = flights.filter((f: any) => !f.friend && !f.example && +new Date(f.arr?.estimated || f.arr?.scheduled || f.dep?.scheduled || 0) > now).sort((a: any, b: any) => +new Date(a.dep?.scheduled) - +new Date(b.dep?.scheduled))[0]; const sk = document.documentElement.dataset.skin; if (sk !== "aurora" && localStorage.getItem("sk.aurcard") !== "on") return null; return <AuroraCard flight={nx} />; }

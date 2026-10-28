@@ -1,0 +1,10 @@
+.aur-card{margin:12px 0;padding:16px;border-radius:22px;background:linear-gradient(160deg,rgba(8,40,48,.92),rgba(6,14,32,.95));border:1px solid rgba(90,255,180,.22);color:#e8fbff;position:relative;overflow:hidden}
+.aur-card::after{content:"";position:absolute;inset:-40% -10% auto;height:120%;background:radial-gradient(40% 50% at 30% 100%,rgba(90,255,180,.22),transparent 70%),radial-gradient(30% 40% at 75% 100%,rgba(160,90,240,.16),transparent 70%);pointer-events:none}
+.aur-h{display:flex;justify-content:space-between;align-items:center}.aur-pill{font-size:12px;padding:3px 10px;border-radius:99px;background:rgba(90,255,180,.16);color:#7dffc4}
+.aur-big{font-size:44px;font-weight:800;color:#5affb4;margin:6px 0}.aur-big small{display:block;font-size:12px;font-weight:500;color:#9fc}
+.aur-g{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.aur-g span{background:rgba(255,255,255,.05);border-radius:12px;padding:8px}.aur-g i{display:block;font-style:normal;font-size:11px;color:#8fb4c2}.aur-g b{font-size:13px}
+.aur-spark{display:flex;align-items:flex-end;gap:4px;height:56px;margin-top:10px}.aur-spark i{width:14px;border-radius:4px;background:#5affb4}.aur-spark small{margin-left:8px;font-size:11px;color:#8fb4c2}
+.aur-side{margin-top:10px;font-size:13px}.aur-note{margin-top:10px;font-size:11px;color:#8fb4c2;line-height:1.4}.aur-act{display:flex;justify-content:space-between;align-items:center;margin-top:10px;position:relative;z-index:1}
+.aur-alert{font-size:13px}.aur-alert select{margin-left:6px;background:#0b1e2a;color:#e8fbff;border:1px solid #275;border-radius:8px;padding:4px}
+html[data-theme=light] .aur-card{background:linear-gradient(160deg,#e9fff6,#eef4ff);color:#062824;border-color:rgba(13,148,136,.25)}html[data-theme=light] .aur-big{color:#0d9488}
+html[data-skin=eink] .aur-card{background:#fff!important;color:#000!important;border:2px solid #000}html[data-skin=eink] .aur-card::after{display:none}html[data-skin=eink] .aur-big,html[data-skin=eink] .aur-pill{color:#000;background:none}html[data-skin=eink] .aur-spark i{background:#000}
