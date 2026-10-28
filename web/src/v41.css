@@ -57,3 +57,19 @@ html[data-skin=eink] .pk{border:2px solid #000!important}html[data-skin=eink] .p
 html[data-skin=eink] .eta,html[data-skin=eink] .eta *,html[data-skin=eink] .banner,html[data-skin=eink] .banner *,html[data-skin=eink] .dex,html[data-skin=eink] .cxd *{background:#fff!important;color:#000!important;-webkit-text-fill-color:#000!important;border-color:#000!important}
 html[data-skin=eink] .eta,html[data-skin=eink] .banner{border:2px solid #000!important}
 html[data-skin=eink] .pk-grad,html[data-skin=eink] .pk-t,html[data-skin=eink] .pk-min,html[data-skin=eink] .pk-chain *,html[data-skin=eink] .pk-lab,html[data-skin=eink] .pk-conf,html[data-skin=eink] .pk-tx{border:0!important}
+/* v43 trip view / offline / airport live / spotter */
+.tv-leg{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;background:none;border:0;color:var(--text);padding:10px 0;min-height:44px}
+.tv-dot{width:10px;height:10px;border-radius:50%;background:var(--acc);margin-top:5px;flex:none}
+.tv-gap{border-left:2px dashed color-mix(in srgb,var(--muted) 50%,transparent);margin-left:4px;padding:4px 0 4px 14px}
+.tv-wx{display:flex;gap:8px;overflow-x:auto;margin-top:6px}.tv-wx>div{display:flex;flex-direction:column;min-width:76px;padding:8px;border-radius:10px;background:color-mix(in srgb,var(--text) 6%,transparent)}.tv-wx small{color:var(--muted);font-size:11px}
+.offl{position:fixed;top:env(safe-area-inset-top,0);left:0;right:0;z-index:9999;background:var(--warn,#c80);color:#111;text-align:center;font-size:13px;font-weight:600;padding:6px 10px}
+.alive-map{width:100%;max-width:340px;display:block;margin:8px auto;aspect-ratio:1}
+.alive-ring{fill:none;stroke:color-mix(in srgb,var(--muted) 45%,transparent);stroke-width:.8}
+.alive-rt{fill:var(--muted);font-size:8px}.alive-apt{fill:var(--text)}
+.alive-k{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.alive-list{max-height:260px;overflow:auto;margin-top:8px}.alive-row{padding:6px 0;border-bottom:1px solid color-mix(in srgb,var(--muted) 20%,transparent);gap:8px}
+.spot-ph{margin:8px 0 0}.spot-ph img{width:100%;border-radius:10px;display:block}
+.spot-st{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}.spot-st>div{display:flex;flex-direction:column;padding:10px;border-radius:12px;background:color-mix(in srgb,var(--acc) 12%,transparent)}.spot-st b{font-size:22px;color:var(--acc)}.spot-st small{color:var(--muted)}
+html[data-skin=eink] .offl{background:#fff;color:#000;border-bottom:2px solid #000}
+html[data-skin=eink] .spot-st>div,html[data-skin=eink] .tv-wx>div{background:#fff;border:1px solid #000}html[data-skin=eink] .spot-st b{color:#000}
+html[data-skin=eink] .alive-map g{color:#000!important}html[data-skin=eink] .alive-map .alive-overflight path{fill:#fff;stroke:#000;stroke-width:1}html[data-skin=eink] .alive-map .alive-ground path{fill:#888}html[data-skin=eink] .alive-row span[style]{color:#000!important}html[data-skin=eink] .alive-k{border:1px solid #000}

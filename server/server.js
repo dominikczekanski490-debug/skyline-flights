@@ -1475,6 +1475,20 @@ api.get("/squawks", wrap(async (req, res) => { const out = []; for (const s of [
 api.get("/mil", wrap(async (req, res) => res.json({ list: (await adsb("mil")).filter(a => a.lat).slice(0, 300), source: "adsb.lol" })));
 api.get("/overhead", wrap(async (req, res) => { const lat = +req.query.lat, lon = +req.query.lon, r = Math.min(250, +req.query.r || 25); if (!isFinite(lat) || !isFinite(lon)) return res.status(400).json({ error: "lat/lon required" });
   const l = (await adsb(`point/${lat.toFixed(3)}/${lon.toFixed(3)}/${r}`)).filter(a => a.lat).map(a => ({ ...a, nm: Math.round(hav({ lat, lon }, a) / 1.852 * 10) / 10 })).sort((a, b) => a.nm - b.nm); res.json({ list: l, source: "adsb.lol" }); }));
+// v43 airport live map: aircraft within 40 nm classed as ground / approach / departure / holding / overflight.
+// Holding = Skyline estimate from the turn pattern Skyline itself observed (track turned >=300° in <=12 min at steady altitude); needs a few polls.
+const TRK = {};
+api.get("/airport/:iata/traffic", wrap(async (req, res) => { const c = req.params.iata.toUpperCase(), ap = AP[c]; if (!ap?.lat) return res.status(404).json({ error: "Unknown airport" });
+  res.json(await cached(`aptraf:${c}`, 20, async () => { const l = (await adsb(`point/${ap.lat.toFixed(3)}/${ap.lon.toFixed(3)}/40`)).filter(a => a.lat && a.type !== "TWR" && a.reg !== "TWR"); const now = Date.now(); const T = TRK[c] ||= {};
+    for (const k in T) if (now - T[k].at > 15 * 60e3) delete T[k];
+    const list = l.map(a => { const nm = Math.round(hav(ap, a) / 1.852 * 10) / 10, alt = a.alt === "ground" ? 0 : +a.alt || null; const h = T[a.hex] ||= { s: [], at: now }; h.at = now;
+      if (a.track != null && alt != null) { h.s.push({ t: now, tr: a.track, alt }); h.s = h.s.filter(x => now - x.t < 12 * 60e3).slice(-40); }
+      let turn = 0; for (let i = 1; i < h.s.length; i++) { const d = ((h.s[i].tr - h.s[i - 1].tr + 540) % 360) - 180; turn += d; }
+      const alts = h.s.map(x => x.alt), steady = alts.length >= 3 && Math.max(...alts) - Math.min(...alts) < 2500;
+      const cls = a.alt === "ground" || (alt != null && alt < 300 && (a.gs || 0) < 60) ? "ground" : Math.abs(turn) >= 300 && steady && alt > 3000 ? "holding" : nm < 30 && alt != null && alt < 12000 && (a.vs || 0) < -300 ? "approach" : nm < 30 && alt != null && alt < 15000 && (a.vs || 0) > 300 ? "departure" : "overflight";
+      const brg = Math.atan2(Math.sin((a.lon - ap.lon) * Math.PI / 180) * Math.cos(a.lat * Math.PI / 180), Math.cos(ap.lat * Math.PI / 180) * Math.sin(a.lat * Math.PI / 180) - Math.sin(ap.lat * Math.PI / 180) * Math.cos(a.lat * Math.PI / 180) * Math.cos((a.lon - ap.lon) * Math.PI / 180)) * 180 / Math.PI;
+      return { hex: a.hex, cs: (a.flight || "").trim(), reg: a.reg, type: a.type, alt: a.alt, gs: a.gs, vs: a.vs, track: a.track, lat: a.lat, lon: a.lon, nm, brg: Math.round((brg + 360) % 360), cls, turn: Math.round(Math.abs(turn)) }; }).sort((a, b) => a.nm - b.nm);
+    return { iata: c, at: now, center: { lat: ap.lat, lon: ap.lon }, list, source: "ADS-B: adsb.lol / airplanes.live / adsb.fi", holdNote: "Holding is a Skyline estimate from the turn pattern seen over the last 12 min" }; })); }));
 api.get("/aircraft/:q", wrap(async (req, res) => { const q = req.params.q.toUpperCase().replace(/[^A-Z0-9-]/g, ""); const isHex = /^[0-9A-F]{6}$/.test(q);
   const db = await cached("adsbdb:" + q, 86400, () => getJ("https://api.adsbdb.com/v0/aircraft/" + q).then(j => j.response?.aircraft || null).catch(() => null));
   const live = await adsb((isHex ? "hex/" : "reg/") + q).catch(() => []);

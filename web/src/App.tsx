@@ -28,6 +28,7 @@ import { TerminalBoard, status as boardStatus } from "./terminal";
 import { mark, toast, Boundary } from "./guard";
 import { PlaneFrom, useAircraft } from "./inbound";
 import { Alternatives, FlightStory, PassCard, JetLag } from "./v20";
+import { TripView, OfflineBanner, AirportLive, SpotterLog } from "./v43";
 import { AssistantFeed, TodayCard, NLSearch, CompCard, shareImage, exportIcs as icsOf, AirportGuide } from "./assist";
 import { NextHero, PlaneHere, Facts, GlobalSearch, DayOf, phaseOf } from "./big";
 import { useRef, useEffect, useMemo, useState, lazy, Suspense, type ReactNode } from "react";
@@ -47,7 +48,7 @@ import { Timeline, Progress, WeatherCard, AirportInfo, PassportMore, PasteImport
 import { AskSkyline, LockView, RouteWeather, useInsights } from "./v21";
 import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, makeShareLink, parseShare, LeaveCard, PassportExtras, DepartureDay, UpdateBanner, PushChecklist, BUILD, localNotify, testLocal, notifEnv } from "./extras";
 
-type Ov = { t: "ask" } | { t: "lock" } | { t: "flight"; f: Flight } | { t: "board"; iata: string; term?: boolean; dir?: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" } | { t: "tools"; id?: string } | { t: "features" } | { t: "labs"; id?: string; apt?: string; f?: Flight } | { t: "dayof"; f: Flight } | { t: "guide"; iata: string } | { t: "overhead" } | { t: "wrapped" } | { t: "conn" };
+type Ov = { t: "ask" } | { t: "lock" } | { t: "flight"; f: Flight } | { t: "board"; iata: string; term?: boolean; dir?: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" } | { t: "tools"; id?: string } | { t: "features" } | { t: "labs"; id?: string; apt?: string; f?: Flight } | { t: "dayof"; f: Flight } | { t: "guide"; iata: string } | { t: "overhead" } | { t: "wrapped" } | { t: "conn" } | { t: "trip"; f?: Flight } | { t: "spots" };
 const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <AirlineTile a={a} className="card-tile" mode="colour" style={{ width: Math.round(s * 2.4), height: s }} />;
 
 export default function App() {
@@ -58,8 +59,8 @@ export default function App() {
   const [live, setLive] = useState<Record<string, any>>({});
   const [mapStyle, setMapStyle] = useState(localStorage.getItem("sk.map2") || "dark");
   const [radar, setRadar] = useState(false); const [locate, setLocate] = useState(0);
-  useEffect(() => { const tb = location.hash.match(/tab=(mine|friends|tracked|passport)/); if (tb) setTab(tb[1] as any); const v = location.hash.match(/ov=(overhead|wrapped|conn|ask|settings|search)/); if (v) setOv([{ t: v[1] } as Ov]); const lb = location.hash.match(/labs=?(\w*)/); if (lb) setOv([{ t: "labs", id: lb[1] || undefined }]); const fm = location.hash.match(/flight=([\w-]+)/); if (fm) { const f = load().find(x => x.id === fm[1]); if (f) setOv([{ t: "flight", f }]); } }, []);
-  useEffect(() => { const h = () => { const fm = location.hash.match(/flight=([\w-]+)/); const f = fm && load().find(x => x.id === decodeURIComponent(fm[1])); if (f) setOv([{ t: "flight", f }]); }; window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
+  useEffect(() => { const tb = location.hash.match(/tab=(mine|friends|tracked|passport)/); if (tb) setTab(tb[1] as any); const v = location.hash.match(/ov=(overhead|wrapped|conn|ask|settings|search|trip|spots)/); if (v) setOv([{ t: v[1] } as Ov]); const lb = location.hash.match(/labs=?(\w*)/); if (lb) setOv([{ t: "labs", id: lb[1] || undefined }]); const fm = location.hash.match(/flight=([\w-]+)/); if (fm) { const f = load().find(x => x.id === fm[1]); if (f) setOv([{ t: "flight", f }]); } }, []);
+  useEffect(() => { const h = () => { const fm = location.hash.match(/flight=([\w-]+)/); const f = fm && load().find(x => x.id === decodeURIComponent(fm[1])); if (f) setOv([{ t: "flight", f }]); const v = location.hash.match(/ov=(overhead|wrapped|conn|ask|settings|search|trip|spots)/); if (v) setOv([{ t: v[1] } as Ov]); const b = location.hash.match(/board=([A-Za-z]{3})/); if (b) setOv([{ t: "board", iata: b[1].toUpperCase() }]); }; window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
   useEffect(() => { const m = location.hash.match(/board=([A-Za-z]{3})/); if (m) setOv([{ t: "board", iata: m[1].toUpperCase() }]); const a = location.hash.match(/airports=(\w+)/); if (a) setOv([{ t: "airports", mode: a[1] }]); }, []);
   const [why, setWhy] = useState<any>(null); (window as any).__why = (f: any) => { navigator.vibrate?.(8); setWhy(f); };
   const [theme, setTheme] = useState(localStorage.getItem("sk.theme") || "dark");
@@ -98,7 +99,7 @@ export default function App() {
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", v); window.removeEventListener("focus", v); }; }, [active.map(f => f.id).join()]);
   const top = ov.at(-1); const focus = top?.t === "flight" ? top.f : null;
   const mapFlights = focus ? [focus] : tab === "passport" ? flights.filter(f => !f.friend) : tab === "friends" ? flights.filter(f => f.friend) : active.filter(f => !f.friend);
-  return <div className="app"><WarmBanner /><UpdateBanner />{why && <WhySheet f={why} close={() => setWhy(null)} />}
+  return <div className="app"><WarmBanner /><UpdateBanner /><OfflineBanner />{why && <WhySheet f={why} close={() => setWhy(null)} />}
     <MapView flights={mapFlights} live={live} style={mapStyle} radar={radar} focus={focus} locate={locate} onPlane={id => { const f = flights.find(x => x.id === id); f && push({ t: "flight", f }); }} />
     <div className="maptint" /><div className="aurora" />
     <div className="mapbtns"><button onClick={() => setMapStyle(MAP_STYLES[(MAP_STYLES.indexOf(mapStyle) + 1) % MAP_STYLES.length])}>{I.layers}</button><button className={radar ? "on" : ""} onClick={() => setRadar(!radar)}>{I.cloud}</button><button onClick={() => setLocate(Date.now())}>{I.locate}</button></div>
@@ -161,7 +162,7 @@ function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => 
     <TodayCard flights={list} />
     <AssistantFeed flights={list} push={push} />
     <NLSearch open={f => push({ t: "flight", f })} />
-    <div className="qa">{([[I.alert, "Disruptions", "Live delay scores", () => push({ t: "airports", mode: "disruptions" }), "r"], [I.grid, "Tools", `${TOOLS.length} aviation tools`, () => push({ t: "tools" }), "b"], [I.spark, "Skyline Labs", `${LABS.length + LABS2.length + LABS3.length + LABS4.length + LABS5.length} insights & tools`, () => push({ t: "labs" }), "v"], [I.globe, "UK & Ireland", "Every airport board", () => push({ t: "airports", mode: "uk" }), "b"], [I.takeoff, "MAN board", "Departures now", () => push({ t: "board", iata: "MAN" }), "g"], [I.sliders, "Settings", "Keys & theme", () => push({ t: "settings" }), "v"]] as const).map(([ic, t, s, fn, c]) => <button key={t} className={"qtile press q" + c} onClick={fn}><span className="qic">{ic}</span><b>{t}</b><small>{s}</small></button>)}</div>
+    <div className="qa">{([[I.alert, "Disruptions", "Live delay scores", () => push({ t: "airports", mode: "disruptions" }), "r"], [I.grid, "Tools", `${TOOLS.length} aviation tools`, () => push({ t: "tools" }), "b"], [I.spark, "Skyline Labs", `${LABS.length + LABS2.length + LABS3.length + LABS4.length + LABS5.length} insights & tools`, () => push({ t: "labs" }), "v"], [I.globe, "UK & Ireland", "Every airport board", () => push({ t: "airports", mode: "uk" }), "b"], [I.takeoff, "MAN board", "Departures now", () => push({ t: "board", iata: "MAN" }), "g"], [I.globe, "Trips", "Timeline & weather", () => push({ t: "trip" }), "g"], [I.plane, "Spotter log", "Planes seen & flown", () => push({ t: "spots" }), "b"], [I.sliders, "Settings", "Keys & theme", () => push({ t: "settings" }), "v"]] as const).map(([ic, t, s, fn, c]) => <button key={t} className={"qtile press q" + c} onClick={fn}><span className="qic">{ic}</span><b>{t}</b><small>{s}</small></button>)}</div>
     {!list.length ? <div className="empty16 rise"><div className="e-ic">{I.plane}</div><b>Your next trip starts here</b><span>Search a flight number like BA1387 or a route to start tracking it live.</span>
       <button className="primary mt16" onClick={() => push({ t: "search" })}>{I.search} Add a flight</button>
       <div className="row g8 mt12 wrap center"><button className="chip" onClick={() => push({ t: "board", iata: "MAN" })}>Manchester board</button><button className="chip" onClick={() => push({ t: "airports" })}>Airport delays</button></div></div>
@@ -244,6 +245,8 @@ function Overlay(p: { o: Ov; z: number; close: () => void; push: (o: Ov) => void
   if (o.t === "overhead") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Overhead22 x={x} /></Sheet>;
   if (o.t === "wrapped") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Wrapped22 x={x} /></Sheet>;
   if (o.t === "conn") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Connections22 flights={p.flights} x={x} /></Sheet>;
+  if (o.t === "trip") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><TripView f={o.f} flights={p.flights} open={f => p.push({ t: "flight", f })} x={x} /></Sheet>;
+  if (o.t === "spots") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><SpotterLog x={x} /></Sheet>;
   if (o.t === "guide") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><AirportGuide iata={o.iata} x={x} /></Sheet>;
   if (o.t === "dayof") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><DayOf f={p.flights.find(f => f.id === o.f.id) || o.f} push={p.push} x={x} /></Sheet>;
   if (o.t === "labs") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Head title="Labs" right={x} /><div className="px"><Labs id={o.id} apt={o.apt} f={o.f} open={f => p.push({ t: "flight", f })} /></div></Sheet>;
@@ -355,7 +358,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <Timeline f={f} />
     <Prediction f={f} inb={inb} />
     <SecHead ic={Ic.bolt} title="Actions" sub="Share, plan and check the risks" />
-    <div className="sk-acts three"><ActBtn ic={Ic.image} onClick={() => shareImage(f)}>Share image</ActBtn><ActBtn ic={Ic.cal} onClick={() => icsOf([f], f.number + ".ics")}>Calendar</ActBtn>{f.origin?.iata && <ActBtn ic={Ic.tower} onClick={() => push({ t: "guide", iata: f.origin!.iata })}>{f.origin.iata} guide</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.life} onClick={() => push({ t: "labs", id: "rescue", f })}>Backup flights</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.cloud} onClick={() => push({ t: "labs", id: "wx", apt: f.origin!.iata })}>{f.origin.iata} weather</ActBtn>}{!f.example && <ActBtn ic={Ic.shield} onClick={() => push({ t: "labs", id: "risk", f })}>Trip risk</ActBtn>}</div>
+    <div className="sk-acts three"><ActBtn ic={Ic.image} onClick={() => shareImage(f)}>Share image</ActBtn><ActBtn ic={Ic.cal} onClick={() => icsOf([f], f.number + ".ics")}>Calendar</ActBtn>{!f.example && <ActBtn ic={Ic.globe} onClick={() => push({ t: "trip", f })}>Trip view</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.tower} onClick={() => push({ t: "guide", iata: f.origin!.iata })}>{f.origin.iata} guide</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.life} onClick={() => push({ t: "labs", id: "rescue", f })}>Backup flights</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.cloud} onClick={() => push({ t: "labs", id: "wx", apt: f.origin!.iata })}>{f.origin.iata} weather</ActBtn>}{!f.example && <ActBtn ic={Ic.shield} onClick={() => push({ t: "labs", id: "risk", f })}>Trip risk</ActBtn>}</div>
     {!f.example && <CompCard f={f} />}
     <LeaveCard f={f} /><DepartureDay f={f} />
     <WeatherCard w={wx[0]} a={f.origin} label="Departure" />
@@ -450,7 +453,7 @@ function Board({ iata, x, push, term0 }: any) {
             <select className="chip" value={airline} onChange={e => setAirline(e.target.value)}><option value="">Airline: All</option>{airlines.sort().map(a => <option key={a}>{a}</option>)}</select></div>
     <div className="px"><div className="sk-seg big">{([["dep", "Departures", Ic.plane], ["arr", "Arrivals", Ic.land]] as const).map(([k, l, ic]) => <button key={k} className={dir === k ? "on" : ""} onClick={() => setDir(k)}>{ic}<span>{l}</span></button>)}</div></div>
     {term && <TerminalBoard iata={iata} dir={dir} date={date} onDir={setDir} onClose={() => setTerm(false)} onOpen={f => { setTerm(false); if (history.state?.tb) history.back(); push({ t: "flight", f: { ...f, date } }); }} />}
-    {info ? <AirportInfo iata={iata} /> : <>
+    {info ? <><AirportLive iata={iata} /><AirportInfo iata={iata} /></> : <>
     <div className="px"><label className="sk-field"><span>{Ic.search}</span><input placeholder="Filter city or flight" value={q} onChange={e => setQ(e.target.value)} /></label></div>
     {!d && <div>{[0,1,2,3,4,5,6].map(i => <div key={i} className="sk-row"><div className="skel" style={{ width: 52 }} /><div className="grow"><div className="skel" style={{ width: (60 + (i * 37) % 30) + "%" }} /><div className="skel" style={{ width: "35%", height: 10, marginTop: 8 }} /></div><div className="skel" style={{ width: 54 }} /></div>)}</div>}
     {d && !d.error && d.sourceKind && d.sourceKind !== "live" && <div className="px"><span className={"srcb " + (d.sourceKind === "official" ? "off" : "")}>{d.sourceKind === "official" ? "OFFICIAL AIRPORT FEED" : "AERODATABOX"}</span> <span className="faint sm">{d.source}{d.site ? ` · ${d.site}` : ""} · real scheduled, estimated & actual times</span></div>}
