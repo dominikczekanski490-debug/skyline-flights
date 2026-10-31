@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "./lib";
 import "./v59.css";
 import { ConnOdds, WhatIf, DestRank, MyReport, BeatStats, SeatSun, Bingo, Memory, Countdowns, FavRoutes, RunwayDial } from "./v60";
+import { FlightSwiper, LegRisk, CallPlanner, AirportTwins, DelayDetective, RouteMap, MapQuiz, DailyChallenge, SizeCompare, TypeGuess } from "./v61";
 
 export function useApi(u: string | null) { const [d, setD] = useState<any>(null); useEffect(() => { if (!u) { setD(null); return; } let on = true; setD(undefined); api(u).then(r => on && setD(r)).catch(e => on && setD({ error: e.message })); return () => { on = false; }; }, [u]); return d; }
 export const Rule = ({ d }: { d: any }) => <div className="faint xs mt8">Rule: {d.rule} Source: {d.source}.</div>;
@@ -115,7 +116,7 @@ export function NatoTrainer() { const mk = () => Array.from({ length: 3 }, () =>
     <div className="v59nt">{w.split("").map((c, k) => <span key={k} className={k < i ? "done" : k === i ? "cur" : ""}>{c}<small>{k < i ? NATO[c.charCodeAt(0) - 65] : ""}</small></span>)}</div>
     <div className="v59qa">{opts.map(k => <button key={k} onClick={() => tap(k)}>{NATO[k]}</button>)}</div>{miss && <div className="bad xs mt8">Not {miss}, try again.</div>}<div className="faint xs mt8">ICAO spelling alphabet. Practice only: nothing is sent anywhere.</div></div>; }
 
-export function PlayView({ x }: { x: any }) { const [t, setT] = useState<"p" | "s" | "a" | "b" | "g" | "t">("p");
+export function PlayView({ x }: { x: any }) { const [t, setT] = useState<"p" | "s" | "a" | "b" | "g" | "t" | "e">("p");
   return <div className="fd"><div className="head"><div><span className="tag">PLAY & PLAN</span><h1 className="h1s">Play & Plan</h1><div className="muted sm">Drag, pick, test and play with real flight data</div></div>{x}</div>
-    <div className="v54-tabs" role="tablist">{([["p", "Plan"], ["s", "Stats"], ["a", "Alerts"], ["b", "Boards"], ["g", "Games"], ["t", "Trip"]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={t === k} className={t === k ? "on" : ""} onClick={() => setT(k)}>{l}</button>)}</div>
-    {t === "p" ? <><ConnOdds /><LateOMeter /><WhatIf /><SeatSun /><RoutePicker /><FaceOff /></> : t === "s" ? <><DestRank /><MyReport /></> : t === "t" ? <><Countdowns /><FavRoutes /><RunwayDial /></> : t === "a" ? <><AlertRules /><OddsLab /></> : t === "b" ? <BoardViews /> : <><BeatStats /><CodeQuiz /><LaterGame /><Memory /><Bingo /><NatoTrainer /></>}</div>; }
+    <div className="v54-tabs" role="tablist">{([["p", "Plan"], ["s", "Stats"], ["a", "Alerts"], ["b", "Boards"], ["g", "Games"], ["e", "Explore"], ["t", "Trip"]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={t === k} className={t === k ? "on" : ""} onClick={() => setT(k)}>{l}</button>)}</div>
+    {t === "p" ? <><FlightSwiper /><LegRisk /><ConnOdds /><LateOMeter /><WhatIf /><SeatSun /><RoutePicker /><FaceOff /></> : t === "s" ? <><AirportTwins /><DelayDetective /><DestRank /><MyReport /></> : t === "e" ? <><RouteMap /><SizeCompare /><CallPlanner /></> : t === "t" ? <><Countdowns /><FavRoutes /><RunwayDial /></> : t === "a" ? <><AlertRules /><OddsLab /></> : t === "b" ? <BoardViews /> : <><DailyChallenge /><MapQuiz /><TypeGuess /><BeatStats /><CodeQuiz /><LaterGame /><Memory /><Bingo /><NatoTrainer /></>}</div>; }
