@@ -23,7 +23,7 @@ export function startFleet({ AP, adsb, STATE, snapFile }) {
     for (const x of list) { if (!x.hex || x.lat == null) continue; const gnd = x.alt === "ground"; const alt = gnd ? 0 : +x.alt; if (!gnd && !isFinite(alt)) continue;
       let p = F.get(x.hex); if (!p) { if ((!x.reg && !x.type) || F.size > 30000) continue; p = { reg: x.reg, type: x.type, cs: null, last: null, legs: [] }; F.set(x.hex, p); }
       const cs = (x.flight || "").trim() || p.cs; const t = now - (x.seen || 0) * 1000; const prev = p.last; p.reg = x.reg || p.reg; p.type = x.type || p.type;
-      const s = { t, la: x.lat, lo: x.lon, alt, gnd, vs: x.vs || 0, gs: x.gs || 0, trk: x.track || 0 };
+      const s = { t, la: x.lat, lo: x.lon, alt, gnd, vs: x.vs || 0, gs: x.gs || 0, trk: x.track || 0, sq: x.squawk || null };
       const fresh = prev && t - prev.t < 25 * 60e3;
       if (gnd || (alt < 1500 && s.gs < 80)) { const n = nearest(s.la, s.lo, 6); if (n && fresh && !prev.gnd && prev.alt > 0) close(p, n.a.iata, t, "g"); s.gnd = true; s.ap = n?.a.iata; }
       else { // airborne
@@ -57,5 +57,8 @@ export function startFleet({ AP, adsb, STATE, snapFile }) {
   function busiest(lim = 12) { const day0 = Date.now() - 24 * 3600e3, out = []; for (const [h, p] of F) { const L = p.legs.filter(l => l[0] && l[2] && l[3] && l[3] > day0); if (L.length >= 2) out.push({ hex: h, reg: p.reg, type: p.type, cs: p.cs, legs: L.length, path: [L[0][0], ...L.map(l => l[2])], likely: L.some(l => /c|a|u/.test(l[5] || "")) }); } return out.sort((a, b) => b.legs - a.legs).slice(0, lim); }
   // v57: airport movements seen on ADS-B in 24 h (take-offs l[0]/l[1], landings l[2]/l[3]) with an hour-of-day profile (UTC).
   function movements() { const day0 = Date.now() - 24 * 3600e3, A = {}; for (const [, p] of F) for (const l of p.legs) { for (const [ap, t, w] of [[l[0], l[1], "dep"], [l[2], l[3], "arr"]]) { if (!ap || !t || t < day0) continue; const m = (A[ap] ||= { dep: 0, arr: 0, likely: 0, h: Array(24).fill(0) }); m[w]++; m.h[new Date(t).getUTCHours()]++; if (/c|a|u/.test(l[5] || "")) m.likely++; } } return A; }
-  return { legsFor, stats, persist, airlineNow, legsOn, focus, typeNow, census, busiest, movements };
+  // v58: squawk census of aircraft seen in the last maxAge, and live state by callsign.
+  function squawks(maxAgeMs = 10 * 60e3) { const now = Date.now(), C = {}; let n = 0, none = 0; for (const [h, p] of F) { const s = p.last; if (!s || now - s.t > maxAgeMs || s.gnd) continue; n++; if (!s.sq) { none++; continue; } const m = (C[s.sq] ||= { n: 0, ac: [] }); m.n++; if (m.ac.length < 6) m.ac.push({ hex: h, reg: p.reg, type: p.type, cs: p.cs, alt: s.alt, la: s.la, lo: s.lo }); } return { n, none, codes: C }; }
+  function byCs() { const now = Date.now(), M = new Map(); for (const [h, p] of F) if (p.cs && p.last && now - p.last.t < 30 * 60e3) M.set(p.cs, { hex: h, reg: p.reg, type: p.type, last: p.last, legs: p.legs }); return M; }
+  return { legsFor, stats, persist, airlineNow, legsOn, focus, typeNow, census, busiest, movements, squawks, byCs };
 }

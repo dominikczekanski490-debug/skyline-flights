@@ -1035,7 +1035,7 @@ api.get("/flights", wrap(async (req, res) => { const ids = String(req.query.ids 
   for (const id of ids) { const [n, d] = id.split("@"); if (!/^[A-Z0-9]{2,8}$/i.test(n || "")) continue; const ymd = /^\d{4}-\d{2}-\d{2}$/.test(d || "") ? d : todayLondon();
     try { out[id] = await Promise.race([cached(`ff:${n.toUpperCase()}:${ymd}`, 110, () => findFlight(n, ymd)), new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 14e3))]); } catch (e) { out[id] = { error: String(e.message || e) }; } }
   res.json({ at: new Date().toISOString(), ttl: 120, flights: out }); }));
-api.get("/flight/:number", wrap(async (req, res) => res.json(await findFlight(req.params.number, String(req.query.date || todayLondon())))));
+api.get("/flight/:number", wrap(async (req, res) => { lookCount(req.params.number, req); res.json(await findFlight(req.params.number, String(req.query.date || todayLondon()))); }));
 api.get("/route", wrap(async (req, res) => { const from = String(req.query.from || "").toUpperCase(), to = String(req.query.to || "").toUpperCase(), ymd = String(req.query.date || todayLondon());
   let list = [], source = "";
   if (OFFICIAL[from]) { list = (await officialBoard(from, "dep", ymd)).filter(f => !to || f.destination?.iata === to); source = "official"; }
@@ -1329,6 +1329,8 @@ setInterval(() => { FLEET?.persist(); STATE.obs = Object.fromEntries(Object.entr
 import webpush from "web-push";
 import { startFleet } from "./fleet.js";
 import { register as reg36, decode as acarsDecode } from "./v36.js";
+import { register as reg58, lookCount as lookCount58 } from "./v58.js";
+const lookCount = (n, req) => lookCount58(STATE, n, todayLondon(), req);
 import { liveFits, depEvidence, arrEvidence } from "./evidence.js";
 for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { try { FLEET?.persist(); } catch {} process.exit(0); });
 let FLEET = null;
@@ -1763,6 +1765,7 @@ const dist = path.join(__dir, "../web/dist");
 app.use(express.static(dist, { setHeaders: (r, p) => { if (p.endsWith("sw.js") || p.endsWith(".html") || p.endsWith("version.json")) r.setHeader("cache-control", "no-cache"); } }));
 app.get(/^\/(?!api).*/, (q, r) => r.sendFile(path.join(dist, "index.html")));
 reg36(api, { getJSON, cached, wrap, STATE, saveState, board, todayLondon, adsb });
+reg58(api, { getJSON, cached, wrap, STATE, todayLondon, adsb, AP, fleet: () => FLEET, decode: acarsDecode, HIST });
 app.listen(PORT, "0.0.0.0", () => console.log("Skyline on :" + PORT));
 
 process.on("unhandledRejection", e => console.error("[unhandledRejection]", e?.message || e));
