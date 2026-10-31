@@ -11,7 +11,7 @@ function Ring({ v, min, max, color, label, unit }: { v: number; min: number; max
   return <svg className="hx-ring" viewBox="0 0 120 120" role="img" aria-label={`${label} ${v}${unit}`}><circle cx="60" cy="60" r={r} className="hx-ring-bg" />
     <circle cx="60" cy="60" r={r} className="hx-ring-fg" style={{ stroke: color, strokeDasharray: C, ["--off" as any]: C * (1 - f), ["--c" as any]: C }} transform="rotate(-90 60 60)" />
     <text x="60" y="58" className="hx-ring-v">{v.toFixed(1)}<tspan className="hx-ring-u">{unit}</tspan></text><text x="60" y="78" className="hx-ring-l">{label}</text></svg>; }
-function Hero({ cls, kicker, verdict, tone, sub, children, foot }: any) {
+export function Hero({ cls, kicker, verdict, tone, sub, children, foot }: any) {
   return <div className={`card m0 mt8 hx ${cls} t-${tone}`}><div className="hx-k">{kicker}</div><div className="hx-v">{verdict}</div>{sub && <div className="hx-s">{sub}</div>}{children}<div className="hx-f">{foot}</div></div>; }
 function Waves({ h }: { h: number }) { const a = clamp(h, 0.1, 3) * 7; const path = (y: number, k: number) => `M0 ${y} ${Array.from({ length: 9 }, (_, i) => `Q ${i * 50 + 25} ${y + (i % 2 ? a : -a) * k} ${i * 50 + 50} ${y}`).join(" ")} V60 H0 Z`;
   return <svg className="hx-waves" viewBox="0 0 400 60" preserveAspectRatio="none" aria-hidden><path d={path(30, 1)} className="w1" /><path d={path(38, .7)} className="w2" /></svg>; }

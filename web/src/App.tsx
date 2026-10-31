@@ -1,6 +1,7 @@
 import { Ground, Essentials } from "./v46";
 import { Outdoors, Quakes, AirlineFacts, CityDist } from "./v47";
 import { AirportToday } from "./v48";
+import { RouteInsights, DestInfo } from "./v49";
 import { DelayExplainer } from "./v42";
 import { AuroraCard, RouteAurora } from "./aurora";
 import "./aurora.css";
@@ -361,7 +362,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <Facts f={f} ac={ac} />
     <Progress f={f} lv={lv} />
     <Timeline f={f} />
-    <Prediction f={f} inb={inb} />{!f.example && <><DestGuide f={f} /><BeforeLand f={f} /><AirportToday f={f} /><CityDist f={f} /><Ground f={f} /><Essentials f={f} /><Outdoors f={f} /><Quakes f={f} /><AirlineFacts f={f} /></>}
+    <Prediction f={f} inb={inb} />{!f.example && <><DestGuide f={f} /><BeforeLand f={f} /><AirportToday f={f} /><DestInfo f={f} /><RouteInsights f={f} /><CityDist f={f} /><Ground f={f} /><Essentials f={f} /><Outdoors f={f} /><Quakes f={f} /><AirlineFacts f={f} /></>}
     <SecHead ic={Ic.bolt} title="Actions" sub="Share, plan and check the risks" />
     <div className="sk-acts three"><ActBtn ic={Ic.image} onClick={() => shareImage(f)}>Share image</ActBtn><ActBtn ic={Ic.cal} onClick={() => icsOf([f], f.number + ".ics")}>Calendar</ActBtn>{!f.example && <ActBtn ic={Ic.globe} onClick={() => push({ t: "trip", f })}>Trip view</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.tower} onClick={() => push({ t: "guide", iata: f.origin!.iata })}>{f.origin.iata} guide</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.life} onClick={() => push({ t: "labs", id: "rescue", f })}>Backup flights</ActBtn>}{f.origin?.iata && <ActBtn ic={Ic.cloud} onClick={() => push({ t: "labs", id: "wx", apt: f.origin!.iata })}>{f.origin.iata} weather</ActBtn>}{!f.example && <ActBtn ic={Ic.shield} onClick={() => push({ t: "labs", id: "risk", f })}>Trip risk</ActBtn>}</div>
     {!f.example && <CompCard f={f} />}
