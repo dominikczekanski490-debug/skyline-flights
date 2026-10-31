@@ -1922,6 +1922,35 @@ api.get("/airline-facts/:icao", wrap(async (req, res) => { const c = req.params.
     return { icao: c, qid: q, name: u("aLabel")[0], founded: u("inc").sort()[0]?.slice(0, 4) || null, hubs: u("hubLabel").filter(x => !/^Q\d+$/.test(x)).slice(0, 8), alliance: u("allLabel")[0] || null, hq: u("hqLabel")[0] || null, parent: u("parLabel")[0] || null, wiki: u("art")[0] || null, source: "Wikidata " + q }; })); }));
 api.get("/bankhol", wrap(async (req, res) => { res.json(await cached("bh1", 86400, async () => { const j = await getJSON("https://www.gov.uk/bank-holidays.json"); const t = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
   return { divisions: Object.fromEntries(Object.entries(j).map(([k, v]) => [k, v.events.filter(e => e.date >= t).slice(0, 12).map(e => ({ date: e.date, title: e.title }))])), source: "GOV.UK bank holidays (gov.uk/bank-holidays.json)" }; })); }));
+
+// v49 route insight: statistics only from Skyline's own observed log (HIST). Rules returned with data.
+api.get("/route-insight", (req, res) => { const o = String(req.query.o || "").toUpperCase().slice(0, 3), t = String(req.query.t || "").toUpperCase().slice(0, 3), num = String(req.query.number || "").toUpperCase().replace(/\s/g, "");
+  const al = (num.match(/^[A-Z]+|^[A-Z0-9]{2}/) || [""])[0]; const cl = d => Math.max(-10, Math.min(180, d));
+  const st = a => { const v = a.filter(x => x.s !== "cancelled" && x.d != null).map(x => cl(x.d)); return { n: a.length, flown: v.length, cancelled: a.filter(x => x.s === "cancelled").length, avg: v.length ? Math.round(v.reduce((s, d) => s + d, 0) / v.length) : null, late15: v.length ? Math.round(v.filter(d => d >= 15).length / v.length * 100) : null }; };
+  const route = [], flight = [], airlines = {}, routes = {};
+  for (const k in HIST) { const pre = (k.match(/^[A-Z]+/) || [k.slice(0, 2)])[0]; for (const [id, x] of Object.entries(HIST[k])) { const date = id.slice(-10); const r = { ...x, date, k };
+    if (x.o === o && x.t === t) route.push(r); if (k === num) flight.push(r); if (x.o === o) { (airlines[pre] ||= []).push(r); (routes[x.t] ||= []).push(r); } } }
+  const dows = [0, 1, 2, 3, 4, 5, 6].map(w => ({ dow: w, ...st(route.filter(r => new Date(r.date + "T12:00:00Z").getUTCDay() === w)) }));
+  const dates = [...new Set(route.map(r => r.date))].sort().map(d => ({ date: d, ...st(route.filter(r => r.date === d)) }));
+  const fl = flight.sort((a, b) => a.date < b.date ? -1 : 1).map(r => ({ date: r.date, d: r.d, s: r.s }));
+  const lg = (m, min) => Object.entries(m).map(([k, a]) => ({ k, ...st(a) })).filter(x => x.flown >= min).sort((a, b) => a.avg - b.avg);
+  const alLeague = lg(airlines, 10), rtLeague = lg(routes, 5);
+  if (req.query.raw) return res.json({ raw: route.filter(r => r.s !== "cancelled" && r.d != null).map(r => cl(r.d)) });
+  res.json({ o, t, number: num, airline: al, days: dates.length, route: st(route), flight: st(flight), series: fl, dows, calendar: dates,
+    airlineLeague: alLeague, routeLeague: { size: rtLeague.length, rank: rtLeague.findIndex(x => x.k === t) + 1, me: rtLeague.find(x => x.k === t) || null, best: rtLeague.slice(0, 3), worst: rtLeague.slice(-3).reverse() },
+    scope: `Flights Skyline itself observed on ${o} departure boards (${dates.length ? dates[0].date + " to " + dates[dates.length - 1].date : "none yet"}). Delay = actual minus scheduled departure, capped −10..180 min.`, source: "Skyline observed log" }); });
+// v49 destination info: FCDO travel advice (GOV.UK content API) and public holidays (Nager.Date).
+api.get("/dest-info/:iata", wrap(async (req, res) => { const c = req.params.iata.toUpperCase(), a = AP[c]; if (!a) return res.status(404).json({ error: "Unknown airport" });
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || "") ? req.query.date : new Date().toISOString().slice(0, 10); const norm = x => String(x || "").toLowerCase().replace(/[^a-z]/g, "");
+  const out = { iata: c, country: a.country, date, advice: null, holidays: null };
+  try { out.advice = await cached("fcdo:" + a.country, 3600, async () => { const idx = await cached("fcdoidx", 86400, async () => ({ links: { children: ((await getJSON("https://www.gov.uk/api/content/foreign-travel-advice")).links.children || []).map(x => ({ title: x.title, base_path: x.base_path, details: { country: { name: x.details?.country?.name } } })) } }));
+    const ch = (idx.links.children || []).find(x => norm(x.details?.country?.name) === norm(a.country) || norm(x.title.replace(/ travel advice$/, "")) === norm(a.country)); if (!ch) return { none: true };
+    const j = await getJSON("https://www.gov.uk/api/content" + ch.base_path); return { title: j.title, url: "https://www.gov.uk" + ch.base_path, updated: j.public_updated_at, change: j.details.change_description, alerts: j.details.alert_status || [], parts: (j.details.parts || []).map(p => ({ title: p.title, url: "https://www.gov.uk" + ch.base_path + "/" + p.slug })) }; }); } catch (e) { out.advice = { error: e.message }; }
+  if (a.country === "United Kingdom") out.holidays = { uk: true };
+  else try { out.holidays = await cached("nag:" + a.country + date.slice(0, 4), 86400, async () => { const cs = await cached("nagc", 86400, () => getJSON("https://date.nager.at/api/v3/AvailableCountries")); const cc = cs.find(x => norm(x.name) === norm(a.country)); if (!cc) return { none: true };
+    const y = +date.slice(0, 4); const l = [...await getJSON(`https://date.nager.at/api/v3/PublicHolidays/${y}/${cc.countryCode}`), ...await getJSON(`https://date.nager.at/api/v3/PublicHolidays/${y + 1}/${cc.countryCode}`)];
+    return { cc: cc.countryCode, list: l.map(h => ({ date: h.date, name: h.name, local: h.localName, national: h.global, regions: h.counties })) }; }); } catch (e) { out.holidays = { error: e.message }; }
+  res.json({ ...out, source: "GOV.UK FCDO travel advice; Nager.Date public holidays" }); }));
 api.get("/arrive/:iata", wrap(async (req, res) => { const c = req.params.iata.toUpperCase(), a = AP[c]; if (!a) return res.status(404).json({ error: "Unknown airport" });
   const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || "") ? req.query.date : new Date().toISOString().slice(0, 10); const days = Math.min(21, Math.max(1, +req.query.days || 7));
   const k = await codesOf(c).catch(() => null); const end = new Date(Date.parse(date) + days * 864e5).toISOString().slice(0, 10);
