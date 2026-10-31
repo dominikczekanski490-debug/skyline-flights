@@ -3,15 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./lib";
 import "./v59.css";
+import { ConnOdds, WhatIf, DestRank, MyReport, BeatStats, SeatSun, Bingo, Memory, Countdowns, FavRoutes, RunwayDial } from "./v60";
 
-function useApi(u: string | null) { const [d, setD] = useState<any>(null); useEffect(() => { if (!u) { setD(null); return; } let on = true; setD(undefined); api(u).then(r => on && setD(r)).catch(e => on && setD({ error: e.message })); return () => { on = false; }; }, [u]); return d; }
-const Rule = ({ d }: { d: any }) => <div className="faint xs mt8">Rule: {d.rule} Source: {d.source}.</div>;
-const St = ({ d, t }: { d: any; t: string }) => d === undefined ? <div className="muted sm mt8">Loading {t}…</div> : d?.error ? <div className="bad sm mt8">Couldn't load {t} ({d.error}).</div> : null;
+export function useApi(u: string | null) { const [d, setD] = useState<any>(null); useEffect(() => { if (!u) { setD(null); return; } let on = true; setD(undefined); api(u).then(r => on && setD(r)).catch(e => on && setD({ error: e.message })); return () => { on = false; }; }, [u]); return d; }
+export const Rule = ({ d }: { d: any }) => <div className="faint xs mt8">Rule: {d.rule} Source: {d.source}.</div>;
+export const St = ({ d, t }: { d: any; t: string }) => d === undefined ? <div className="muted sm mt8">Loading {t}…</div> : d?.error ? <div className="bad sm mt8">Couldn't load {t} ({d.error}).</div> : null;
 const ls = <T,>(k: string, v: T): T => { try { return JSON.parse(localStorage.getItem(k) || "") ?? v; } catch { return v; } };
-function useLS<T>(k: string, v: T) { const [s, set] = useState<T>(() => ls(k, v)); useEffect(() => { localStorage.setItem(k, JSON.stringify(s)); }, [k, s]); return [s, set] as const; }
-const U = (s: string, n = 8) => s.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, n);
-const tone = (on: number | null) => on == null ? "info" : on >= 75 ? "good" : on >= 55 ? "warn" : "bad";
-const In = (p: { v: string; set: (s: string) => void; ph: string; n?: number; label: string }) => <input value={p.v} maxLength={p.n || 8} placeholder={p.ph} aria-label={p.label} onChange={e => p.set(U(e.target.value, p.n))} />;
+export function useLS<T>(k: string, v: T) { const [s, set] = useState<T>(() => ls(k, v)); useEffect(() => { localStorage.setItem(k, JSON.stringify(s)); }, [k, s]); return [s, set] as const; }
+export const U = (s: string, n = 8) => s.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, n);
+export const tone = (on: number | null) => on == null ? "info" : on >= 75 ? "good" : on >= 55 ? "warn" : "bad";
+export const In = (p: { v: string; set: (s: string) => void; ph: string; n?: number; label: string }) => <input value={p.v} maxLength={p.n || 8} placeholder={p.ph} aria-label={p.label} onChange={e => p.set(U(e.target.value, p.n))} />;
 
 /** A1 (smart). Late-o-meter: drag how late is OK, see how often this flight made it. */
 export function LateOMeter() { const [q, setQ] = useState("FR557"); const [u, setU] = useState<string | null>(null); const [m, setM] = useState(15); const d = useApi(u);
@@ -114,7 +115,7 @@ export function NatoTrainer() { const mk = () => Array.from({ length: 3 }, () =>
     <div className="v59nt">{w.split("").map((c, k) => <span key={k} className={k < i ? "done" : k === i ? "cur" : ""}>{c}<small>{k < i ? NATO[c.charCodeAt(0) - 65] : ""}</small></span>)}</div>
     <div className="v59qa">{opts.map(k => <button key={k} onClick={() => tap(k)}>{NATO[k]}</button>)}</div>{miss && <div className="bad xs mt8">Not {miss}, try again.</div>}<div className="faint xs mt8">ICAO spelling alphabet. Practice only: nothing is sent anywhere.</div></div>; }
 
-export function PlayView({ x }: { x: any }) { const [t, setT] = useState<"p" | "a" | "b" | "g">("p");
+export function PlayView({ x }: { x: any }) { const [t, setT] = useState<"p" | "s" | "a" | "b" | "g" | "t">("p");
   return <div className="fd"><div className="head"><div><span className="tag">PLAY & PLAN</span><h1 className="h1s">Play & Plan</h1><div className="muted sm">Drag, pick, test and play with real flight data</div></div>{x}</div>
-    <div className="v54-tabs" role="tablist">{([["p", "Plan"], ["a", "Alerts"], ["b", "Boards"], ["g", "Games"]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={t === k} className={t === k ? "on" : ""} onClick={() => setT(k)}>{l}</button>)}</div>
-    {t === "p" ? <><LateOMeter /><RoutePicker /><FaceOff /></> : t === "a" ? <><AlertRules /><OddsLab /></> : t === "b" ? <BoardViews /> : <><CodeQuiz /><LaterGame /><NatoTrainer /></>}</div>; }
+    <div className="v54-tabs" role="tablist">{([["p", "Plan"], ["s", "Stats"], ["a", "Alerts"], ["b", "Boards"], ["g", "Games"], ["t", "Trip"]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={t === k} className={t === k ? "on" : ""} onClick={() => setT(k)}>{l}</button>)}</div>
+    {t === "p" ? <><ConnOdds /><LateOMeter /><WhatIf /><SeatSun /><RoutePicker /><FaceOff /></> : t === "s" ? <><DestRank /><MyReport /></> : t === "t" ? <><Countdowns /><FavRoutes /><RunwayDial /></> : t === "a" ? <><AlertRules /><OddsLab /></> : t === "b" ? <BoardViews /> : <><BeatStats /><CodeQuiz /><LaterGame /><Memory /><Bingo /><NatoTrainer /></>}</div>; }

@@ -57,12 +57,12 @@ export function SpotMap({ d, lat, lon }: { d: any; lat?: number; lon?: number })
 
 /** Trip itinerary + budget */
 type Line = { k: string; v: number };
-export function TripPlan({ x, flights }: { x: any; flights: Flight[] }) { const now = Date.now() - 864e5; const up = flights.filter(f => !f.example && Date.parse(f.date) >= now - 864e5).sort((a, b) => (a.dep?.scheduled || a.date).localeCompare(b.dep?.scheduled || b.date));
+export function TripPlan({ x, flights, extra }: { x: any; flights: Flight[]; extra?: any }) { const now = Date.now() - 864e5; const up = flights.filter(f => !f.example && Date.parse(f.date) >= now - 864e5).sort((a, b) => (a.dep?.scheduled || a.date).localeCompare(b.dep?.scheduled || b.date));
   const [B, setB] = useState<Line[]>(() => ls("sk.budget", [{ k: "Flights", v: 0 }, { k: "Accommodation", v: 0 }, { k: "Food & drink", v: 0 }, { k: "Transport", v: 0 }])); const [cur, setCur] = useState<string>(() => ls("sk.budget.cur", "£"));
   const set = (n: Line[]) => { setB(n); save("sk.budget", n); };
   const miles = up.reduce((s, f) => s + dist(f.origin as any, f.destination as any), 0); const mins = up.reduce((s, f) => s + (f.dep?.scheduled && f.arr?.scheduled ? (Date.parse(f.arr.scheduled) - Date.parse(f.dep.scheduled)) / 6e4 : 0), 0);
   const first = up[0]?.date?.slice(0, 10), last = up[up.length - 1]?.date?.slice(0, 10); const nights = first && last ? Math.round((Date.parse(last) - Date.parse(first)) / 864e5) : 0; const total = B.reduce((s, l) => s + (+l.v || 0), 0);
-  return <div className="fd"><div className="head"><div><span className="tag">TRIP PLANNER</span><h1 className="h1s">Itinerary & budget</h1><div className="muted sm">Built from your saved flights</div></div>{x}</div>
+  return <div className="fd"><div className="head"><div><span className="tag">TRIP PLANNER</span><h1 className="h1s">Itinerary & budget</h1><div className="muted sm">Built from your saved flights</div></div>{x}</div>{extra}
     {!up.length ? <div className="card"><h3>No upcoming flights</h3><div className="muted sm">Add a flight on Home and it appears here as an itinerary with distance, time in the air and a budget.</div></div> : <>
       <Hero cls="v55-trip" tone="info" kicker="YOUR ITINERARY" verdict={`${up.length} flight${up.length > 1 ? "s" : ""}`} sub={`${first}${last && last !== first ? ` → ${last} · ${nights} night${nights === 1 ? "" : "s"}` : ""}`} foot="Distance is great-circle between airports; time in the air uses scheduled times only (flights without both times are left out).">
         <div className="v55-tg"><span><i>Distance</i><b>{Math.round(miles * 1.609).toLocaleString("en-GB")} km</b></span><span><i>Scheduled air time</i><b>{mins ? `${Math.floor(mins / 60)}h ${Math.round(mins % 60)}m` : "—"}</b></span><span><i>Airports</i><b>{new Set(up.flatMap(f => [f.origin?.iata, f.destination?.iata]).filter(Boolean)).size}</b></span></div></Hero>

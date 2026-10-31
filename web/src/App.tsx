@@ -6,6 +6,7 @@ import { RouteInsights, DestInfo } from "./v49";
 import { TripWx, DepWindow } from "./v50";
 import { HubLinks, PackList, RouteCompare, Spotlight } from "./v54";
 import { PinnedDash, TripPlan } from "./v55";
+import { Trips } from "./v60trip";
 import { NetworkView, LookupView } from "./v56";
 import { PatternsView } from "./v57";
 import { LiveWatch } from "./v58";
@@ -267,7 +268,7 @@ function Overlay(p: { o: Ov; z: number; close: () => void; push: (o: Ov) => void
   if (o.t === "live") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><LiveWatch x={x} /></Sheet>;
   if (o.t === "pat") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><PatternsView x={x} /></Sheet>;
   if (o.t === "look") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><LookupView x={x} /></Sheet>;
-  if (o.t === "plan") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><TripPlan x={x} flights={load()} /></Sheet>;
+  if (o.t === "plan") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><TripPlan x={x} flights={load()} extra={<Trips />} /></Sheet>;
   if (o.t === "cmp") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><RouteCompare a0={o.a} x={x} /></Sheet>;
   if (o.t === "guide") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><AirportGuide iata={o.iata} x={x} /></Sheet>;
   if (o.t === "dayof") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><DayOf f={p.flights.find(f => f.id === o.f.id) || o.f} push={p.push} x={x} /></Sheet>;
