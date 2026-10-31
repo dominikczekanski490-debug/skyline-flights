@@ -652,7 +652,8 @@ function resolveCity(raw) { if (!raw) return null; const m = raw.match(/\(([A-Z]
 const ceStatus = s => { s = fold(s); if (/CANCEL|ODWOL|ZRUS|ANUL|TOROLV|ODPOV/.test(s)) return "cancelled"; if (/DIVERT|PRZEKIER|ODKLON/.test(s)) return "diverted";
   if (/LANDED|WYLADOW|PRISTAL|PRILET|LANDOL|ARRIVED/.test(s)) return "landed"; if (/DEPART|WYSTART|ODLET|ODL |AIRBORNE|FELSZALL|ODLETELO/.test(s)) return "departed";
   if (/BOARD|NASTUP/.test(s)) return "boarding"; if (/GATE|BRAMKA|ZAMKN|CLOSED/.test(s)) return "gate"; if (/DELAY|OPOZN|ZPOZD|MESKAS|KESIK/.test(s)) return "delayed"; return "scheduled"; };
-const CE_KEEP = (list, ymd) => { if (list.length <= 400 || ymd !== todayLondon()) return list.slice(0, 400); // v23: whole day when it fits const lo = Date.now() - 3 * 3600e3, hi = Date.now() + 12 * 3600e3;
+const CE_KEEP = (list, ymd) => { if (list.length <= 400 || ymd !== todayLondon()) return list.slice(0, 400); // v23: whole day when it fits
+  const lo = Date.now() - 3 * 3600e3, hi = Date.now() + 12 * 3600e3;
   return list.filter(f => { const t = +new Date(f.dep.scheduled || f.arr.scheduled); return t >= lo && t <= hi; }).slice(0, 400); };
 const ceGet = (url, opt = {}) => getText(url, { ...opt, headers: { accept: "*/*", ...(opt.headers || {}) } });
 const htmlDec = s => s.replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#039;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
