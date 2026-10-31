@@ -7,7 +7,7 @@ import { TripWx, DepWindow } from "./v50";
 import { DelayExplainer } from "./v42";
 import { AuroraCard, RouteAurora } from "./aurora";
 import "./aurora.css";
-import { AircraftCard, WhatsNew22, HomeWidgets, Overhead22, Wrapped22, Connections22 } from "./v22";
+import { AircraftCard, HomeWidgets, Overhead22, Wrapped22, Connections22 } from "./v22";
 import "./v22.css";
 import { DiscoverCarousel, trackPing, AcarsFeed } from "./v36";
 import "./v24.css";
@@ -115,7 +115,7 @@ export default function App() {
       {tab === "passport" && <Passport flights={flights.filter(f => !f.friend)} setFlights={setFlights} open={f => push({ t: "flight", f })} push={push} />}
       <div style={{ height: 120 }} />
     </Sheet>
-    <WhatsNew22 />
+    <Suspense fallback={null}><Welcome theme={theme} setTheme={setTheme} /></Suspense>
     {!ov.length && <nav className="tabbar"><div className="pill"><i className="tabind" style={{ transform: `translateX(${["mine","friends","tracked","passport"].indexOf(tab) * 100}%)` }} />
       {([["mine", "My Flights", I.plane], ["friends", "Friends", I.friends], ["tracked", "Tracked", I.clock], ["passport", "Passport", I.passport]] as const).map(([k, l, ic]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{ic}<span>{l}</span></button>)}
     </div><button className="searchbtn" aria-label="Search" onClick={() => push({ t: "search" })}>{I.search}</button></nav>}
@@ -592,7 +592,7 @@ function Settings({ x, theme, setTheme, push }: any) {
   const saveK = (body: any) => api("/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, adminToken: tok, newAdminToken: tok }) }).then(() => { setMsg("Saved ✓"); load(); }).catch(e => setMsg(e.message));
   return <><Head title="Settings" sub="Preferences, data and sources" right={x} /><div className="px col g8 set">
     <div className="card m0"><b className="set-h sm"><span>{Ic.image}</span>Photo credits</b><div className="faint sm mt4">{PLANE_CREDITS}</div><div className="faint sm mt4"><a href="https://www.planespotters.net" target="_blank" rel="noopener">Planespotters.net</a> · <a href="https://commons.wikimedia.org" target="_blank" rel="noopener">Wikimedia Commons</a></div></div><div className="card m0 row between"><span className="set-l"><span>{Ic.info}</span>App version</span><b className="sm">{BUILD}</b></div><button className="card m0 row between press" style={{ width: "100%" }} onClick={() => push({ t: "features" })}><span className="set-l"><span>{Ic.flask}</span>All features</span><b className="sm set-n">{TOOLS.length + BOARD_FEATURES.length}</b></button><UnitsCard /><AlertPrefsCard onChange={() => syncPush(JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend)).catch(() => {})} />
-    <div className="card m0"><h3 className="set-h"><span>{Ic.palette}</span>Appearance</h3><SkinPicker v={theme} set={setTheme} /></div>
+    <div className="card m0"><h3 className="set-h"><span>{Ic.palette}</span>Appearance</h3><SkinPicker v={theme} set={setTheme} /></div><button className="card m0 mt12" style={{ width: "100%", textAlign: "left" }} onClick={() => dispatchEvent(new Event("sk:welcome"))}><b>Replay welcome tour</b><div className="faint sm">Home airport, favourite airline, alerts, theme and Home Screen tips</div></button>
     <div className="card m0"><h3 className="set-h"><span>{Ic.bell}</span>Notifications</h3><div className="muted sm">Gate & terminal changes, boarding, delays (15+ min, or improving), cancellations, departure, landing and baggage belt for your tracked flights. Tap <b>Turn on alerts</b> — iPhone only asks for permission after a tap, and only inside the Home Screen app (Safari → Share → Add to Home Screen, iOS 16.4+).</div>
       <div className="faint sm mt4"><b>Honest limits:</b> with the app open, Skyline also alerts on-device straight away. When it's closed, alerts come from the server, which checks tracked flights every 4 min — so they can lag by a few minutes, and if the free server is asleep (Render free tier) the first check after it wakes can be late. Focus modes and iOS notification settings can hide banners.</div>
       <PushControls /><NotifInbox /><NotifPreviews /></div>
@@ -610,6 +610,7 @@ function Settings({ x, theme, setTheme, push }: any) {
 }
 
 const Man3D = lazy(() => import("./v35"));
+const Welcome = lazy(() => import("./v53"));
 function Man3DBtn() { const [o, setO] = useState(() => /man3d=1/.test(location.hash));
   return <><button className="card press m3btn px" style={{ width: "calc(100% - 24px)", margin: "8px 12px", textAlign: "left" }} onClick={() => setO(true)}><span style={{ fontSize: 22 }}>🛬</span><div><b>See Manchester Airport in 3D</b> <span className="m3beta" style={{ fontSize: 10, padding: "1px 6px", borderRadius: 6, background: "var(--accent,#6aa8ff)", color: "#fff" }}>BETA</span><div className="muted sm">Terminals, runways and live aircraft · shapes from OpenStreetMap</div></div></button>
     {o && createPortal(<Suspense fallback={<div className="m3d" style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "grid", placeItems: "center" }}>Loading 3D view…</div>}><Man3D onClose={() => setO(false)} /></Suspense>, document.body)}</>; }
