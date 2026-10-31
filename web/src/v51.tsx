@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type Flight } from "./lib";
 import { Hero } from "./v47";
+import { Timeline, TypeLive } from "./v55";
 
 const AL: Record<string, [string, string]> = { ryanair: ["FR", "RYR"], easyjet: ["U2", "EZY"], wizz: ["W6", "WZZ"], jet2: ["LS", "EXS"], tui: ["BY", "TOM"], "british airways": ["BA", "BAW"], ba: ["BA", "BAW"], aer: ["EI", "EIN"], "aer lingus": ["EI", "EIN"], lufthansa: ["LH", "DLH"], klm: ["KL", "KLM"], emirates: ["EK", "UAE"], qatar: ["QR", "QTR"], turkish: ["TK", "THY"], aegean: ["A3", "AEE"], loganair: ["LM", "LOG"], "virgin": ["VS", "VIR"], etihad: ["EY", "ETD"], "air france": ["AF", "AFR"], vueling: ["VY", "VLG"], pegasus: ["PC", "PGT"], sas: ["SK", "SAS"], "american": ["AA", "AAL"], united: ["UA", "UAL"], delta: ["DL", "DAL"] };
 const ls = (k: string, d: any) => { try { return JSON.parse(localStorage.getItem(k) || "") ?? d; } catch { return d; } };
@@ -71,12 +72,13 @@ export function AirlinePage({ iata, icao, name, x, push }: any) { const [d, setD
     {d && <Hero kicker="On-time from our log" verdict={d.on == null ? "No observed flights yet" : `${d.on}% on time`} tone={d.on == null ? "" : d.on >= 75 ? "good" : d.on >= 55 ? "warn" : "bad"} sub={d.flights ? `${d.flights} departures across ${d.numbers} flight numbers${d.range ? `, ${d.range[0]} – ${d.range[1]}` : ""}; ${d.cancelled} cancelled; average ${d.avg} min late` : "Skyline hasn't seen this airline on the airport boards it reads."} foot={d.scope}>
       {d.bases.length > 0 && <div className="hx-cols"><div className="hx-col"><div className="faint xs">Busiest origins seen</div>{d.bases.map((b: any) => <div key={b.k} className="hx-row row between sm"><button className="link" onClick={() => push({ t: "board", iata: b.k })}>{b.k}</button><span>{b.n} · {b.on}%</span></div>)}</div>
         <div className="hx-col"><div className="faint xs">Top routes</div>{d.routes.map((b: any) => <div key={b.k} className="hx-row row between sm"><span>{b.k}</span><span>{b.n} · {b.on}%</span></div>)}</div></div>}</Hero>}
+    {(icao || iata) && <Timeline kind="airline" q={[icao, iata].filter(Boolean).join(",")} title="Daily reliability" />}
     {d && <Hero kicker="Fleet seen on ADS-B" verdict={d.fleet ? `${d.fleet.seen} aircraft` : "No ICAO code, no fleet"} sub={d.fleet ? `${d.fleet.airborne} were airborne at last contact; ${d.fleet.window}. Only aircraft our receivers' feed actually saw — not the full fleet.` : ""} foot="Source: ADS-B (adsb.lol) via Skyline fleet tracker">
       {d.fleet?.types.length ? d.fleet.types.map((t: any) => <div key={t.k} className="hx-row row between sm"><button className="link" onClick={() => push({ t: "type", q: t.k })}>{t.k}</button><span>{t.n}</span></div>) : d.fleet && <div className="sm">None seen in the window.</div>}</Hero>}
   </div></>; }
 
 const ICAO_T: Record<string, string> = { A20N: "Airbus A320neo", A21N: "Airbus A321neo", A319: "Airbus A319", A320: "Airbus A320", A321: "Airbus A321", A332: "Airbus A330-200", A333: "Airbus A330-300", A339: "Airbus A330-900", A359: "Airbus A350-900", A35K: "Airbus A350-1000", A388: "Airbus A380", B738: "Boeing 737-800", B38M: "Boeing 737 MAX 8", B39M: "Boeing 737 MAX 9", B752: "Boeing 757-200", B763: "Boeing 767-300", B772: "Boeing 777-200", B77W: "Boeing 777-300ER", B788: "Boeing 787-8", B789: "Boeing 787-9", B78X: "Boeing 787-10", E190: "Embraer 190", E195: "Embraer 195", E75L: "Embraer 175", AT76: "ATR 72-600", AT75: "ATR 72-500", DH8D: "De Havilland Canada Dash 8-400", DH8C: "De Havilland Canada Dash 8-300", BCS3: "Airbus A220-300", BCS1: "Airbus A220-100", CRJ9: "CRJ900" };
-export function TypePage({ q, x }: { q: string; x: any }) { const name = ICAO_T[q.toUpperCase()] || q; const [d, setD] = useState<any>(null); const [e, setE] = useState("");
+export function TypePage({ q, x, push }: { q: string; x: any; push?: (o: any) => void }) { const name = ICAO_T[q.toUpperCase()] || q; const [d, setD] = useState<any>(null); const [e, setE] = useState("");
   useEffect(() => { api(`/type-info?q=${encodeURIComponent(name)}`).then(setD).catch(z => setE(String(z.message || z))); }, [name]);
   const n = (v: any, u: string) => v == null ? <span className="faint">Not on Wikidata</span> : <>{(+v).toLocaleString("en-GB", { maximumFractionDigits: 2 })} {u}</>;
   const F: [string, any][] = d && !d.none ? [["Manufacturer", d.maker || <span className="faint">Not on Wikidata</span>], ["First flight", d.firstFlight || <span className="faint">Not on Wikidata</span>], ["Length", n(d.lengthM, "m")], ["Wingspan", n(d.spanM, "m")], ["Height", n(d.heightM, "m")], ["Max take-off mass", n(d.mtowKg, "kg")], ["Seats", n(d.seats, "")], ["Range", n(d.rangeKm, "km")], ["Built", n(d.built, "")]] : [];
@@ -87,6 +89,7 @@ export function TypePage({ q, x }: { q: string; x: any }) { const name = ICAO_T[
     {d && !d.none && <Hero kicker="Aircraft type" verdict={d.name} sub={d.name.toLowerCase() !== name.toLowerCase() ? `Closest Wikidata match for “${name}”` : undefined} foot={<>{d.source}{gaps ? ` · ${gaps} of ${F.length} fields not recorded there` : ""}{d.wiki && <> · <a href={d.wiki} target="_blank" rel="noreferrer">Wikipedia</a></>}</>}>
       {d.img && <img src={d.img.replace(/^http:/, "https:") + "?width=640"} alt={d.name} style={{ width: "100%", borderRadius: 12 }} />}
       <div className="hx-facts">{F.map(([k, v]) => <div key={k}><span className="faint xs">{k}</span><div className="sm">{v}</div></div>)}</div></Hero>}
+    {/^[A-Z0-9]{3,4}$/i.test(q) && <TypeLive q={q} push={push} />}
   </div></>; }
 
 export function HomePins({ flights, push }: { flights: Flight[]; push: (o: any) => void }) {

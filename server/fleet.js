@@ -51,5 +51,6 @@ export function startFleet({ AP, adsb, STATE, snapFile }) {
   function airlineNow(prefixes, maxAgeMs = 20 * 60e3) { const now = Date.now(), out = []; for (const [h, p] of F) { const s = p.last; if (!s || now - s.t > maxAgeMs || !p.cs) continue; if (!prefixes.some(x => p.cs.startsWith(x))) continue;
       const L = p.legs[p.legs.length - 1]; out.push({ hex: h, reg: p.reg, type: p.type, cs: p.cs, gnd: !!s.gnd, ap: s.ap || null, lat: s.la, lon: s.lo, alt: s.gnd ? "ground" : s.alt, gs: s.gs, track: s.trk, app: s.app?.ap || null, seenAgo: Math.round((now - s.t) / 1000), last: L ? { from: L[0], to: L[2], dep: L[1], arr: L[3] } : null }); } return out; }
   function legsOn(o, d, prefixes) { const out = []; for (const [h, p] of F) for (const l of p.legs) if (l[0] === o && l[2] === d && l[4] && prefixes.some(x => l[4].startsWith(x))) out.push({ hex: h, reg: p.reg, cs: l[4], dep: l[1], arr: l[3] }); return out; }
-  return { legsFor, stats, persist, airlineNow, legsOn, focus };
+  function typeNow(type, maxAgeMs = 24 * 3600e3) { const now = Date.now(), ops = {}; let seen = 0, air = 0; for (const [h, p] of F) { const s = p.last; if (!s || now - s.t > maxAgeMs || p.type !== type) continue; seen++; if (!s.gnd) air++; const k = (p.cs || "").match(/^[A-Z]{3}(?=\d)/)?.[0] || "Other / private"; ops[k] = (ops[k] || 0) + 1; } return { seen, airborne: air, ops: Object.entries(ops).sort((a, b) => b[1] - a[1]).slice(0, 10) }; }
+  return { legsFor, stats, persist, airlineNow, legsOn, focus, typeNow };
 }

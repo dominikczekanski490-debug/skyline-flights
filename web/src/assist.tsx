@@ -1,4 +1,5 @@
 import { PinApt, MetarDash, AroundApt } from "./v54";
+import { Timeline } from "./v55";
 // v19 Stage B: assistant feed, NL search, compensation, share image, Today card, airport guide. All built on real signals; estimates are labelled "Skyline estimate".
 import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { api, best, delay, dist, dur, fmtT, fmtD, today, withEstArr, ics, download, type Flight } from "./lib";
@@ -154,11 +155,11 @@ const FAC: [string, string][] = [["restaurant", "Restaurants"], ["cafe", "Cafés
 export function AirportGuide({ iata, x }: { iata: string; x: any }) { const [g, setG] = useState<any>(null);
   useEffect(() => { let on = true, n = 0; const go = () => api("/guide/" + iata).then(r => { if (!on) return; setG(r); if (r.facilitiesError === "loading" && n++ < 6) setTimeout(go, 15000); }).catch(e => on && setG({ error: e.message })); go(); return () => { on = false; }; }, [iata]);
   const a = g?.airport; const fc = g?.facilities;
-  return <div className="fd"><div className="head"><div><span className="tag">AIRPORT GUIDE</span><h1 className="h1s">{iata}{a ? " · " + (a.city || "") : ""}</h1><div className="muted sm">{a?.name || "Loading…"}</div><PinApt iata={iata} /></div>{x}</div><MetarDash iata={iata} />
+  return <div className="fd"><div className="head"><div><span className="tag">AIRPORT GUIDE</span><h1 className="h1s">{iata}{a ? " · " + (a.city || "") : ""}</h1><div className="muted sm">{a?.name || "Loading…"}</div><PinApt iata={iata} /></div>{x}</div><MetarDash iata={iata} /><Timeline kind="airport" q={iata} title={`${iata} departures · daily`} />
     {g?.error && <div className="card bad sm">{g.error}</div>}
     <div className="card"><div className="row between"><h3>Security wait</h3>{g?.security && <span className="srcb live">LIVE</span>}</div>
       {g?.security ? g.security.queues.map((q: any) => <div key={q.terminal + q.kind} className="row between ckrow"><span>{q.terminal} <span className="faint sm">{q.kind}</span></span><b>{q.text}</b></div>) : <div className="muted sm">{g ? (g.securityAvailable ? "Feed unavailable right now." : `${iata} doesn't publish live security queue times in a feed Skyline can read.`) : "…"}</div>}</div>
-    <AroundApt iata={iata} />
+    <AroundApt iata={iata} lat={a?.lat} lon={a?.lon} />
     <div className="card"><h3>Terminal maps</h3>{g?.maps && <>{g.maps.official && <a className="row between ckrow" href={"https://" + g.maps.official.replace(/^https?:\/\//, "")} target="_blank" rel="noreferrer"><span>Official airport site</span><span className="faint sm">{g.maps.official} ›</span></a>}
       <a className="row between ckrow" href={g.maps.osm} target="_blank" rel="noreferrer"><span>OpenStreetMap (indoor detail where mapped)</span><span className="faint sm">›</span></a><a className="row between ckrow" href={g.maps.google} target="_blank" rel="noreferrer"><span>Google Maps</span><span className="faint sm">›</span></a></>}
       {fc?.terminals?.length > 0 && <div className="faint sm mt8">Terminals mapped: {fc.terminals.join(", ")}{fc.gates ? ` · ${fc.gates} gates in OSM` : ""}</div>}</div>

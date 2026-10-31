@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, type Flight } from "./lib";
 import { Hero } from "./v47";
+import { SpotMap, Timeline, AirlineCompare } from "./v55";
 import "./v54.css";
 
 const ls = (k: string, d: any) => { try { return JSON.parse(localStorage.getItem(k) || "") ?? d; } catch { return d; } };
@@ -42,24 +43,26 @@ export function MetarDash({ iata }: { iata: string }) { const [d, setD] = useSta
     <code className="v54-raw">{m.rawOb}</code></Hero>; }
 
 /** 4. Plane-spotting spots + hotels nearby (OSM) */
-export function AroundApt({ iata }: { iata: string }) { const [d, setD] = useState<any>(null);
+export function AroundApt({ iata, lat, lon }: { iata: string; lat?: number; lon?: number }) { const [d, setD] = useState<any>(null);
   useEffect(() => { let on = true, n = 0; const go = () => api("/apt-around/" + iata).then(r => on && setD(r)).catch(e => { if (!on) return; if (n++ < 2) setTimeout(go, 20000); else setD({ error: e.message }); }); go(); return () => { on = false; }; }, [iata]);
   const map = (p: any) => `https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lon}#map=17/${p.lat}/${p.lon}`;
   const body = (L: any[], none: string, k: "s" | "h") => !d ? <div className="muted sm">Asking OpenStreetMap (can take a minute the first time)…</div> : d.error ? <div className="muted sm">OpenStreetMap isn't reachable right now ({d.error}).</div> : !L.length ? <div className="muted sm">{none}</div>
-    : L.slice(0, 6).map((p: any, i: number) => <a key={i} className="row between ckrow" href={k === "h" && p.web ? p.web : map(p)} target="_blank" rel="noreferrer"><span>{k === "s" && p.spotting ? "📸 " : ""}{p.name || "Unnamed viewpoint"}{p.stars ? ` · ${p.stars}★` : ""}</span><span className="faint sm">{p.km} km ›</span></a>);
-  return <><div className="card"><div className="row between"><h3>Plane-spotting spots</h3><span className="faint xs">OpenStreetMap</span></div>{body(d?.spots || [], `No viewpoints are mapped in OpenStreetMap within 6 km of ${iata}.`, "s")}<div className="faint xs mt8">📸 = named as a spotting / viewing area. Others are general viewpoints; check access and local rules before you go.</div></div>
+    : L.slice(0, 6).map((p: any, i: number) => <a key={i} className="row between ckrow" href={k === "h" && p.web ? p.web : map(p)} target="_blank" rel="noreferrer"><span>{k === "s" ? `${i + 1}. ` : ""}{k === "s" && p.spotting ? "📸 " : ""}{p.name || "Unnamed viewpoint"}{p.stars ? ` · ${p.stars}★` : ""}</span><span className="faint sm">{p.km} km ›</span></a>);
+  return <><div className="card"><div className="row between"><h3>Plane-spotting spots</h3><span className="faint xs">OpenStreetMap</span></div><SpotMap d={d} lat={lat} lon={lon} />{body(d?.spots || [], `No viewpoints are mapped in OpenStreetMap within 6 km of ${iata}.`, "s")}<div className="faint xs mt8">📸 = named as a spotting / viewing area. Others are general viewpoints; check access and local rules before you go.</div></div>
     <div className="card"><div className="row between"><h3>Hotels near {iata}</h3><span className="faint xs">OpenStreetMap</span></div>{body(d?.hotels || [], `No hotels are mapped in OpenStreetMap within 3 km of ${iata}.`, "h")}<div className="faint xs mt8">Straight-line distance from the airport reference point. No prices — Skyline has no booking data.</div></div></>; }
 
 /** 5. Route comparison */
 function Col({ s, w }: { s: any; w: (k: string) => boolean }) { if (!s.flights) return <div className="v54-col"><b>{s.route}</b><div className="muted sm">No observed flights on this route yet.</div></div>;
   return <div className="v54-col"><b>{s.route}</b><small>{s.apO} → {s.apT}</small>{([["on", "On time", pct(s.on)], ["avg", "Avg delay", mins(s.avg)], ["late30", "30+ min late", pct(s.late30)], ["cancelled", "Cancelled", String(s.cancelled)], ["perDay", "Flights / day", String(s.perDay)], ["flights", "Sample", `${s.flights} over ${s.days} days`]] as const).map(([k, l, v]) => <div key={k} className={"v54-cr" + (w(k) ? " win" : "")}><i>{l}</i><b>{v}</b></div>)}<div className="faint xs mt8">{s.carriers.map((c: any) => `${c[0]} ${c[1]}`).join(" · ")}</div></div>; }
-export function RouteCompare({ a0, x }: { a0?: string; x: any }) { const [a, setA] = useState(a0 || ls("sk.cmp", ["MAN-ALC", "EMA-ALC"])[0]); const [b, setB] = useState(ls("sk.cmp", ["MAN-ALC", "EMA-ALC"])[1]); const [d, setD] = useState<any>(null);
+export function RouteCompare({ a0, x }: { a0?: string; x: any }) { const [mode, setMode] = useState<"r" | "a">("r"); const [a, setA] = useState(a0 || ls("sk.cmp", ["MAN-ALC", "EMA-ALC"])[0]); const [b, setB] = useState(ls("sk.cmp", ["MAN-ALC", "EMA-ALC"])[1]); const [d, setD] = useState<any>(null);
   const go = () => { save("sk.cmp", [a, b]); setD(null); api(`/route-compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`).then(setD).catch(e => setD({ error: e.message })); };
   useEffect(go, []);
   const better = (k: string, me: any, ot: any) => { if (!me?.flights || !ot?.flights) return false; const hi = k === "on" || k === "perDay"; if (!["on", "avg", "late30", "cancelled", "perDay"].includes(k)) return false; return hi ? me[k] > ot[k] : me[k] < ot[k]; };
   return <div className="fd"><div className="head"><div><span className="tag">COMPARE ROUTES</span><h1 className="h1s">Route vs route</h1><div className="muted sm">Reliability from departures Skyline has observed</div></div>{x}</div>
-    <div className="card v54-cin"><input value={a} onChange={e => setA(e.target.value.toUpperCase())} placeholder="MAN-ALC" aria-label="First route" /><span>vs</span><input value={b} onChange={e => setB(e.target.value.toUpperCase())} placeholder="EMA-ALC" aria-label="Second route" /><button className="press" onClick={go}>Compare</button></div>
-    {!d ? <div className="card muted sm">Loading…</div> : d.error ? <div className="card bad sm">{d.error}</div> : <div className="card"><div className="v54-cg"><Col s={d.a} w={k => better(k, d.a, d.b)} /><Col s={d.b} w={k => better(k, d.b, d.a)} /></div><div className="faint xs mt8">Green = better of the two. {d.scope} Source: {d.source}.</div></div>}</div>; }
+    <div className="v54-tabs" role="tablist"><button role="tab" aria-selected={mode === "r"} className={mode === "r" ? "on" : ""} onClick={() => setMode("r")}>Routes</button><button role="tab" aria-selected={mode === "a"} className={mode === "a" ? "on" : ""} onClick={() => setMode("a")}>Airlines</button></div>
+    {mode === "a" ? <AirlineCompare /> : <><div className="card v54-cin"><input value={a} onChange={e => setA(e.target.value.toUpperCase())} placeholder="MAN-ALC" aria-label="First route" /><span>vs</span><input value={b} onChange={e => setB(e.target.value.toUpperCase())} placeholder="EMA-ALC" aria-label="Second route" /><button className="press" onClick={go}>Compare</button></div>
+    {!d ? <div className="card muted sm">Loading…</div> : d.error ? <div className="card bad sm">{d.error}</div> : <div className="card"><div className="v54-cg"><Col s={d.a} w={k => better(k, d.a, d.b)} /><Col s={d.b} w={k => better(k, d.b, d.a)} /></div><div className="faint xs mt8">Green = better of the two. {d.scope} Source: {d.source}.</div></div>}
+    {d && !d.error && <>{d.a.flights > 0 && <Timeline kind="route" q={d.a.route.replace("→", "-")} title={`${d.a.route} · daily`} />}{d.b.flights > 0 && <Timeline kind="route" q={d.b.route.replace("→", "-")} title={`${d.b.route} · daily`} />}</>}</>}</div>; }
 
 /** 6. Daily spotlight: airport + airline of the day */
 export function Spotlight({ push }: { push: (o: any) => void }) { const [d, setD] = useState<any>(null);
