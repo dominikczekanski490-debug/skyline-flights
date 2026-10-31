@@ -1951,6 +1951,18 @@ api.get("/dest-info/:iata", wrap(async (req, res) => { const c = req.params.iata
     const y = +date.slice(0, 4); const l = [...await getJSON(`https://date.nager.at/api/v3/PublicHolidays/${y}/${cc.countryCode}`), ...await getJSON(`https://date.nager.at/api/v3/PublicHolidays/${y + 1}/${cc.countryCode}`)];
     return { cc: cc.countryCode, list: l.map(h => ({ date: h.date, name: h.name, local: h.localName, national: h.global, regions: h.counties })) }; }); } catch (e) { out.holidays = { error: e.message }; }
   res.json({ ...out, source: "GOV.UK FCDO travel advice; Nager.Date public holidays" }); }));
+// v50 stage 5: trip weather intelligence. Open-Meteo hourly (forecast/recent past) at both ends, daily sunshine/daylight, ERA5 2015-2024 climate normal. Rules live client-side and are printed on each card.
+api.get("/trip-wx", wrap(async (req, res) => { const o = AP[String(req.query.o || "").toUpperCase()], t = AP[String(req.query.t || "").toUpperCase()]; if (!o?.lat || !t?.lat) return res.status(404).json({ error: "Unknown airport" });
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || "") ? req.query.date : new Date().toISOString().slice(0, 10); const age = (Date.parse(date) - Date.now()) / 864e5;
+  if (age < -85 || age > 14) return res.json({ out: true, date, reason: age > 14 ? "Forecasts only reach 14 days ahead." : "Older than Open-Meteo's recent-past window (about 3 months)." });
+  const end = new Date(Date.parse(date) + 3 * 864e5).toISOString().slice(0, 10); const H = "temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,cloud_cover_low,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m";
+  const one = a => cached(`twx1:${a.iata}:${date}`, 3600, async () => { const j = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${a.lat}&longitude=${a.lon}&hourly=${H}&daily=sunshine_duration,daylight_duration,temperature_2m_max,sunrise,sunset&timezone=GMT&start_date=${date}&end_date=${end}`);
+    return { iata: a.iata, city: a.city, hourly: j.hourly, daily: j.daily }; });
+  const norm = cached(`norm1:${t.iata}`, 30 * 86400, async () => { const j = await getJSON(`https://archive-api.open-meteo.com/v1/archive?latitude=${t.lat}&longitude=${t.lon}&start_date=2015-01-01&end_date=2024-12-31&daily=temperature_2m_max&timezone=GMT`); return { time: j.daily.time, tmax: j.daily.temperature_2m_max }; }).catch(() => null);
+  const [O, T, N] = await Promise.all([one(o), one(t), norm]); let normal = null;
+  if (N) { const md = d => { const x = new Date(d + "T12:00:00Z"); return x.getUTCMonth() * 31 + x.getUTCDate(); }; const m0 = md(date); const v = N.time.map((d, i) => Math.abs(md(d) - m0) <= 3 && N.tmax[i] != null ? N.tmax[i] : null).filter(x => x != null);
+    if (v.length) normal = { mean: Math.round(v.reduce((s, x) => s + x, 0) / v.length * 10) / 10, n: v.length, years: "2015–2024", window: "±3 days" }; }
+  res.json({ date, o: O, t: T, normal, source: "Open-Meteo forecast (hourly, GMT) and ERA5 archive" }); }));
 api.get("/arrive/:iata", wrap(async (req, res) => { const c = req.params.iata.toUpperCase(), a = AP[c]; if (!a) return res.status(404).json({ error: "Unknown airport" });
   const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || "") ? req.query.date : new Date().toISOString().slice(0, 10); const days = Math.min(21, Math.max(1, +req.query.days || 7));
   const k = await codesOf(c).catch(() => null); const end = new Date(Date.parse(date) + days * 864e5).toISOString().slice(0, 10);
