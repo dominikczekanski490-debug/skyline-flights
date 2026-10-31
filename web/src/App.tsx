@@ -1,4 +1,5 @@
 import { Ground, Essentials } from "./v46";
+import { FindView, AirlinePage, TypePage, HomePins } from "./v51";
 import { Outdoors, Quakes, AirlineFacts, CityDist } from "./v47";
 import { AirportToday } from "./v48";
 import { RouteInsights, DestInfo } from "./v49";
@@ -52,7 +53,7 @@ import { Timeline, Progress, WeatherCard, AirportInfo, PassportMore, PasteImport
 import { AskSkyline, LockView, RouteWeather, useInsights } from "./v21";
 import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, makeShareLink, parseShare, LeaveCard, PassportExtras, DepartureDay, UpdateBanner, PushChecklist, BUILD, localNotify, testLocal, notifEnv } from "./extras";
 
-type Ov = { t: "ask" } | { t: "lock" } | { t: "flight"; f: Flight } | { t: "board"; iata: string; term?: boolean; dir?: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" } | { t: "tools"; id?: string } | { t: "features" } | { t: "labs"; id?: string; apt?: string; f?: Flight } | { t: "dayof"; f: Flight } | { t: "guide"; iata: string } | { t: "overhead" } | { t: "wrapped" } | { t: "conn" } | { t: "trip"; f?: Flight } | { t: "spots" };
+type Ov = { t: "find" } | { t: "airline"; iata?: string; icao?: string; name?: string } | { t: "type"; q: string } | { t: "ask" } | { t: "lock" } | { t: "flight"; f: Flight } | { t: "board"; iata: string; term?: boolean; dir?: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" } | { t: "tools"; id?: string } | { t: "features" } | { t: "labs"; id?: string; apt?: string; f?: Flight } | { t: "dayof"; f: Flight } | { t: "guide"; iata: string } | { t: "overhead" } | { t: "wrapped" } | { t: "conn" } | { t: "trip"; f?: Flight } | { t: "spots" };
 const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <AirlineTile a={a} className="card-tile" mode="colour" style={{ width: Math.round(s * 2.4), height: s }} />;
 
 export default function App() {
@@ -63,7 +64,7 @@ export default function App() {
   const [live, setLive] = useState<Record<string, any>>({});
   const [mapStyle, setMapStyle] = useState(localStorage.getItem("sk.map2") || "dark");
   const [radar, setRadar] = useState(false); const [locate, setLocate] = useState(0);
-  useEffect(() => { const tb = location.hash.match(/tab=(mine|friends|tracked|passport)/); if (tb) setTab(tb[1] as any); const v = location.hash.match(/ov=(overhead|wrapped|conn|ask|settings|search|trip|spots|labs|tools)/); if (v) setOv([{ t: v[1] } as Ov]); const lb = location.hash.match(/labs=?(\w*)/); if (lb) setOv([{ t: "labs", id: lb[1] || undefined }]); const fm = location.hash.match(/flight=([\w-]+)/); if (fm) { const f = load().find(x => x.id === fm[1]); if (f) setOv([{ t: "flight", f }]); } }, []);
+  useEffect(() => { const tb = location.hash.match(/tab=(mine|friends|tracked|passport)/); if (tb) setTab(tb[1] as any); const v = location.hash.match(/ov=(find|overhead|wrapped|conn|ask|settings|search|trip|spots|labs|tools)/); if (v) setOv([{ t: v[1] } as Ov]); const alh = location.hash.match(/airline=([A-Z0-9]{2})?,?([A-Z]{3})?/); if (alh) setOv([{ t: "airline", iata: alh[1], icao: alh[2] }]); const tyh = location.hash.match(/actype=([\w-]+)/); if (tyh) setOv([{ t: "type", q: tyh[1] }]); const lb = location.hash.match(/labs=?(\w*)/); if (lb) setOv([{ t: "labs", id: lb[1] || undefined }]); const fm = location.hash.match(/flight=([\w-]+)/); if (fm) { const f = load().find(x => x.id === fm[1]); if (f) setOv([{ t: "flight", f }]); } }, []);
   useEffect(() => { const h = () => { const fm = location.hash.match(/flight=([\w-]+)/); const f = fm && load().find(x => x.id === decodeURIComponent(fm[1])); if (f) setOv([{ t: "flight", f }]); const v = location.hash.match(/ov=(overhead|wrapped|conn|ask|settings|search|trip|spots|labs|tools)/); if (v) setOv([{ t: v[1] } as Ov]); const b = location.hash.match(/board=([A-Za-z]{3})/); if (b) setOv([{ t: "board", iata: b[1].toUpperCase() }]); }; window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
   useEffect(() => { const m = location.hash.match(/board=([A-Za-z]{3})/); if (m) setOv([{ t: "board", iata: m[1].toUpperCase() }]); const a = location.hash.match(/airports=(\w+)/); if (a) setOv([{ t: "airports", mode: a[1] }]); }, []);
   const [why, setWhy] = useState<any>(null); (window as any).__why = (f: any) => { navigator.vibrate?.(8); setWhy(f); };
@@ -162,7 +163,7 @@ function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => 
     <GlobalSearch push={push} onFlight={f => push({ t: "flight", f })} />
     {(() => { const nx = list.filter(f => !f.example && phaseOf(f) !== "cancelled" && !(f.status === "landed" && Date.now() - +new Date(f.arr.actual || f.arr.scheduled || 0) > 3 * 3600e3)).sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1)[0];
       return nx ? <><NextHero f={nx} open={() => open(nx)} dayof={() => push({ t: "dayof", f: nx })} /><div className="px pf-hero"><PlaneFrom f={nx} compact /></div></> : null; })()}
-    <div className="px"><AuroraHome flights={list} /><HomeWidgets flights={list} push={push} /><AirportPulse push={push} /></div><DiscoverCarousel push={push} /><AcarsEntry />
+    <div className="px"><AuroraHome flights={list} /><HomePins flights={list} push={push} /><HomeWidgets flights={list} push={push} /><AirportPulse push={push} /></div><DiscoverCarousel push={push} /><AcarsEntry />
     <TodayCard flights={list} />
     <AssistantFeed flights={list} push={push} />
     <NLSearch open={f => push({ t: "flight", f })} />
@@ -250,6 +251,9 @@ function Overlay(p: { o: Ov; z: number; close: () => void; push: (o: Ov) => void
   if (o.t === "wrapped") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Wrapped22 x={x} /></Sheet>;
   if (o.t === "conn") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Connections22 flights={p.flights} x={x} /></Sheet>;
   if (o.t === "trip") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><TripView f={o.f} flights={p.flights} open={f => p.push({ t: "flight", f })} x={x} /></Sheet>;
+  if (o.t === "find") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><FindView x={x} push={p.push} /></Sheet>;
+  if (o.t === "airline") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><AirlinePage {...o} x={x} push={p.push} /></Sheet>;
+  if (o.t === "type") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><TypePage q={o.q} x={x} /></Sheet>;
   if (o.t === "spots") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><SpotterLog x={x} /></Sheet>;
   if (o.t === "guide") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><AirportGuide iata={o.iata} x={x} /></Sheet>;
   if (o.t === "dayof") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><DayOf f={p.flights.find(f => f.id === o.f.id) || o.f} push={p.push} x={x} /></Sheet>;
