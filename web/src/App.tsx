@@ -34,7 +34,7 @@ import { PlaneFrom, useAircraft } from "./inbound";
 import { Alternatives, FlightStory, PassCard, JetLag } from "./v20";
 import { DestGuide, BeforeLand } from "./v44";
 import { OnlineOnly, TripView, OfflineBanner, AirportLive, SpotterLog } from "./v43";
-import { AssistantFeed, TodayCard, NLSearch, CompCard, shareImage, exportIcs as icsOf, AirportGuide } from "./assist";
+import { AssistantFeed, TodayCard, CompCard, shareImage, exportIcs as icsOf, AirportGuide } from "./assist";
 import { NextHero, PlaneHere, Facts, GlobalSearch, DayOf, phaseOf } from "./big";
 import { useRef, useEffect, useMemo, useState, lazy, Suspense, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -163,10 +163,10 @@ function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => 
     <GlobalSearch push={push} onFlight={f => push({ t: "flight", f })} />
     {(() => { const nx = list.filter(f => !f.example && phaseOf(f) !== "cancelled" && !(f.status === "landed" && Date.now() - +new Date(f.arr.actual || f.arr.scheduled || 0) > 3 * 3600e3)).sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1)[0];
       return nx ? <><NextHero f={nx} open={() => open(nx)} dayof={() => push({ t: "dayof", f: nx })} /><div className="px pf-hero"><PlaneFrom f={nx} compact /></div></> : null; })()}
-    <div className="px"><AuroraHome flights={list} /><HomePins flights={list} push={push} /><HomeWidgets flights={list} push={push} /><AirportPulse push={push} /></div><DiscoverCarousel push={push} /><AcarsEntry />
+    <div className="px"><AuroraHome flights={list} /><HomePins flights={list} push={push} /><HomeWidgets flights={list} push={push} /><Suspense fallback={<div className="skel" style={{ height: 120, margin: "12px 0" }} />}><HomeDash flights={list} push={push} /></Suspense><AirportPulse push={push} /></div><DiscoverCarousel push={push} /><AcarsEntry />
     <TodayCard flights={list} />
     <AssistantFeed flights={list} push={push} />
-    <NLSearch open={f => push({ t: "flight", f })} />
+    <button className="h52-find glass52" onClick={() => push({ t: "find" })}>🔎 Find flights in plain English — “delayed flights to Tenerife”</button>
     <div className="qa">{([[I.alert, "Disruptions", "Live delay scores", () => push({ t: "airports", mode: "disruptions" }), "r"], [I.grid, "Tools", `${TOOLS.length} aviation tools`, () => push({ t: "tools" }), "b"], [I.spark, "Skyline Labs", labCount ? `${labCount} insights & tools` : "Insights & tools", () => push({ t: "labs" }), "v"], [I.globe, "UK & Ireland", "Every airport board", () => push({ t: "airports", mode: "uk" }), "b"], [I.takeoff, "MAN board", "Departures now", () => push({ t: "board", iata: "MAN" }), "g"], [I.globe, "Trips", "Timeline & weather", () => push({ t: "trip" }), "g"], [I.plane, "Spotter log", "Planes seen & flown", () => push({ t: "spots" }), "b"], [I.sliders, "Settings", "Keys & theme", () => push({ t: "settings" }), "v"]] as const).map(([ic, t, s, fn, c]) => <button key={t} className={"qtile press q" + c} onClick={fn}><span className="qic">{ic}</span><b>{t}</b><small>{s}</small></button>)}</div>
     {!list.length ? <div className="empty16 rise"><div className="e-ic">{I.plane}</div><b>Your next trip starts here</b><span>Search a flight number like BA1387 or a route to start tracking it live.</span>
       <button className="primary mt16" onClick={() => push({ t: "search" })}>{I.search} Add a flight</button>
@@ -611,6 +611,7 @@ function Settings({ x, theme, setTheme, push }: any) {
 
 const Man3D = lazy(() => import("./v35"));
 const Welcome = lazy(() => import("./v53"));
+const HomeDash = lazy(() => import("./v52"));
 function Man3DBtn() { const [o, setO] = useState(() => /man3d=1/.test(location.hash));
   return <><button className="card press m3btn px" style={{ width: "calc(100% - 24px)", margin: "8px 12px", textAlign: "left" }} onClick={() => setO(true)}><span style={{ fontSize: 22 }}>🛬</span><div><b>See Manchester Airport in 3D</b> <span className="m3beta" style={{ fontSize: 10, padding: "1px 6px", borderRadius: 6, background: "var(--accent,#6aa8ff)", color: "#fff" }}>BETA</span><div className="muted sm">Terminals, runways and live aircraft · shapes from OpenStreetMap</div></div></button>
     {o && createPortal(<Suspense fallback={<div className="m3d" style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "grid", placeItems: "center" }}>Loading 3D view…</div>}><Man3D onClose={() => setO(false)} /></Suspense>, document.body)}</>; }

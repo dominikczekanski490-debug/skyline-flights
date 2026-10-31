@@ -1952,6 +1952,20 @@ api.get("/dest-info/:iata", wrap(async (req, res) => { const c = req.params.iata
     const y = +date.slice(0, 4); const l = [...await getJSON(`https://date.nager.at/api/v3/PublicHolidays/${y}/${cc.countryCode}`), ...await getJSON(`https://date.nager.at/api/v3/PublicHolidays/${y + 1}/${cc.countryCode}`)];
     return { cc: cc.countryCode, list: l.map(h => ({ date: h.date, name: h.name, local: h.localName, national: h.global, regions: h.counties })) }; }); } catch (e) { out.holidays = { error: e.message }; }
   res.json({ ...out, source: "GOV.UK FCDO travel advice; Nager.Date public holidays" }); }));
+// v52 home: trending routes/airports from Skyline's observed board log; aviation "on this day" from Wikipedia; nearest airport.
+api.get("/home-trends", (req, res) => { const day = todayLondon(); const R = {}, A = {}; const days = new Set();
+  for (const k in HIST) for (const [id, x] of Object.entries(HIST[k])) { const d = id.slice(-10); days.add(d); const r = x.o + "→" + x.t; const add = (M, key) => { const m = (M[key] ||= { today: 0, prior: 0 }); d === day ? m.today++ : m.prior++; }; if (x.o && x.t) add(R, r); if (x.o) add(A, x.o); }
+  const priorDays = [...days].filter(d => d < day).length; const rank = M => Object.entries(M).map(([k, m]) => ({ k, today: m.today, avg: priorDays ? +(m.prior / priorDays).toFixed(1) : null })).filter(x => x.today >= 3)
+    .map(x => ({ ...x, ratio: x.avg ? +(x.today / x.avg).toFixed(2) : null })).sort((a, b) => (b.ratio ?? 0) - (a.ratio ?? 0) || b.today - a.today).slice(0, 6);
+  res.json({ day, priorDays, routes: rank(R), airports: rank(A).length ? Object.entries(A).map(([k, m]) => ({ k, today: m.today })).sort((a, b) => b.today - a.today).slice(0, 6) : [], rule: `Trending = today's observed departures on the route ÷ its daily average over the previous ${priorDays} logged days (min 3 today). Airports ranked by departures logged today.`, source: "Skyline observed log (official airport boards)" }); });
+api.get("/aviation-fact", wrap(async (req, res) => { const n = new Date(); const mm = String(n.getUTCMonth() + 1).padStart(2, "0"), dd = String(n.getUTCDate()).padStart(2, "0");
+  res.json(await cached(`avfact:${mm}${dd}`, 12 * 3600, async () => { const j = await getJSON(`https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/events/${mm}/${dd}`, { headers: WDUA });
+    const re = /\b(aircraft|airliner|airline|aviation|airport|aeroplane|airplane|flight \d|flew|first flight|jet|helicopter|airship|Concorde|Boeing|Airbus|Wright)\b/i;
+    const L = (j.events || []).filter(e => re.test(e.text)).map(e => ({ year: e.year, text: e.text, url: e.pages?.[0]?.content_urls?.desktop?.page || null }));
+    return { date: `${dd}/${mm}`, facts: L.slice(0, 5), none: !L.length, source: "Wikipedia ‘On this day’ (Wikimedia feed API)", rule: "Events whose text mentions aviation keywords" }; })); }));
+api.get("/airports/nearest", (req, res) => { const la = +req.query.lat, lo = +req.query.lon; if (!isFinite(la) || !isFinite(lo)) return res.status(400).json({ error: "lat/lon" });
+  const big = new Set(Object.keys(OFFICIAL)); let b = null; for (const a of Object.values(AP)) { if (!a.iata || a.lat == null) continue; const d = Math.hypot(a.lat - la, (a.lon - lo) * Math.cos(la * Math.PI / 180)) * 111; const s = d - (big.has(a.iata) ? 15 : 0); if (!b || s < b.s) b = { s, d: Math.round(d), a }; }
+  res.json(b ? { ...b.a, km: b.d } : null); });
 // v51: airline page (Skyline observed log + ADS-B fleet snapshot) and aircraft type page (Wikidata only; missing specs stay missing).
 api.get("/airline-page", (req, res) => { const P = String(req.query.pre || "").toUpperCase().split(",").map(x => x.replace(/[^A-Z0-9]/g, "").slice(0, 3)).filter(Boolean).slice(0, 2), pre = P.join(","), icao = String(req.query.icao || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3); if (!pre) return res.status(400).json({ error: "prefix needed" });
   const cl = d => Math.max(-10, Math.min(180, d)); const rows = []; for (const k in HIST) { if (!P.some(x => k.startsWith(x) && /^\d/.test(k.slice(x.length)))) continue; for (const [id, x] of Object.entries(HIST[k])) rows.push({ ...x, k, date: id.slice(-10) }); }
