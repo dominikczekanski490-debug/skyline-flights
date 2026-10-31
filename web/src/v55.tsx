@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api, dist, fmtT, type Flight } from "./lib";
 import { Hero } from "./v47";
 import "./v55.css";
+import { SharedRoutes } from "./v56";
 
 const ls = (k: string, d: any) => { try { return JSON.parse(localStorage.getItem(k) || "") ?? d; } catch { return d; } };
 const save = (k: string, v: any) => localStorage.setItem(k, JSON.stringify(v));
@@ -83,4 +84,5 @@ export function AirlineCompare() { const [a, setA] = useState(() => ls("sk.cmpal
   const win = (k: string, dir: number, me: any, ot: any) => dir && me?.flights && ot?.flights && me[k] != null && ot[k] != null && (dir > 0 ? me[k] > ot[k] : me[k] < ot[k]);
   return <><div className="card v54-cin"><input value={a} onChange={e => setA(e.target.value.toUpperCase())} aria-label="First airline ICAO code" placeholder="EZY" /><span>vs</span><input value={b} onChange={e => setB(e.target.value.toUpperCase())} aria-label="Second airline ICAO code" placeholder="RYR" /><button className="press" onClick={go}>Compare</button></div>
     {!d ? <div className="card muted sm">Loading…</div> : <div className="card"><div className="v54-cg">{d.map((s: any, i: number) => <div key={i} className="v54-col"><b>{[a, b][i]}</b>{s.error ? <div className="muted sm">{s.error}</div> : !s.flights ? <div className="muted sm">No observed departures for this code.</div> : R.map(([k, l, f, dir]) => <div key={k} className={"v54-cr" + (win(k, dir, s, d[1 - i]) ? " win" : "")}><i>{l}</i><b>{f(s)}</b></div>)}</div>)}</div>
-      <div className="faint xs mt8">Use ICAO airline codes (EZY, RYR, BAW, EXS…). Green = better of the two. {d[0]?.scope || ""}</div></div>}</>; }
+      <div className="faint xs mt8">Use ICAO airline codes (EZY, RYR, BAW, EXS…). Green = better of the two. {d[0]?.scope || ""}</div></div>}
+    {d && d[0]?.pre && d[1]?.pre && <SharedRoutes a={d[0].pre} b={d[1].pre} la={a} lb={b} />}</>; }
