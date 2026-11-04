@@ -3,25 +3,56 @@ import fs from "fs"; import os from "os"; import path from "path";
 const DIR = path.join(os.tmpdir(), "skyline-apt3d"); try { fs.mkdirSync(DIR, { recursive: true }); } catch {}
 const OVP = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
 const UA = "Skyline/1.0 (hobby flight tracker; contact via github)";
-async function ovp(q) { let last; for (const u of [...OVP, ...OVP, OVP[0], OVP[0]]) { try { const r = await fetch(u + "?data=" + encodeURIComponent(q), { headers: { "user-agent": UA }, signal: AbortSignal.timeout(90000) }); if (!r.ok) throw new Error("Overpass " + r.status); return await r.json(); } catch (e) { last = e; await new Promise(r => setTimeout(r, 4000)); } } throw last; }
+async function ovp(q) { let last; for (const u of OVP) { try { const r = await fetch(u + "?data=" + encodeURIComponent(q), { headers: { "user-agent": UA }, signal: AbortSignal.timeout(25000) }); if (!r.ok) throw new Error("Overpass " + r.status); return await r.json(); } catch (e) { last = e; await new Promise(r => setTimeout(r, 4000)); } } throw last; }
 const inPoly = (p, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) c = !c; } return c; };
 const H = t => { const h = t.height; if (h) { const n = parseFloat(h); if (n > 0) return /ft/.test(h) ? n * 0.3048 : n; } if (t["building:levels"]) return +t["building:levels"] * 4; return null; };
 const area = c => { let s = 0; for (let i = 0; i < c.length - 1; i++) s += c[i][0] * c[i + 1][1] - c[i + 1][0] * c[i][1]; return Math.abs(s / 2); };
+// Fallback when every Overpass mirror is down: the main OSM API /map call, in small tiles, parsed as a stream of lines.
+// Output mimics Overpass "out geom" so the rest of build() is unchanged. Only aerodrome-ish ways/relations are kept.
+const atr = (l, k) => { const m = l.match(new RegExp(" " + k + "=\"([^\"]*)\"")); return m ? m[1].replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">") : null; };
+const want = t => t.aeroway || t.building || /terminal/i.test(t.name || "");
+async function osmApi(a) {
+  const d = 0.03, dl = d / Math.cos(a.lat * Math.PI / 180), T = 0.02, N = new Map(), W = new Map(), R = new Map();
+  for (let y = a.lat - d; y < a.lat + d - 1e-9; y += T) for (let x = a.lon - dl; x < a.lon + dl - 1e-9; x += T) {
+    const r = await fetch(`https://api.openstreetmap.org/api/0.6/map?bbox=${x.toFixed(5)},${y.toFixed(5)},${Math.min(x + T, a.lon + dl).toFixed(5)},${Math.min(y + T, a.lat + d).toFixed(5)}`, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(60000) });
+    if (!r.ok) throw new Error("OSM API " + r.status);
+    let cur = null, buf = ""; const dec = new TextDecoder();
+    const line = l => { l = l.trim();
+      if (l.startsWith("<node")) { N.set(+atr(l, "id"), [+atr(l, "lon"), +atr(l, "lat")]); cur = null; }
+      else if (l.startsWith("<way")) { const id = +atr(l, "id"); cur = W.has(id) ? null : { type: "way", id, nd: [], tags: {} }; if (cur) W.set(id, cur); }
+      else if (l.startsWith("<relation")) { const id = +atr(l, "id"); cur = R.has(id) ? null : { type: "relation", id, mem: [], tags: {} }; if (cur) R.set(id, cur); }
+      else if (!cur) return;
+      else if (l.startsWith("<nd")) cur.nd.push(+atr(l, "ref"));
+      else if (l.startsWith("<member") && atr(l, "type") === "way") cur.mem.push([+atr(l, "ref"), atr(l, "role")]);
+      else if (l.startsWith("<tag")) cur.tags[atr(l, "k")] = atr(l, "v"); };
+    for await (const ch of r.body) { buf += dec.decode(ch, { stream: true }); const ls = buf.split("\n"); buf = ls.pop(); ls.forEach(line); }
+    line(buf);
+  }
+  const geo = w => w?.nd.map(i => N.get(i)).filter(Boolean).map(([lon, lat]) => ({ lat, lon }));
+  const out = [];
+  for (const r of R.values()) if (r.tags.aeroway === "aerodrome" || r.tags.aeroway === "terminal" || (r.tags.building && /terminal/i.test(r.tags.name || ""))) out.push({ type: "relation", tags: r.tags, members: r.mem.map(([id, role]) => ({ role, geometry: geo(W.get(id)) })).filter(m => m.geometry?.length) });
+  for (const w of W.values()) if (want(w.tags)) out.push({ type: "way", tags: w.tags, geometry: geo(w) });
+  N.clear(); W.clear(); R.clear();
+  return out;
+}
 async function build(a) {
-  const ad = await ovp(`[out:json][timeout:40];(way["aeroway"="aerodrome"](around:3000,${a.lat},${a.lon});rel["aeroway"="aerodrome"](around:3000,${a.lat},${a.lon}););out geom;`);
+  let fb = null; const ovp2 = async q => { if (fb) return fb; try { return await ovp(q); } catch (e) { const el = await osmApi(a); fb = { elements: el, viaApi: true }; return fb; } };
+  const ad0 = await ovp2(`[out:json][timeout:40];(way["aeroway"="aerodrome"](around:3000,${a.lat},${a.lon});rel["aeroway"="aerodrome"](around:3000,${a.lat},${a.lon}););out geom;`);
+  const ad = ad0.viaApi ? { elements: ad0.elements.filter(e => e.tags.aeroway === "aerodrome") } : ad0;
   const cands = (ad.elements || []).map(e => { const rings = e.type === "way" ? [e.geometry] : (e.members || []).filter(m => m.role === "outer" && m.geometry).map(m => m.geometry); const pts = rings.flat().filter(Boolean).map(p => [p.lon, p.lat]); return { t: e.tags || {}, rings: rings.filter(Boolean).map(r => r.map(p => [p.lon, p.lat])), pts }; }).filter(c => c.pts.length > 3);
   const pick = cands.find(c => c.t.iata === a.iata) || cands.find(c => c.t.icao === a.icao) || cands.sort((x, y) => y.pts.length - x.pts.length)[0];
   let s, w, n, e2; if (pick) { const xs = pick.pts.map(p => p[0]), ys = pick.pts.map(p => p[1]); w = Math.min(...xs); e2 = Math.max(...xs); s = Math.min(...ys); n = Math.max(...ys); }
   if (!pick || e2 - w > 0.12 || n - s > 0.08) { const d = 0.02; s = a.lat - d; n = a.lat + d; w = a.lon - d / Math.cos(a.lat * Math.PI / 180); e2 = a.lon + d / Math.cos(a.lat * Math.PI / 180); }
   const bb = `${s.toFixed(5)},${w.toFixed(5)},${n.toFixed(5)},${e2.toFixed(5)}`;
-  const j = await ovp(`[out:json][timeout:60];(way["aeroway"~"^(terminal|apron|taxiway|runway|hangar|control_tower|tower|jet_bridge)$"](${bb});way["building"](${bb});rel["aeroway"="terminal"](${bb});rel["building"]["name"~"[Tt]erminal"](${bb}););out geom qt;`);
+  const j0 = await ovp2(`[out:json][timeout:60];(way["aeroway"~"^(terminal|apron|taxiway|runway|hangar|control_tower|tower|jet_bridge)$"](${bb});way["building"](${bb});rel["aeroway"="terminal"](${bb});rel["building"]["name"~"[Tt]erminal"](${bb}););out geom qt;`);
+  const j = j0.viaApi ? { elements: j0.elements.filter(e => e.tags.aeroway !== "aerodrome") } : j0;
   const inside = c => !pick || pick.rings.some(r => inPoly(c, r));
   const feats = []; const K = {};
   for (const el of j.elements || []) { if (el.type === "relation") { const o = (el.members || []).filter(m => m.role === "outer" && m.geometry?.length); if (!o.length) continue; let ring = o.sort((a, b) => b.geometry.length - a.geometry.length)[0].geometry; if (o.length > 1) ring = o.flatMap(m => m.geometry); if (ring[0].lat !== ring.at(-1).lat || ring[0].lon !== ring.at(-1).lon) ring = [...ring, ring[0]]; el.geometry = ring; }
     if (!el.geometry) continue; const t = el.tags || {}; const c = el.geometry.map(p => [+p.lon.toFixed(6), +p.lat.toFixed(6)]);
     const closed = c.length > 3 && c[0][0] === c.at(-1)[0] && c[0][1] === c.at(-1)[1]; let kind = null, h = H(t); if (/hotel|hilton|hyatt|inn\b|premier|holiday|sonesta|marriott|novotel|ibis|radisson|college|school/i.test(t.name || "") || t.tourism === "hotel") continue;
     if (t.aeroway === "runway") kind = "runway"; else if (t.aeroway === "taxiway") kind = "taxiway"; else if (t.aeroway === "apron" && closed) kind = "apron";
-    else if ((t.aeroway === "terminal" || t.building === "terminal" || (t.building && /terminal/i.test(t.name || "") && !/car park|parking|hotel|cargo|business|aviation|bus|coach|rail|fuel/i.test(t.name || ""))) && closed) { kind = "terminal"; h ??= 16; }
+    else if ((t.aeroway === "terminal" || t.building === "terminal" || (t.building && /terminal/i.test(t.name || "") && !/car park|parking|hotel|cargo|business|aviation|bus|coach|rail|fuel/i.test(t.name || ""))) && !/parkhaus|car park|parking|multi-storey/i.test(t.name || "") && t.building !== "parking" && closed) { kind = "terminal"; h ??= 16; }
     else if (t.aeroway === "jet_bridge") kind = "bridge";
     else if ((t.building || t.aeroway) && closed) { if (["house", "detached", "semidetached_house", "terrace", "apartments", "residential", "garage", "garages", "shed", "no", "roof"].includes(t.building)) continue; if (!inside(c[0])) continue; kind = (t.aeroway === "control_tower" || t["man_made"] === "tower" || (h && h > 35)) ? "tower" : "building"; h ??= t.aeroway === "hangar" || t.building === "hangar" ? 14 : 8; }
     if (!kind) continue; K[kind] = (K[kind] || 0) + 1;
@@ -29,12 +60,14 @@ async function build(a) {
     feats.push({ type: "Feature", properties: { kind, name: t.name || t.ref || "", h: h ? Math.round(h) : 0, est: H(t) == null, w: kind === "runway" ? (+t.width || 45) : kind === "taxiway" ? (+t.width || 18) : 0, A: poly ? area(c) : 0 }, geometry: poly ? { type: "Polygon", coordinates: [c] } : { type: "LineString", coordinates: c } }); }
   // Label: the biggest terminal shows the terminal's own OSM name, or the airport's OSM name if the terminal has none.
   const terms = feats.filter(f => f.properties.kind === "terminal").sort((x, y) => y.properties.A - x.properties.A);
-  const aname = pick?.t?.name || (/airport/i.test(a.name) ? a.name : a.name + " Airport");
+  const aname = pick?.t?.["name:en"] || (pick?.t?.name && /airport|aeroporto|aéroport|aeropuerto|lotnisko|airfield/i.test(pick.t.name) ? pick.t.name : "") || (/airport/i.test(a.name) ? a.name : a.name + " Airport");
   // Signs: the biggest terminal carries the airport-name sign; every terminal also shows its own OSM name (e.g. "Terminal 1").
   terms.forEach((f, i) => { f.properties.sign = i === 0 ? aname : ""; f.properties.label = f.properties.name && f.properties.name !== aname ? f.properties.name : ""; });
   if (!terms.length) feats.push({ type: "Feature", properties: { kind: "signpt", sign: aname, label: "", h: 0 }, geometry: { type: "Point", coordinates: [a.lon, a.lat] } });
   feats.forEach(f => delete f.properties.A);
-  return { type: "FeatureCollection", iata: a.iata, name: aname, center: [a.lon, a.lat], bbox: [w, s, e2, n], counts: K, built: new Date().toISOString(), outline: !!pick, attribution: "© OpenStreetMap contributors (ODbL)", features: feats };
+  const tp = terms.flatMap(f => (f.geometry.coordinates?.[0] || []));
+  const focus = tp.length ? [Math.min(...tp.map(p => p[0])), Math.min(...tp.map(p => p[1])), Math.max(...tp.map(p => p[0])), Math.max(...tp.map(p => p[1]))] : null;
+  return { type: "FeatureCollection", iata: a.iata, name: aname, center: [a.lon, a.lat], bbox: [w, s, e2, n], focus, counts: K, built: new Date().toISOString(), outline: !!pick, attribution: "© OpenStreetMap contributors (ODbL)", features: feats };
 }
 const busy = new Map();
 const xml = (s, tag) => [...s.matchAll(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "g"))].map(m => m[1]);

@@ -1,4 +1,6 @@
 import "./v63.css";
+// Pitched fitBounds leaves the airport tiny (it fits the far horizon too), so fit flat, then tilt and zoom in a bit.
+const fit = (m: any, b: number[], now: boolean) => { const c = m.cameraForBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 10, bearing: m.getBearing() }); if (!c) return; const z = Math.min(15.3, (c.zoom ?? 14) + 0.7); m.easeTo({ center: c.center, zoom: z, pitch: 60, duration: now || still() ? 0 : 700 }); };
 // v63: 3D airport for ANY airport (OpenStreetMap shapes via /api/apt3d) + live ADS-B traffic drawn as simple 3D aircraft
 // (Skyline's own procedural low-poly models, one per size class, tinted with the airline's brand colours — NOT exact liveries).
 import { useEffect, useRef, useState } from "react";
@@ -77,7 +79,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     const layer: any = { id: "planes3d", type: "custom", renderingMode: "3d",
       onAdd(m: maplibregl.Map, gl: WebGLRenderingContext) { scene = new THREE.Scene(); cam = new THREE.Camera(); scene.add(new THREE.AmbientLight(0xffffff, 1.6)); const d = new THREE.DirectionalLight(0xffffff, 2); d.position.set(60, -80, 120); scene.add(d);
         ren = new THREE.WebGLRenderer({ canvas: m.getCanvas(), context: gl, antialias: true }); ren.autoClear = false; },
-      render(_gl: any, o: any) { if (!origin) return; const now = Date.now(); const z = map.getZoom(); const k = Math.max(1, Math.pow(2, (16.3 - z))); let moving = false;
+      render(_gl: any, o: any) { if (!origin) return; const now = Date.now(); const z = map.getZoom(); const k = Math.min(2.5, Math.max(1, Math.pow(2, (16.3 - z) * 0.6))); let moving = false;
         for (const f of Object.values(fx.current)) { if (!f.obj) continue; const a = f.a; let lon = a.lon, lat = a.lat;
           if (!still() && a.gs > 2 && a.track != null) { const dt = Math.min(12, (now - f.t) / 1000), dm = a.gs * 0.5144 * dt; lat += dm * Math.cos(a.track * Math.PI / 180) / 111320; lon += dm * Math.sin(a.track * Math.PI / 180) / (111320 * Math.cos(lat * Math.PI / 180)); moving = true; }
           const c = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], 0); const tx = (c.x - origin.x) / mpu, ty = -(c.y - origin.y) / mpu, tz = a.alt === "ground" ? 0 : Math.min(+a.alt || 0, 6000) * 0.3048;
@@ -100,7 +102,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     const poll = async () => { if (!ctr || stop) return; try { const r = await api(`/overhead?lat=${ctr[1]}&lon=${ctr[0]}&r=6`); if (stop) return; const L = (r.list || []).filter(isPlane).filter((a: any) => a.alt === "ground" || (+a.alt || 99999) < 6000).slice(0, 40); setN(L.length); sync(L); setSel((s: any) => s ? { ...(fx.current[s.hex]?.a || s) } : s); } catch { } };
     map.on("load", async () => { map.addLayer(layer);
       try { const j = await api("/apt3d?iata=" + iata); if (stop) return; if (j.error) throw new Error(j.error); setInfo(j); ctr = j.center; origin = maplibregl.MercatorCoordinate.fromLngLat(j.center, 0); mpu = origin.meterInMercatorCoordinateUnits();
-        (map.getSource("apt") as any).setData(j); const b = j.bbox; map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { pitch: 60, bearing: -20, padding: 20, duration: 0, maxZoom: 15.5 }); setLoad(""); poll(); }
+        (map.getSource("apt") as any).setData(j); const b = j.focus || j.bbox; fit(map, b, true); setLoad(""); poll(); }
       catch (e: any) { setLoad(""); setErr("Couldn't load the airport shapes: " + (e?.message || e) + ". OpenStreetMap's free Overpass service can be busy — try again in a minute."); } });
     const t = setInterval(poll, 8000);
     const clk = (e: any) => { let best: any = null, bd = 34; for (const f of Object.values(fx.current)) { if (!f.mk) continue; const p = map.project(f.mk.getLngLat()); const d = Math.hypot(p.x - e.point.x, p.y - e.point.y); if (d < bd) { bd = d; best = f.a; } } if (best) setSel({ ...best }); };
@@ -116,7 +118,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     <div className="a3top"><button className="a3btn" onClick={onClose} aria-label="Back">‹</button><div className="a3ttl"><b>{info?.name || iata}</b><span>{iata} · 3D · BETA</span></div>
       <button className="a3cmp" aria-label="Point north" onClick={() => mref.current?.easeTo({ bearing: 0, duration: still() ? 0 : 500 })}><svg viewBox="0 0 40 40" style={{ transform: `rotate(${-brg}deg)` }}><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" strokeOpacity=".4" /><path d="M20 5 25 20H15z" fill="#e5484d" /><path d="M20 35 15 20h10z" fill="currentColor" opacity=".5" /><text x="20" y="15" fontSize="7" textAnchor="middle" fill="#fff">N</text></svg></button></div>
     {load && <div className="a3load card sm">{load}</div>}
-    <div className="a3side"><button className={"a3btn" + (hist ? " on" : "")} aria-label="History trails" onClick={() => setHist(!hist)}>⟲</button><button className="a3btn" aria-label="Fit airport" onClick={() => { const b = info?.bbox; b && mref.current?.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 20, duration: still() ? 0 : 700, maxZoom: 15.5 }); }}>➤</button><button className={"a3btn" + (lay ? " on" : "")} aria-label="Layers" onClick={() => setLay(!lay)}>≋</button></div>
+    <div className="a3side"><button className={"a3btn" + (hist ? " on" : "")} aria-label="History trails" onClick={() => setHist(!hist)}>⟲</button><button className="a3btn" aria-label="Fit airport" onClick={() => { const b = info?.focus || info?.bbox; b && mref.current && fit(mref.current, b, false); }}>➤</button><button className={"a3btn" + (lay ? " on" : "")} aria-label="Layers" onClick={() => setLay(!lay)}>≋</button></div>
     {lay && <div className="a3lay card sm"><label><input type="checkbox" checked={bld} onChange={e => setBld(e.target.checked)} /> 3D buildings</label><label><input type="checkbox" checked={sat} onChange={e => setSat(e.target.checked)} /> Satellite photo</label><label><input type="checkbox" checked={hist} onChange={e => setHist(e.target.checked)} /> Trails (since you opened this)</label></div>}
     <button className="a3btn a3flat" onClick={() => setFlat(!flat)}>{flat ? "3D" : "2D"}</button>
     {!sel && <div className="a3note sm">{info ? <>{info.features.length} OpenStreetMap shapes{info.counts?.terminal ? ` · ${info.counts.terminal} terminal${info.counts.terminal > 1 ? "s" : ""}` : " · no terminal mapped in OSM"}</> : null}{n != null && <> · {n} live aircraft on or near the airport (ADS-B)</>}<br /><span className="faint">Planes are Skyline's simple 3D models per size class in airline colours — not exact liveries. Tap a plane or its label.</span></div>}
