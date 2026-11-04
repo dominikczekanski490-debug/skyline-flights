@@ -98,16 +98,34 @@ let _font: any = null; const font = () => _font ||= new FontLoader().parse(helvB
 const ascii = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[–—]/g, "-").replace(/[^\x20-\x7e]/g, " ").replace(/\s+/g, " ").trim();
 // Airport name as real 3D extruded letters, mounted on the main terminal's airside facade (text only, no logos).
 function facadeSign(text: string, col: string, size: number) { const g = new TextGeometry(ascii(text), { font: font(), size, depth: size * 0.18, curveSegments: 4, bevelEnabled: true, bevelThickness: size * 0.03, bevelSize: size * 0.02, bevelSegments: 1 } as any); g.computeBoundingBox(); const b = g.boundingBox!; g.translate(-(b.max.x + b.min.x) / 2, 0, 0); g.rotateX(Math.PI / 2);
-  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: col, roughness: 0.35, metalness: 0.1, emissive: col, emissiveIntensity: 0.35 })); const o = new THREE.Group(); o.add(m); return { o, w: b.max.x - b.min.x }; }
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: col, roughness: 0.35, metalness: 0.1, emissive: col, emissiveIntensity: 0.35, depthTest: false })); m.renderOrder = 10; const o = new THREE.Group(); o.add(m); return { o, w: b.max.x - b.min.x }; }
 // pick the facade: longest terminal edge whose outward side faces the nearest runway (airside)
 function facade(j: any, toL: (p: number[]) => [number, number]) { const F = j.features || []; const sp = F.find((f: any) => f.properties.kind === "signpt"); const terms = F.filter((f: any) => f.properties.kind === "terminal" && f.geometry.type === "Polygon"); if (!terms.length) return null;
   const sc = sp ? toL(sp.geometry.coordinates) : [0, 0]; const cen = (r: number[][]) => r.reduce((a, p) => [a[0] + p[0] / r.length, a[1] + p[1] / r.length], [0, 0]);
-  const t = terms.map((f: any) => ({ f, r: f.geometry.coordinates[0].map(toL) })).sort((a: any, b: any) => Math.hypot(...(cen(a.r).map((v: number, i: number) => v - sc[i]) as [number, number])) - Math.hypot(...(cen(b.r).map((v: number, i: number) => v - sc[i]) as [number, number])))[0];
-  const rw = F.filter((f: any) => f.properties.kind === "runway" && f.geometry.type === "LineString").map((f: any) => cen(f.geometry.coordinates.map(toL))); const c = cen(t.r);
-  const tr = rw.sort((a: number[], b: number[]) => Math.hypot(a[0] - c[0], a[1] - c[1]) - Math.hypot(b[0] - c[0], b[1] - c[1]))[0] || [c[0], c[1] + 1]; const dr = [tr[0] - c[0], tr[1] - c[1]], dl = Math.hypot(dr[0], dr[1]) || 1;
-  let area = 0; for (let i = 0; i < t.r.length - 1; i++) area += t.r[i][0] * t.r[i + 1][1] - t.r[i + 1][0] * t.r[i][1]; const sg = area > 0 ? 1 : -1; let best: any = null;
-  for (let i = 0; i < t.r.length - 1; i++) { const a = t.r[i], b = t.r[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 15) continue; const n = [sg * (b[1] - a[1]) / L, -sg * (b[0] - a[0]) / L]; const sc2 = L * Math.max(0.05, (n[0] * dr[0] + n[1] * dr[1]) / dl); if (!best || sc2 > best.s) best = { s: sc2, a, b, L, n }; }
-  return best ? { ...best, h: t.f.properties.h || 14 } : null; }
+  const ar = (r: number[][]) => { let s = 0; for (let i = 0; i < r.length - 1; i++) s += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; return s / 2; };
+  const inP = (q: number[], r: number[][]) => { let o = false; for (let i = 0, k = r.length - 1; i < r.length; k = i++) { const a = r[i], b = r[k]; if ((a[1] > q[1]) !== (b[1] > q[1]) && q[0] < (b[0] - a[0]) * (q[1] - a[1]) / (b[1] - a[1]) + a[0]) o = !o; } return o; };
+  const T = terms.map((f: any) => { const r = f.geometry.coordinates[0].map(toL); const c = cen(r); return { f, r, c, A: Math.abs(ar(r)), d: Math.hypot(c[0] - sc[0], c[1] - sc[1]) }; });
+  const near = T.filter((x: any) => x.d < 1500); const pool = near.length ? near : T; const t = pool.sort((a: any, b: any) => b.A - a.A)[0];
+  const ap = F.filter((f: any) => f.properties.kind === "apron" && f.geometry.type === "Polygon").map((f: any) => f.geometry.coordinates[0].map(toL));
+  const tw = F.filter((f: any) => (f.properties.kind === "taxiway" || f.properties.kind === "runway") && f.geometry.type === "LineString").flatMap((f: any) => f.geometry.coordinates.filter((_: any, i: number) => i % 3 === 0).map(toL));
+  const sg = ar(t.r) > 0 ? 1 : -1; const R = t.r; const E: any[] = []; // merge near-collinear edges so long facades split by OSM count as one
+  for (let i = 0; i < R.length - 1; i++) { const a = R[i], b = R[i + 1]; const ang = Math.atan2(b[1] - a[1], b[0] - a[0]); const l = E[E.length - 1]; if (l && Math.abs(((ang - l.ang + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) < 0.26) { l.b = b; l.ang = Math.atan2(b[1] - l.a[1], b[0] - l.a[0]); } else E.push({ a, b, ang }); }
+  let best: any = null, back: any = null;
+  for (const g of E) { const L = Math.hypot(g.b[0] - g.a[0], g.b[1] - g.a[1]); if (L < 20) continue; const n = [sg * (g.b[1] - g.a[1]) / L, -sg * (g.b[0] - g.a[0]) / L]; const m = [(g.a[0] + g.b[0]) / 2, (g.a[1] + g.b[1]) / 2];
+    let f = 0; for (const dd of [30, 70, 120]) { const q = [m[0] + n[0] * dd, m[1] + n[1] * dd]; if (ap.some((r: number[][]) => inP(q, r))) f += 1; }
+    let tn = 0; for (const p of tw) { const v = [p[0] - m[0], p[1] - m[1]], dl = Math.hypot(v[0], v[1]); if (dl < 400 && dl > 1 && (v[0] * n[0] + v[1] * n[1]) / dl > 0.5) tn++; }
+    const s = L * (0.1 + f + Math.min(2, tn / 15)); const o = { s, a: g.a, b: g.b, L, n }; if (!best || s > best.s) best = o; if (!back || L * (1 - f) > back.s2) back = { ...o, s2: L * (1 - f) }; }
+  if (best && back && back.n[0] * best.n[0] + back.n[1] * best.n[1] > -0.3) back = null;
+  return best ? { ...best, back, h: t.f.properties.h || 14 } : null; }
+
+// Roof overhang along the airside facade + entrance canopy on the landside (simple slabs, not surveyed shapes)
+function canopies(fc: any, E: boolean) { const g = new THREE.Group(); const mt = new THREE.MeshStandardMaterial({ color: E ? "#cccccc" : "#e9edf2", roughness: 0.6, metalness: 0.2 }); const pm = new THREE.MeshStandardMaterial({ color: E ? "#888888" : "#9aa3b0", roughness: 0.5 });
+  const slab = (e: any, len: number, dep: number, th: number, z: number, off: number, posts: boolean) => { const m = [(e.a[0] + e.b[0]) / 2 + e.n[0] * off, (e.a[1] + e.b[1]) / 2 + e.n[1] * off]; const rot = Math.atan2(e.n[1], e.n[0]) + Math.PI / 2;
+    const b = new THREE.Mesh(new THREE.BoxGeometry(len, dep, th), mt); b.position.set(m[0], m[1], z); b.rotation.z = rot; g.add(b);
+    if (posts) for (let k = -2; k <= 2; k++) { const q = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, z, 8), pm); q.rotation.x = Math.PI / 2; const ux = Math.cos(rot), uy = Math.sin(rot); q.position.set(m[0] + ux * k * len / 5 + e.n[0] * dep * 0.4, m[1] + uy * k * len / 5 + e.n[1] * dep * 0.4, z / 2); g.add(q); } };
+  slab(fc, fc.L + 4, 5, 0.8, fc.h + 0.4, 2, false);
+  if (fc.back) { const L = Math.min(60, fc.back.L * 0.5); slab(fc.back, L, 10, 0.6, 6, 5, true); }
+  return g; }
 
 type Fix = { a: any; lon: number; lat: number; t: number; x: number; y: number; z: number; obj?: THREE.Group; mk?: maplibregl.Marker };
 
@@ -175,9 +193,9 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     map.on("load", async () => { map.addLayer(layer); await Promise.all(["B737_nologo", "A320_nologo", "A350_nologo"].map(loadGlb));
       try { const j = await api("/apt3d?iata=" + iata); if (stop) return; if (j.error) throw new Error(j.error); setInfo(j); ctr = j.center; origin = maplibregl.MercatorCoordinate.fromLngLat(j.center, 0); mpu = origin.meterInMercatorCoordinateUnits();
         (map.getSource("apt") as any).setData(j); (window as any).__a3info = j; const toL = (p: number[]): [number, number] => { const c = maplibregl.MercatorCoordinate.fromLngLat(p as any, 0); return [(c.x - origin.x) / mpu, -(c.y - origin.y) / mpu]; }; const fc = scene ? facade(j, toL) : null; let cam0: any = null;
-        if (fc) { const txt = (j.sign || j.name).toUpperCase(); const col = eink() ? "#000000" : iata === "LPL" ? "#d6001c" : "#1f4fa3"; let size = Math.min(14, Math.max(4, fc.h * 0.4)); let r = facadeSign(txt, col, size); if (r.w > fc.L * 0.92) { size *= fc.L * 0.92 / r.w; r = facadeSign(txt, col, size); }
-          const mx = (fc.a[0] + fc.b[0]) / 2 + fc.n[0] * 0.8, my = (fc.a[1] + fc.b[1]) / 2 + fc.n[1] * 0.8; const onWall = fc.h > size * 1.6; r.o.position.set(mx, my, onWall ? fc.h - size * 1.35 : fc.h + 0.3); r.o.rotation.z = Math.atan2(fc.n[1], fc.n[0]) + Math.PI / 2; sign = r.o; scene.add(sign); (window as any).__a3sign = { txt, size, onWall, L: fc.L };
-          const ll = new maplibregl.MercatorCoordinate(origin.x + (mx + fc.n[0] * 60) * mpu, origin.y - (my + fc.n[1] * 60) * mpu, 0).toLngLat(); const brg = Math.atan2(-fc.n[0], -fc.n[1]) * 180 / Math.PI; cam0 = { center: [ll.lng, ll.lat], zoom: Math.min(17.4, Math.max(15.6, 17.6 - Math.log2(Math.max(1, size * ascii(txt).length * 0.8 / 120)))), pitch: 64, bearing: brg }; map.triggerRepaint(); }
+        if (fc) { const txt = (j.sign || j.name).replace(/["“”(].*$/, "").replace(/\s+/g, " ").trim().toUpperCase(); const col = eink() ? "#000000" : iata === "LPL" ? "#d6001c" : "#ffffff"; let size = Math.min(14, Math.max(4, fc.h * 0.4)); let r = facadeSign(txt, col, size); if (r.w > fc.L * 0.92) { size = Math.max(4, size * fc.L * 0.92 / r.w); r = facadeSign(txt, col, size); }
+          const mx = (fc.a[0] + fc.b[0]) / 2 + fc.n[0] * 0.8, my = (fc.a[1] + fc.b[1]) / 2 + fc.n[1] * 0.8; const onWall = fc.h > size * 1.6; r.o.position.set(mx + fc.n[0] * 4.2, my + fc.n[1] * 4.2, onWall ? fc.h - size * 1.35 : fc.h + 1.4); r.o.rotation.z = Math.atan2(fc.n[1], fc.n[0]) + Math.PI / 2; sign = r.o; scene.add(sign); scene.add(canopies(fc, eink())); (window as any).__a3sign = { txt, size, onWall, L: fc.L };
+          const ll = new maplibregl.MercatorCoordinate(origin.x + (mx + fc.n[0] * 60) * mpu, origin.y - (my + fc.n[1] * 60) * mpu, 0).toLngLat(); const brg = Math.atan2(-fc.n[0], -fc.n[1]) * 180 / Math.PI; cam0 = { center: [ll.lng, ll.lat], zoom: (() => { const cl = Math.cos(j.center[1] * Math.PI / 180); let z = 17.4; for (; z > 14; z -= 0.1) { const k = Math.min(3, Math.max(1, Math.pow(2, (16.2 - z) * 0.7))); if (r.w * k / (40075016 * cl / (512 * Math.pow(2, z))) <= 300) break; } return z; })(), pitch: 64, bearing: brg }; map.triggerRepaint(); }
         const b = j.focus || j.bbox; if (cam0) map.jumpTo(cam0); else fit(map, b, true); setLoad(""); poll(); }
       catch (e: any) { setLoad(""); setErr("Couldn't load the airport shapes: " + (e?.message || e) + ". OpenStreetMap's free Overpass service can be busy — try again in a minute."); } });
     const t = setInterval(poll, 8000);
