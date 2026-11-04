@@ -29,7 +29,10 @@ async function build(a) {
     feats.push({ type: "Feature", properties: { kind, name: t.name || t.ref || "", h: h ? Math.round(h) : 0, est: H(t) == null, w: kind === "runway" ? (+t.width || 45) : kind === "taxiway" ? (+t.width || 18) : 0, A: poly ? area(c) : 0 }, geometry: poly ? { type: "Polygon", coordinates: [c] } : { type: "LineString", coordinates: c } }); }
   // Label: the biggest terminal shows the terminal's own OSM name, or the airport's OSM name if the terminal has none.
   const terms = feats.filter(f => f.properties.kind === "terminal").sort((x, y) => y.properties.A - x.properties.A);
-  const aname = pick?.t?.name || a.name; terms.forEach((f, i) => { f.properties.label = f.properties.name || (i === 0 ? aname : ""); });
+  const aname = pick?.t?.name || (/airport/i.test(a.name) ? a.name : a.name + " Airport");
+  // Signs: the biggest terminal carries the airport-name sign; every terminal also shows its own OSM name (e.g. "Terminal 1").
+  terms.forEach((f, i) => { f.properties.sign = i === 0 ? aname : ""; f.properties.label = f.properties.name && f.properties.name !== aname ? f.properties.name : ""; });
+  if (!terms.length) feats.push({ type: "Feature", properties: { kind: "signpt", sign: aname, label: "", h: 0 }, geometry: { type: "Point", coordinates: [a.lon, a.lat] } });
   feats.forEach(f => delete f.properties.A);
   return { type: "FeatureCollection", iata: a.iata, name: aname, center: [a.lon, a.lat], bbox: [w, s, e2, n], counts: K, built: new Date().toISOString(), outline: !!pick, attribution: "© OpenStreetMap contributors (ODbL)", features: feats };
 }
