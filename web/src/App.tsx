@@ -170,7 +170,7 @@ function MyFlights({ list, open, push }: { list: Flight[]; open: (f: Flight) => 
     <GlobalSearch push={push} onFlight={f => push({ t: "flight", f })} />
     {(() => { const nx = list.filter(f => !f.example && phaseOf(f) !== "cancelled" && !(f.status === "landed" && Date.now() - +new Date(f.arr.actual || f.arr.scheduled || 0) > 3 * 3600e3)).sort((a, b) => (best(a.dep) || a.date) < (best(b.dep) || b.date) ? -1 : 1)[0];
       return nx ? <><NextHero f={nx} open={() => open(nx)} dayof={() => push({ t: "dayof", f: nx })} /><div className="px pf-hero"><PlaneFrom f={nx} compact /></div></> : null; })()}
-    <div className="px"><AuroraHome flights={list} /><HomePins flights={list} push={push} /><HomeWidgets flights={list} push={push} /><Suspense fallback={<div className="skel" style={{ height: 120, margin: "12px 0" }} />}><HomeDash flights={list} push={push} /></Suspense><Spotlight push={push} /><AirportPulse push={push} /></div><DiscoverCarousel push={push} /><AcarsEntry />
+    <div className="px"><AuroraHome flights={list} /><WhatMatters /><HomePins flights={list} push={push} /><HomeWidgets flights={list} push={push} /><Suspense fallback={<div className="skel" style={{ height: 120, margin: "12px 0" }} />}><HomeDash flights={list} push={push} /></Suspense><Spotlight push={push} /><AirportPulse push={push} /></div><DiscoverCarousel push={push} /><AcarsEntry />
     <TodayCard flights={list} />
     <AssistantFeed flights={list} push={push} />
     <button className="h52-find glass52" onClick={() => push({ t: "find" })}>🔎 Find flights in plain English — “delayed flights to Tenerife”</button>
@@ -366,7 +366,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   const tz = tzOffset(f.destination?.tz) - tzOffset(f.origin?.tz);
 
   const h = flights.filter((x: Flight) => x.origin?.iata === f.origin?.iata && x.destination?.iata === f.destination?.iata && !x.friend);
-  return <div className="fd"><EtaLine f={f} live={lv} />{(f.origin?.iata === "MAN" || f.destination?.iata === "MAN") && <Man3DBtn />}
+  return <div className="fd"><EtaLine f={f} live={lv} />{f.origin?.iata && <Apt3DBtn iata={f.origin.iata} name={f.origin.city || f.origin.iata} />}
     {f.example && <div className="exlabel">Example data — not a real flight record</div>}
     <div className={"banner " + banner[1]}><b>{banner[0]}</b><div className="sm">Total {dur(estDurMin(f.origin, f.destination))} est. • {dist(f.origin, f.destination).toLocaleString()} mi{lv ? ` • live ${Math.round(lv.alt || 0).toLocaleString()} ft, ${Math.round(lv.gs || 0)} kt` : ""}</div>{lv?.matched === "route" && <div className="sm">{lv.matchNote}. Probable match: the airline flies a different radio callsign from the flight number.</div>}</div>
     <SunRoute f={f} />
@@ -473,7 +473,7 @@ function Board({ iata, x, push, term0 }: any) {
   const nowIdx = list.findIndex((f: any) => +new Date((dir === "dep" ? f.dep : f.arr).scheduled) > Date.now() - 30 * 60e3);
   useEffect(() => { if (nowIdx > 0 && date === today()) setTimeout(() => document.getElementById("brow-now")?.scrollIntoView({ block: "start" }), 50); }, [d]);
   const airlines = [...new Set((d?.flights || []).map((f: any) => f.airline?.iata))].filter(Boolean) as string[];
-  return <>{iata === "MAN" && <Man3DBtn />}{iata === "MAN" && <WalkBtn />}<div className="head"><div><div className="row g6 bh-tags">{[iata, ap?.icao, new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: ap?.tz || "Europe/London" }) + " " + (ap?.tz === "Europe/London" ? "GMT" : "local")].map(t => <span key={t} className="tag">{t}</span>)}</div><h1 className="h1s">{ap?.city || iata}</h1><div className="muted sm">{ap ? [ap.name, ap.country].filter(Boolean).join(", ").toUpperCase() : d?.error ? "" : "Loading airport…"}</div></div>{x}</div>
+  return <>{iata && <Apt3DBtn iata={iata} name={ap?.city || iata} />}{iata === "MAN" && <WalkBtn />}<div className="head"><div><div className="row g6 bh-tags">{[iata, ap?.icao, new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: ap?.tz || "Europe/London" }) + " " + (ap?.tz === "Europe/London" ? "GMT" : "local")].map(t => <span key={t} className="tag">{t}</span>)}</div><h1 className="h1s">{ap?.city || iata}</h1><div className="muted sm">{ap ? [ap.name, ap.country].filter(Boolean).join(", ").toUpperCase() : d?.error ? "" : "Loading airport…"}</div></div>{x}</div>
     <div className="chips bh-chips"><div className="sk-seg mini"><button className={!term ? "on" : ""}>{Ic.list}<span>List</span></button><button onClick={() => setTerm(true)}>{Ic.board}<span>FIDS</span></button></div>{isGr && <button className={"sk-pill " + (gr ? "on" : "")} onClick={() => { localStorage.setItem("sk.grboard", gr ? "off" : "on"); setGr(!gr); }}><span>🇬🇷 Airport style</span></button>}<button className={"sk-pill " + (info ? "on" : "")} onClick={() => setInfo(v => !v)}>{info ? Ic.list : Ic.info}<span>{info ? "Board" : "Info"}</span></button><button className="sk-pill" onClick={() => navigator.share?.({ url: location.href, title: `${iata} board` })}>{Ic.share}<span>Share</span></button>
       <select className="chip" value={date} onChange={e => setDate(e.target.value)}>{[-1, 0, 1, 2].map(o => { const v = new Date(Date.now() + o * 864e5).toLocaleDateString("en-CA", { timeZone: "Europe/London" }); return <option key={v} value={v}>{["Yesterday", "Today", "Tomorrow", fmtD(v)][o + 1]}</option>; })}</select>
             <select className="chip" value={airline} onChange={e => setAirline(e.target.value)}><option value="">Airline: All</option>{airlines.sort().map(a => <option key={a}>{a}</option>)}</select></div>
@@ -625,9 +625,10 @@ function Settings({ x, theme, setTheme, push }: any) {
 }
 
 const Man3D = lazy(() => import("./v35"));
+import { Apt3DBtn, WhatMatters } from "./v63b";
 const Welcome = lazy(() => import("./v53"));
 const HomeDash = lazy(() => import("./v52"));
-function Man3DBtn() { const [o, setO] = useState(() => /man3d=1/.test(location.hash));
+export function Man3DBtn() { const [o, setO] = useState(() => /man3d=1/.test(location.hash));
   return <><button className="card press m3btn px" style={{ width: "calc(100% - 24px)", margin: "8px 12px", textAlign: "left" }} onClick={() => setO(true)}><span style={{ fontSize: 22 }}>🛬</span><div><b>See Manchester Airport in 3D</b> <span className="m3beta" style={{ fontSize: 10, padding: "1px 6px", borderRadius: 6, background: "var(--accent,#6aa8ff)", color: "#fff" }}>BETA</span><div className="muted sm">Terminals, runways and live aircraft · shapes from OpenStreetMap</div></div></button>
     {o && createPortal(<Suspense fallback={<div className="m3d" style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "grid", placeItems: "center" }}>Loading 3D view…</div>}><Man3D onClose={() => setO(false)} /></Suspense>, document.body)}</>; }
 
