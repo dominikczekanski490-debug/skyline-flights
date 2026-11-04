@@ -1,5 +1,7 @@
 // v63: 3D airport shapes for ANY airport (OpenStreetMap via Overpass, cached on disk, not in memory) + FAA NAS status (US).
 import fs from "fs"; import os from "os"; import path from "path";
+// Prebuilt shapes shipped in the repo (data © OpenStreetMap contributors, ODbL) are served first; live fetch is the fallback.
+const PRE = path.join(path.dirname(new URL(import.meta.url).pathname), "data", "apt3d");
 const DIR = path.join(os.tmpdir(), "skyline-apt3d"); try { fs.mkdirSync(DIR, { recursive: true }); } catch {}
 const OVP = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
 const UA = "Skyline/1.0 (hobby flight tracker; contact via github)";
@@ -57,17 +59,23 @@ async function build(a) {
     else if ((t.building || t.aeroway) && closed) { if (["house", "detached", "semidetached_house", "terrace", "apartments", "residential", "garage", "garages", "shed", "no", "roof"].includes(t.building)) continue; if (!inside(c[0])) continue; kind = (t.aeroway === "control_tower" || t["man_made"] === "tower" || (h && h > 35)) ? "tower" : "building"; h ??= t.aeroway === "hangar" || t.building === "hangar" ? 14 : 8; }
     if (!kind) continue; K[kind] = (K[kind] || 0) + 1;
     const poly = closed && kind !== "runway" && kind !== "taxiway";
-    feats.push({ type: "Feature", properties: { kind, name: t.name || t.ref || "", h: h ? Math.round(h) : 0, est: H(t) == null, w: kind === "runway" ? (+t.width || 45) : kind === "taxiway" ? (+t.width || 18) : 0, A: poly ? area(c) : 0 }, geometry: poly ? { type: "Polygon", coordinates: [c] } : { type: "LineString", coordinates: c } }); }
+    const sub = kind === "building" ? (t.aeroway === "hangar" || t.building === "hangar" ? "hangar" : (t.building === "parking" || t.amenity === "parking" || /car ?park|parking|parkhaus|multi-storey/i.test(t.name || "")) ? "parking" : "other") : kind;
+    const col = /^#[0-9a-f]{3,6}$/i.test(t["building:colour"] || "") ? t["building:colour"] : "";
+    feats.push({ type: "Feature", properties: { kind, sub, col, roof: t["roof:shape"] || "", lv: +t["building:levels"] || 0, name: t["name:en"] || (/^[\x00-\u024f\s]*$/.test(t.name || "") ? t.name : "") || t.ref || "", h: h ? Math.round(h) : 0, est: H(t) == null, w: kind === "runway" ? (+t.width || 45) : kind === "taxiway" ? (+t.width || 18) : 0, A: poly ? area(c) : 0 }, geometry: poly ? { type: "Polygon", coordinates: [c] } : { type: "LineString", coordinates: c } }); }
   // Label: the biggest terminal shows the terminal's own OSM name, or the airport's OSM name if the terminal has none.
   const terms = feats.filter(f => f.properties.kind === "terminal").sort((x, y) => y.properties.A - x.properties.A);
   const aname = pick?.t?.["name:en"] || (pick?.t?.name && /airport|aeroporto|aéroport|aeropuerto|lotnisko|airfield/i.test(pick.t.name) ? pick.t.name : "") || (/airport/i.test(a.name) ? a.name : a.name + " Airport");
   // Signs: the biggest terminal carries the airport-name sign; every terminal also shows its own OSM name (e.g. "Terminal 1").
-  terms.forEach((f, i) => { f.properties.sign = i === 0 ? aname : ""; f.properties.label = f.properties.name && f.properties.name !== aname ? f.properties.name : ""; });
-  if (!terms.length) feats.push({ type: "Feature", properties: { kind: "signpt", sign: aname, label: "", h: 0 }, geometry: { type: "Point", coordinates: [a.lon, a.lat] } });
+  // Sign text: English name with any quoted honorific dropped (e.g. Corfu International Airport "Ioannis Kapodistrias" -> Corfu International Airport).
+  const signTxt = aname.replace(/\s*["«“'].*$/, "").replace(/\s+/g, " ").trim() || aname; const seenL = new Set();
+  if (terms[0]) { const r = terms[0].geometry.coordinates[0]; const cx = r.reduce((s, p) => s + p[0], 0) / r.length, cy = r.reduce((s, p) => s + p[1], 0) / r.length; feats.push({ type: "Feature", properties: { kind: "signpt", sign: signTxt, h: terms[0].properties.h || 16 }, geometry: { type: "Point", coordinates: [+cx.toFixed(6), +cy.toFixed(6)] } }); }
+  if (pick) pick.rings.forEach(r => r.length > 3 && feats.unshift({ type: "Feature", properties: { kind: "grass", h: 0 }, geometry: { type: "Polygon", coordinates: [r.map(p => [+p[0].toFixed(6), +p[1].toFixed(6)])] } }));
+  terms.forEach((f, i) => { f.properties.sign = ""; const L = f.properties.name && f.properties.name !== aname && !seenL.has(f.properties.name) ? f.properties.name : ""; seenL.add(L); f.properties.label = L; if (L) { const r = f.geometry.coordinates[0]; feats.push({ type: "Feature", properties: { kind: "lblpt", label: L, h: f.properties.h }, geometry: { type: "Point", coordinates: [+(r.reduce((q, p) => q + p[0], 0) / r.length).toFixed(6), +(r.reduce((q, p) => q + p[1], 0) / r.length).toFixed(6)] } }); } });
+  if (!terms.length) feats.push({ type: "Feature", properties: { kind: "signpt", sign: signTxt, label: "", h: 0 }, geometry: { type: "Point", coordinates: [a.lon, a.lat] } });
   feats.forEach(f => delete f.properties.A);
   const tp = terms.flatMap(f => (f.geometry.coordinates?.[0] || []));
   const focus = tp.length ? [Math.min(...tp.map(p => p[0])), Math.min(...tp.map(p => p[1])), Math.max(...tp.map(p => p[0])), Math.max(...tp.map(p => p[1]))] : null;
-  return { type: "FeatureCollection", iata: a.iata, name: aname, center: [a.lon, a.lat], bbox: [w, s, e2, n], focus, counts: K, built: new Date().toISOString(), outline: !!pick, attribution: "© OpenStreetMap contributors (ODbL)", features: feats };
+  return { type: "FeatureCollection", iata: a.iata, name: aname, sign: signTxt, center: [a.lon, a.lat], bbox: [w, s, e2, n], focus, counts: K, built: new Date().toISOString(), outline: !!pick, attribution: "© OpenStreetMap contributors (ODbL)", features: feats };
 }
 const busy = new Map();
 const xml = (s, tag) => [...s.matchAll(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "g"))].map(m => m[1]);
@@ -81,6 +89,7 @@ export function register(api, { AP, cached, wrap, HIST }) {
       return { since, rows: n, top: top && { ...top, oc: AP[top.o]?.city || null, tc: AP[top.t]?.city || null }, cx: cx ? { ap: cx[0].split("|")[0], city: AP[cx[0].split("|")[0]]?.city || null, date: cx[0].split("|")[1], n: cx[1] } : null }; });
     res.json({ ...r, rule: WK_RULE, source: "Skyline flight log (official airport boards)" }); }));
   api.get("/apt3d", wrap(async (req, res) => { const iata = String(req.query.iata || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3); const a = AP[iata]; if (!a) return res.status(404).json({ error: "unknown airport" });
+    const pf = path.join(PRE, iata + ".json"); if (/^[A-Z]{3}$/.test(iata) && fs.existsSync(pf)) { res.type("json").set("cache-control", "public, max-age=86400"); return fs.createReadStream(pf).pipe(res); }
     const f = path.join(DIR, iata + ".json"); try { const st = fs.statSync(f); if (Date.now() - st.mtimeMs < 30 * 864e5) { res.type("json").set("cache-control", "public, max-age=86400"); return fs.createReadStream(f).pipe(res); } } catch {}
     if (busy.size >= 2 && !busy.has(iata)) return res.status(503).json({ error: "Busy building other airports, try again in a minute" });
     let p = busy.get(iata); if (!p) { p = build(a).finally(() => busy.delete(iata)); busy.set(iata, p); }
