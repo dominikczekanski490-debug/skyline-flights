@@ -9,6 +9,7 @@ import * as maplibregl from "maplibre-gl";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { api } from "./lib";
 import { liv } from "./v36";
 maplibregl.setWorkerUrl(workerUrl);
@@ -72,6 +73,24 @@ function signMesh(text: string) { const c = document.createElement("canvas"); co
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; const H = 16, W = H * c.width / c.height; const m = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide, transparent: true, toneMapped: false })); m.geometry.rotateX(Math.PI / 2); m.geometry.translate(0, 0, H / 2);
   const post = new THREE.Mesh(new THREE.BoxGeometry(W * 0.98, 0.6, 1.2), new THREE.MeshPhongMaterial({ color: E ? "#444" : "#c9d1dc" })); post.position.z = 0.6; const g = new THREE.Group(); g.add(post); g.add(m); return g; }
 
+
+// ---- textured airliner models: amvlab "aircraft-models" (logo-free variants), CC BY 4.0, https://github.com/amvlab/aircraft-models
+// Changed by Skyline: the model's livery colour is recoloured to the airline's colours and the airline name is painted on.
+const GLB: Record<string, Promise<THREE.Group | null>> = {}; const GOT: Record<string, THREE.Group | null> = {};
+const glbFile = (t = "", f: string) => f === "wide" ? "A350_nologo" : /^A3/.test(t) || f === "reg" ? "A320_nologo" : "B737_nologo";
+function loadGlb(n: string) { return GLB[n] ||= new Promise(r => new GLTFLoader().load(`/models/${n}.glb`, g => { GOT[n] = g.scene; r(g.scene); }, undefined, () => { GOT[n] = null; r(null); })); }
+const TEX: Record<string, THREE.Texture> = {};
+function livTex(n: string, src: any, c1: string, name: string) { const k = n + c1 + name; if (TEX[k]) return TEX[k]; const im = src.image; const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; const x = c.getContext("2d")!; x.drawImage(im, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height), p = d.data; const R = parseInt(c1.slice(1, 3), 16), G = parseInt(c1.slice(3, 5), 16), B = parseInt(c1.slice(5, 7), 16);
+  const W = c.width / 1024, top = 400 * W;
+  for (let i = 0; i < p.length; i += 4) { const r = p[i], g = p[i + 1], b = p[i + 2]; if (g > r + 12 && g > b + 4 && g < 140) { const y = (i / 4 / c.width) | 0; if (y < top) { p[i] = p[i + 1] = p[i + 2] = 244; } else { const l = Math.min(1.1, g / 70); p[i] = R * l; p[i + 1] = G * l; p[i + 2] = B * l; } } }
+  x.putImageData(d, 0, 0); if (name) { x.fillStyle = c1; x.font = `900 ${Math.round(44 * W)}px "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.textAlign = "center"; for (const yy of [134, 278]) x.fillText(name.toUpperCase(), 440 * W, yy * W); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.flipY = src.flipY; t.anisotropy = 4; return TEX[k] = t; }
+function glbModel(t: string, f: string, c1: string, name: string) { const n = glbFile(t, f); const base = GOT[n]; if (!base) return null; const o = base.clone(true); const E = eink();
+  o.traverse((m: any) => { if (m.isMesh) { const src = m.material.map; m.material = new THREE.MeshStandardMaterial({ map: src && !E ? livTex(n, src, c1, name) : src, color: E ? "#dddddd" : "#ffffff", roughness: 0.55, metalness: 0.1 }); } });
+  const g = new THREE.Group(); o.rotation.set(Math.PI / 2, 0, 0); const w = new THREE.Group(); w.add(o); w.rotation.z = Math.PI / 2; w.position.z = 2.8; if (f === "reg") w.scale.setScalar(0.74); g.add(w);
+  const L = f === "wide" ? 67 : 38; const sh = new THREE.Mesh(new THREE.PlaneGeometry(L * 0.9, L * 0.9), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: E ? 0.12 : 0.3, depthWrite: false, map: shadowTex() })); sh.position.z = 0.15; g.add(sh); return g; }
+
 type Fix = { a: any; lon: number; lat: number; t: number; x: number; y: number; z: number; obj?: THREE.Group; mk?: maplibregl.Marker };
 
 export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => void }) {
@@ -122,11 +141,11 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
           if (f.mk) { const ll = new maplibregl.MercatorCoordinate(origin.x + f.x * mpu, origin.y - f.y * mpu, 0).toLngLat(); f.mk.setLngLat(ll); } }
         if (sign) { sign.rotation.z = -map.getBearing() * Math.PI / 180; sign.scale.setScalar(Math.min(4, Math.max(1, Math.pow(2, (16.5 - z) * 0.8)))); }
         const M = new THREE.Matrix4().fromArray(o.defaultProjectionData.mainMatrix); const T = new THREE.Matrix4().makeTranslation(origin.x, origin.y, origin.z).scale(new THREE.Vector3(mpu, -mpu, mpu));
-        cam.projectionMatrix = M.multiply(T); ren.resetState(); ren.render(scene, cam); if (moving) map.triggerRepaint(); } };
+        cam.projectionMatrix = M.multiply(T); ren.resetState(); try { ren.render(scene, cam); } catch (e: any) { if (!(window as any).__a3e) { (window as any).__a3e = 1; console.error('a3 render', e?.message); } } if (moving) map.triggerRepaint(); } };
     const sync = (L: any[]) => { const seen = new Set<string>();
       for (const a of L) { seen.add(a.hex); let f = fx.current[a.hex]; const cs = (a.flight || "").trim(); const l = liv(cs);
         if (!f) { const c = maplibregl.MercatorCoordinate.fromLngLat([a.lon, a.lat], 0); f = fx.current[a.hex] = { a, lon: a.lon, lat: a.lat, t: Date.now(), x: (c.x - origin.x) / mpu, y: -(c.y - origin.y) / mpu, z: 0 };
-          f.obj = model(fam(a.type) as any, l ? l[0] : accent, l ? l[1] : "#8892a6"); scene.add(f.obj);
+          f.obj = glbModel(a.type || "", fam(a.type), l ? l[0] : accent, l ? l[2].replace(/ (UK|Europe|Austria|Ireland)$/, "") : "") || model(fam(a.type) as any, l ? l[0] : accent, l ? l[1] : "#8892a6"); scene.add(f.obj);
           const d = document.createElement("button"); d.className = "a3lbl"; d.innerHTML = `<i style="background:${l ? l[0] : "#8892a6"}"></i>${cs || a.reg || a.hex}`; d.onclick = () => setSel({ ...fx.current[a.hex].a });
           f.mk = new maplibregl.Marker({ element: d, anchor: "bottom", offset: [0, -14] }).setLngLat([a.lon, a.lat]).addTo(map); }
         f.a = a; f.t = Date.now(); const T = (trails.current[a.hex] ||= []); const last = T.at(-1); if (!last || last[0] !== a.lon || last[1] !== a.lat) T.push([a.lon, a.lat]); if (T.length > 60) T.shift(); }
@@ -135,7 +154,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
       map.triggerRepaint(); };
     let ctr: [number, number] | null = null;
     const poll = async () => { if (!ctr || stop) return; try { const r = await api(`/overhead?lat=${ctr[1]}&lon=${ctr[0]}&r=6`); if (stop) return; const L = (r.list || []).filter(isPlane).filter((a: any) => a.alt === "ground" || (+a.alt || 99999) < 6000).slice(0, 40); setN(L.length); sync(L); setSel((s: any) => s ? { ...(fx.current[s.hex]?.a || s) } : s); } catch { } };
-    map.on("load", async () => { map.addLayer(layer);
+    map.on("load", async () => { map.addLayer(layer); await Promise.all(["B737_nologo", "A320_nologo", "A350_nologo"].map(loadGlb));
       try { const j = await api("/apt3d?iata=" + iata); if (stop) return; if (j.error) throw new Error(j.error); setInfo(j); ctr = j.center; origin = maplibregl.MercatorCoordinate.fromLngLat(j.center, 0); mpu = origin.meterInMercatorCoordinateUnits();
         (map.getSource("apt") as any).setData(j); (window as any).__a3info = j; const sp = (j.features || []).find((f: any) => f.properties.kind === "signpt"); if (sp && scene) { const c = maplibregl.MercatorCoordinate.fromLngLat(sp.geometry.coordinates, 0); sign = signMesh((j.sign || sp.properties.sign || j.name).toUpperCase()); sign.position.set((c.x - origin.x) / mpu, -(c.y - origin.y) / mpu, (sp.properties.h || 16) + 0.5); scene.add(sign); map.triggerRepaint(); } const b = j.focus || j.bbox; fit(map, b, true); setLoad(""); poll(); }
       catch (e: any) { setLoad(""); setErr("Couldn't load the airport shapes: " + (e?.message || e) + ". OpenStreetMap's free Overpass service can be busy — try again in a minute."); } });
@@ -156,7 +175,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     <div className="a3side"><button className={"a3btn" + (hist ? " on" : "")} aria-label="History trails" onClick={() => setHist(!hist)}>⟲</button><button className="a3btn" aria-label="Fit airport" onClick={() => { const b = info?.focus || info?.bbox; b && mref.current && fit(mref.current, b, false); }}>➤</button><button className={"a3btn" + (lay ? " on" : "")} aria-label="Layers" onClick={() => setLay(!lay)}>≋</button></div>
     {lay && <div className="a3lay card sm"><label><input type="checkbox" checked={bld} onChange={e => setBld(e.target.checked)} /> 3D buildings</label><label><input type="checkbox" checked={sat} onChange={e => setSat(e.target.checked)} /> Satellite photo</label><label><input type="checkbox" checked={hist} onChange={e => setHist(e.target.checked)} /> Trails (since you opened this)</label></div>}
     <button className="a3btn a3flat" onClick={() => setFlat(!flat)}>{flat ? "3D" : "2D"}</button>
-    {!sel && <div className="a3note sm">{info ? <>{info.features.length} OpenStreetMap shapes{info.counts?.terminal ? ` · ${info.counts.terminal} terminal${info.counts.terminal > 1 ? "s" : ""}` : " · no terminal mapped in OSM"}</> : null}{n != null && <> · {n} live aircraft on or near the airport (ADS-B)</>}<br /><span className="faint">Planes are Skyline's simple 3D models per size class in airline colours — not exact liveries. Tap a plane or its label.</span></div>}
+    {!sel && <div className="a3note sm">{info ? <>{info.features.length} OpenStreetMap shapes{info.counts?.terminal ? ` · ${info.counts.terminal} terminal${info.counts.terminal > 1 ? "s" : ""}` : " · no terminal mapped in OSM"}</> : null}{n != null && <> · {n} live aircraft on or near the airport (ADS-B)</>}<br /><span className="faint">Planes: 3D models by amvlab (CC BY 4.0, recoloured by Skyline with airline colours and name — not exact liveries). Tap a plane or its label.</span></div>}
     {sel && <Sheet a={sel} iata={iata} onClose={() => setSel(null)} />}
   </div>, document.body);
 }
@@ -174,7 +193,7 @@ function Sheet({ a, iata, onClose }: { a: any; iata: string; onClose: () => void
     {route && <div className="faint sm">Route for this callsign from adsbdb — airlines reuse callsigns, so it can be out of date.</div>}
     <button className="a3acars" onClick={() => setOpen(!open)} disabled={!typed.length}><span className="tag">ACARS</span> {ac == null ? "checking…" : ac.error ? "couldn't reach airframes.io" : typed.length ? <>{typed.length} typed message{typed.length > 1 ? "s" : ""} · {ago(typed[0].t)}</> : msgs.length ? `${msgs.length} data-only message${msgs.length > 1 ? "s" : ""}, no typed text` : "no messages heard recently"}<span style={{ marginLeft: "auto" }}>{typed.length ? (open ? "▴" : "▾") : ""}</span></button>
     {open && typed.slice(0, 5).map((m, i) => <pre key={i} className="a3msg">{ago(m.t)} · {m.labelText}{"\n"}{m.text.slice(0, 400)}</pre>)}
-    <div className="faint sm mt8">{gnd ? (a.gs ?? 0) < 1 ? "Stationary on the ground" : a.gs < 40 ? "Taxiing" : "Runway roll" : "Airborne near " + iata} · live ADS-B (adsb.lol) every 8 s · model: generic {FAM[f as keyof typeof FAM]}, airline colours (not the exact livery){!l && " — airline colours unknown, shown grey"}. ACARS from airframes.io volunteers.</div>
+    <div className="faint sm mt8">{gnd ? (a.gs ?? 0) < 1 ? "Stationary on the ground" : a.gs < 40 ? "Taxiing" : "Runway roll" : "Airborne near " + iata} · live ADS-B (adsb.lol) every 8 s · model: amvlab {f === "wide" ? "A350" : /^A3/.test(a.type || "") || f === "reg" ? "A320" : "737"} shape for this {FAM[f as keyof typeof FAM]} (CC BY 4.0), airline colours and name (not the exact livery){!l && " — airline colours unknown, shown grey"}. ACARS from airframes.io volunteers.</div>
   </div>;
 }
 
