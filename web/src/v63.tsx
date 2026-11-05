@@ -128,7 +128,7 @@ function livTex(n: string, src: any, lv: { f: string; b?: string; t: string; e: 
   const rows = A ? [258, 640] : B7 ? [134, 278] : [134, 278]; const cx = (A ? 480 : 440) * W;
   for (const [k, yy] of rows.entries()) { x.save(); x.translate(cx, yy * W); if ((A || B7) && k === MIR) x.scale(-1, 1); x.fillText((name || lv.n || "").toUpperCase(), 0, 0); x.restore(); }
   const acc = lv.a || "#f1c933";
-  if (B7) paintMotif(x, lv.m || "plain", 860 * W, 780 * W, 100 * W, acc, "#fff8d0");
+  if (B7) { paintMotif(x, lv.m || "plain", 860 * W, 780 * W, 110 * W, acc, "#fff8d0"); paintMotif(x, lv.m || "plain", 920 * W, 860 * W, 70 * W, acc, "#fff8d0"); }
   else if (A) paintMotif(x, lv.m || "plain", 900 * W, 180 * W, 80 * W, acc, "#ffffff");
   else if (A35) paintMotif(x, lv.m || "plain", 900 * W, 850 * W, 80 * W, acc, "#ffffff");
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.flipY = src.flipY; t.anisotropy = 8; t.needsUpdate = true; return TEX[key] = t;
