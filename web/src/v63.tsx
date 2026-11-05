@@ -15,6 +15,7 @@ import helvBold from "three/examples/fonts/helvetiker_bold.typeface.json";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { api } from "./lib";
 import { liv } from "./v36";
+import { liveryFor } from "./livery";
 maplibregl.setWorkerUrl(workerUrl);
 
 const still = () => document.documentElement.dataset.skin === "eink" || matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -80,24 +81,75 @@ const glbFile = (t = "", f: string) => f === "wide" ? "A350_nologo" : /^A3/.test
 function loadGlb(n: string) { return GLB[n] ||= new Promise(r => new GLTFLoader().load(`/models/${n}.glb`, g => { GOT[n] = g.scene; r(g.scene); }, undefined, () => { GOT[n] = null; r(null); })); }
 const TEX: Record<string, THREE.Texture> = {};
 const MIR = 1;
-function livTex(n: string, src: any, c1: string, name: string) { const k = n + c1 + name; if (TEX[k]) return TEX[k]; const im = src.image; const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; const x = c.getContext("2d")!; x.drawImage(im, 0, 0);
-  const d = x.getImageData(0, 0, c.width, c.height), p = d.data; const R = parseInt(c1.slice(1, 3), 16), G = parseInt(c1.slice(3, 5), 16), B = parseInt(c1.slice(5, 7), 16);
-  const W = c.width / 1024;
-  const A = n === "A320_nologo", B7 = n === "B737_nologo";
-  for (let i = 0; i < p.length; i += 4) { const r = p[i], g = p[i + 1], b = p[i + 2]; const q = i / 4, y = (q / c.width | 0) / W, xx = (q % c.width) / W;
-    if (B7) { if (g > r + 12 && g > b + 4 && g < 140) { p[i] = p[i + 1] = p[i + 2] = 244; } else if (xx > 690 && y > 660 && r > 200 && g > 200 && b > 200) { p[i] = R; p[i + 1] = G; p[i + 2] = B; } }
-    else if (A) { if (b > r + 80 && g > r + 50) { p[i] = p[i + 1] = p[i + 2] = 244; } else if (r > 140 && r < 215 && b > 195 && b - r > 22 && g > 170) { p[i] = p[i + 1] = p[i + 2] = 236; } else if (b > r + 40 && b < 170 && g < 100) { const l = Math.min(1.1, b / 110); p[i] = R * l; p[i + 1] = G * l; p[i + 2] = B * l; } }
-    else if (g > r + 12 && g > b + 4 && g < 140) { if (y < 400) { p[i] = p[i + 1] = p[i + 2] = 244; } else { const l = Math.min(1.1, g / 70); p[i] = R * l; p[i + 1] = G * l; p[i + 2] = B * l; } } }
-  x.putImageData(d, 0, 0); if (name) { x.fillStyle = c1; x.font = `900 ${Math.round(44 * W)}px "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.textAlign = "center"; for (const [k, yy] of (A ? [270, 645] : [134, 278]).entries()) { x.save(); x.translate((A ? 480 : 440) * W, yy * W); if (A && k === MIR) x.scale(-1, 1); x.fillText(name.toUpperCase(), 0, 0); x.restore(); } }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.flipY = src.flipY; t.anisotropy = 4; return TEX[k] = t; }
-function glbModel(t: string, f: string, c1: string, name: string) { const n = glbFile(t, f); const base = GOT[n]; if (!base) return null; const o = base.clone(true); const E = eink();
-  o.traverse((m: any) => { if (m.isMesh) { const src = m.material.map; m.material = new THREE.MeshStandardMaterial({ map: src && !E ? livTex(n, src, c1, name) : src, color: E ? "#dddddd" : "#ffffff", roughness: 0.55, metalness: 0.1 }); } });
+// Recolour the logo-free amvlab atlas into a simplified airline scheme (original Skyline paint — not exact liveries, no trademark logos).
+function hexRgb(h: string) { const x = (h || "#888888").replace("#", ""); return [parseInt(x.slice(0, 2), 16) || 0, parseInt(x.slice(2, 4), 16) || 0, parseInt(x.slice(4, 6), 16) || 0] as [number, number, number]; }
+function paintMotif(x: CanvasRenderingContext2D, m: string, cx: number, cy: number, s: number, col: string, acc: string) {
+  x.save(); x.translate(cx, cy); x.fillStyle = col; x.strokeStyle = acc; x.lineWidth = Math.max(2, s * 0.06);
+  if (m === "disc" || m === "circle") { // geometric harp-ish / disc mark (original shape, not a logo)
+    x.beginPath(); x.moveTo(0, -s * 0.55); x.quadraticCurveTo(s * 0.55, -s * 0.2, s * 0.35, s * 0.55); x.lineTo(0, s * 0.35); x.lineTo(-s * 0.35, s * 0.55); x.quadraticCurveTo(-s * 0.55, -s * 0.2, 0, -s * 0.55); x.fill();
+    x.beginPath(); x.moveTo(0, -s * 0.4); for (let i = 0; i < 5; i++) { const t = i / 4; x.moveTo(-s * 0.12, -s * 0.25 + t * s * 0.55); x.quadraticCurveTo(s * 0.05, -s * 0.1 + t * s * 0.4, s * 0.18, -s * 0.2 + t * s * 0.5); } x.stroke();
+  } else if (m === "chevron") { x.beginPath(); x.moveTo(0, -s * 0.5); x.lineTo(s * 0.45, s * 0.2); x.lineTo(0, s * 0.05); x.lineTo(-s * 0.45, s * 0.2); x.closePath(); x.fill(); }
+  else if (m === "flag" || m === "band") { x.fillRect(-s * 0.35, -s * 0.5, s * 0.7, s); x.fillStyle = acc; x.fillRect(-s * 0.35, -s * 0.1, s * 0.7, s * 0.2); }
+  else if (m === "stripes") { for (let i = -2; i <= 2; i++) { x.fillStyle = i % 2 ? col : acc; x.fillRect(-s * 0.4, i * s * 0.18, s * 0.8, s * 0.14); } }
+  else if (m === "split") { x.fillStyle = col; x.fillRect(-s * 0.4, -s * 0.5, s * 0.4, s); x.fillStyle = acc; x.fillRect(0, -s * 0.5, s * 0.4, s); }
+  else { x.beginPath(); x.arc(0, 0, s * 0.35, 0, Math.PI * 2); x.fill(); }
+  x.restore();
+}
+function livTex(n: string, src: any, lv: { f: string; b?: string; t: string; e: string; a?: string; m?: string; tx?: string; n?: string }, name: string) {
+  const key = n + (lv.t || "") + (lv.b || "") + (lv.a || "") + name + (lv.m || ""); if (TEX[key]) return TEX[key];
+  const im = src.image; const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; const x = c.getContext("2d")!; x.drawImage(im, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height), p = d.data; const W = c.width / 1024;
+  const [fR, fG, fB] = hexRgb(lv.f || "#ffffff"), [bR, bG, bB] = hexRgb(lv.b || lv.f || "#ffffff"), [tR, tG, tB] = hexRgb(lv.t || "#333333"), [eR, eG, eB] = hexRgb(lv.e || lv.t || "#333");
+  const A = n === "A320_nologo", B7 = n === "B737_nologo", A35 = n === "A350_nologo";
+  for (let i = 0; i < p.length; i += 4) {
+    const r = p[i], g = p[i + 1], b = p[i + 2]; const q = i / 4, y = (q / c.width | 0) / W, xx = (q % c.width) / W;
+    const green = g > r + 12 && g > b + 4 && g < 160;
+    const blueBody = b > r + 80 && g > r + 50; // A320 sky-blue upper
+    const darkBlue = b > r + 40 && b < 170 && g < 100; // A320 dark accents / tail
+    const lilac = r > 140 && r < 215 && b > 195 && b - r > 22 && g > 170;
+    if (B7) {
+      if (green) { // fuselage block: upper → fuselage colour, lower third → belly
+        const local = (y % 200) / 200; const belly = local > 0.62 || (y > 220 && y < 400 && (y - 220) / 180 > 0.55);
+        if (belly && lv.b) { p[i] = bR; p[i + 1] = bG; p[i + 2] = bB; } else { p[i] = fR; p[i + 1] = fG; p[i + 2] = fB; }
+      } else if (xx > 680 && y > 640 && r > 180 && g > 180 && b > 180) { p[i] = tR; p[i + 1] = tG; p[i + 2] = tB; } // vertical fin
+      else if (xx > 820 && y > 40 && y < 220 && r > 100 && Math.abs(r - g) < 40) { p[i] = eR; p[i + 1] = eG; p[i + 2] = eB; } // rough engine cowling guess
+    } else if (A) {
+      if (blueBody) { const belly = (y > 280 && y < 380) || (y > 640 && y < 740); if (belly && lv.b) { p[i] = bR; p[i + 1] = bG; p[i + 2] = bB; } else { p[i] = fR; p[i + 1] = fG; p[i + 2] = fB; } }
+      else if (lilac) { p[i] = fR; p[i + 1] = fG; p[i + 2] = fB; }
+      else if (darkBlue) { const l = Math.min(1.15, b / 110); p[i] = tR * l; p[i + 1] = tG * l; p[i + 2] = tB * l; }
+    } else if (A35) {
+      if (green) { if (y < 420) { const belly = (y % 210) / 210 > 0.6 && lv.b; if (belly) { p[i] = bR; p[i + 1] = bG; p[i + 2] = bB; } else { p[i] = fR; p[i + 1] = fG; p[i + 2] = fB; } } else { const l = Math.min(1.1, g / 70); p[i] = tR * l; p[i + 1] = tG * l; p[i + 2] = tB * l; } }
+    } else if (green) { if (y < 400) { p[i] = fR; p[i + 1] = fG; p[i + 2] = fB; } else { const l = Math.min(1.1, g / 70); p[i] = tR * l; p[i + 1] = tG * l; p[i + 2] = tB * l; } }
+  }
+  x.putImageData(d, 0, 0);
+  // name on both sides
+  const tx = lv.tx || lv.t || "#073590"; x.fillStyle = tx; x.font = `900 ${Math.round(48 * W)}px "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.textAlign = "center";
+  const rows = A ? [270, 645] : B7 ? [150, 300] : [134, 278]; const cx = (A ? 480 : 440) * W;
+  for (const [k, yy] of rows.entries()) { x.save(); x.translate(cx, yy * W); if ((A || B7) && k === MIR) x.scale(-1, 1); x.fillText((name || lv.n || "").toUpperCase(), 0, 0); x.restore(); }
+  // tail motif (harp-ish / disc / etc.) — original geometry only
+  const acc = lv.a || "#f1c933";
+  if (B7) paintMotif(x, lv.m || "plain", 860 * W, 780 * W, 90 * W, acc, "#fff8d0");
+  else if (A) paintMotif(x, lv.m || "plain", 880 * W, 200 * W, 70 * W, acc, "#ffffff");
+  else if (A35) paintMotif(x, lv.m || "plain", 900 * W, 850 * W, 80 * W, acc, "#ffffff");
+  // soft panel shading to reduce flat look
+  x.globalCompositeOperation = "multiply"; const grd = x.createLinearGradient(0, 0, 0, c.height); grd.addColorStop(0, "rgba(200,210,230,0.15)"); grd.addColorStop(0.5, "rgba(255,255,255,0)"); grd.addColorStop(1, "rgba(40,50,70,0.18)"); x.fillStyle = grd; x.fillRect(0, 0, c.width, c.height); x.globalCompositeOperation = "source-over";
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.flipY = src.flipY; t.anisotropy = 8; t.needsUpdate = true; return TEX[key] = t;
+}
+function glbModel(t: string, f: string, cs: string, fallbackC1: string, fallbackName: string) {
+  const n = glbFile(t, f); const base = GOT[n]; if (!base) return null; const o = base.clone(true); const E = eink();
+  const lv = liveryFor(cs.slice(0, 3), cs.slice(0, 3)) || { n: fallbackName || "", f: "#ffffff", t: fallbackC1, e: fallbackC1, a: fallbackC1, m: "plain" as const, tx: fallbackC1 };
+  const name = (fallbackName || lv.n || "").replace(/ (UK|Europe|Austria|Ireland)$/, "");
+  o.traverse((m: any) => { if (m.isMesh) { const src = m.material.map; m.material = new THREE.MeshStandardMaterial({ map: src && !E ? livTex(n, src, lv, name) : src, color: E ? "#dddddd" : "#ffffff", roughness: 0.42, metalness: 0.18, envMapIntensity: 0.8 }); m.castShadow = false; } });
   const g = new THREE.Group(); o.rotation.set(Math.PI / 2, 0, 0); const w = new THREE.Group(); w.add(o); w.rotation.z = Math.PI / 2; w.position.z = 2.8; if (f === "reg") w.scale.setScalar(0.74); g.add(w);
-  const L = f === "wide" ? 67 : 38; const sh = new THREE.Mesh(new THREE.PlaneGeometry(L * 0.9, L * 0.9), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: E ? 0.12 : 0.3, depthWrite: false, map: shadowTex() })); sh.position.z = 0.15; g.add(sh); return g; }
+  const L = f === "wide" ? 67 : f === "reg" ? 28 : 38; const sh = new THREE.Mesh(new THREE.PlaneGeometry(L * 1.05, L * 0.55), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: E ? 0.12 : 0.38, depthWrite: false, map: shadowTex() })); sh.position.set(0, -L * 0.05, 0.12); g.add(sh); return g;
+}
 
 // Glass curtain wall: blue glass panes with white mullions (one row per storey band), used as the terminal facade pattern.
-function curtain() { const W = 64, H = 64, c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d")!; const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#9cc3e6"); g.addColorStop(0.5, "#4f86bd"); g.addColorStop(1, "#2e5f93"); x.fillStyle = g; x.fillRect(0, 0, W, H);
-  x.fillStyle = "rgba(255,255,255,.18)"; x.beginPath(); x.moveTo(0, 0); x.lineTo(24, 0); x.lineTo(0, 30); x.fill(); x.fillStyle = "#f4f6f9"; for (let i = 0; i < W; i += 16) x.fillRect(i, 0, 2, H); x.fillRect(0, 0, W, 3); x.fillRect(0, 32, W, 2);
+function curtain() { const W = 128, H = 128, c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d")!;
+  const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#c5def5"); g.addColorStop(0.35, "#6fa0d0"); g.addColorStop(0.7, "#3d6fa8"); g.addColorStop(1, "#254e7a"); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.fillStyle = "rgba(255,255,255,.22)"; x.beginPath(); x.moveTo(0, 0); x.lineTo(40, 0); x.lineTo(0, 50); x.fill();
+  x.fillStyle = "#f7f9fc"; for (let i = 0; i < W; i += 16) x.fillRect(i, 0, 3, H); for (let j = 0; j < H; j += 32) x.fillRect(0, j, W, 3);
+  x.fillStyle = "rgba(20,40,70,.18)"; for (let i = 0; i < W; i += 16) for (let j = 0; j < H; j += 32) x.fillRect(i + 4, j + 6, 9, 20);
   const d = x.getImageData(0, 0, W, H); return { width: W, height: H, data: new Uint8Array(d.data.buffer) }; }
 let _font: any = null; const font = () => _font ||= new FontLoader().parse(helvBold as any);
 const ascii = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[–—]/g, "-").replace(/[^\x20-\x7e]/g, " ").replace(/\s+/g, " ").trim();
@@ -123,14 +175,48 @@ function facade(j: any, toL: (p: number[]) => [number, number]) { const F = j.fe
   if (best && back && back.n[0] * best.n[0] + back.n[1] * best.n[1] > -0.3) back = null;
   return best ? { ...best, back, h: t.f.properties.h || 14 } : null; }
 
-// Roof overhang along the airside facade + entrance canopy on the landside (simple slabs, not surveyed shapes)
-function canopies(fc: any, E: boolean) { const g = new THREE.Group(); const mt = new THREE.MeshStandardMaterial({ color: E ? "#cccccc" : "#e9edf2", roughness: 0.6, metalness: 0.2 }); const pm = new THREE.MeshStandardMaterial({ color: E ? "#888888" : "#9aa3b0", roughness: 0.5 });
-  const slab = (e: any, len: number, dep: number, th: number, z: number, off: number, posts: boolean) => { const m = [(e.a[0] + e.b[0]) / 2 + e.n[0] * off, (e.a[1] + e.b[1]) / 2 + e.n[1] * off]; const rot = Math.atan2(e.n[1], e.n[0]) + Math.PI / 2;
-    const b = new THREE.Mesh(new THREE.BoxGeometry(len, dep, th), mt); b.position.set(m[0], m[1], z); b.rotation.z = rot; g.add(b);
-    if (posts) for (let k = -2; k <= 2; k++) { const q = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, z, 8), pm); q.rotation.x = Math.PI / 2; const ux = Math.cos(rot), uy = Math.sin(rot); q.position.set(m[0] + ux * k * len / 5 + e.n[0] * dep * 0.4, m[1] + uy * k * len / 5 + e.n[1] * dep * 0.4, z / 2); g.add(q); } };
-  slab(fc, fc.L + 4, 5, 0.8, fc.h + 0.4, 2, false);
-  if (fc.back) { const L = Math.min(60, fc.back.L * 0.5); slab(fc.back, L, 10, 0.6, 6, 5, true); }
-  return g; }
+// Roof overhang, landside canopy, jet bridges, apron gate pads, taxiway edge lights (simple procedural, not surveyed).
+function aptExtras(fc: any, j: any, toL: (p: number[]) => [number, number], E: boolean) {
+  const g = new THREE.Group();
+  const mt = new THREE.MeshStandardMaterial({ color: E ? "#cccccc" : "#e9edf2", roughness: 0.55, metalness: 0.25 });
+  const pm = new THREE.MeshStandardMaterial({ color: E ? "#888888" : "#8e97a6", roughness: 0.45, metalness: 0.35 });
+  const glass = new THREE.MeshStandardMaterial({ color: E ? "#aaa" : "#7eb0d8", roughness: 0.25, metalness: 0.4, transparent: true, opacity: 0.85 });
+  const dark = new THREE.MeshStandardMaterial({ color: E ? "#666" : "#3a4250", roughness: 0.7 });
+  const padM = new THREE.MeshStandardMaterial({ color: E ? "#bbb" : "#9aa3b2", roughness: 0.9 });
+  const slab = (e: any, len: number, dep: number, th: number, z: number, off: number, posts: boolean, mat = mt) => {
+    const m = [(e.a[0] + e.b[0]) / 2 + e.n[0] * off, (e.a[1] + e.b[1]) / 2 + e.n[1] * off]; const rot = Math.atan2(e.n[1], e.n[0]) + Math.PI / 2;
+    const b = new THREE.Mesh(new THREE.BoxGeometry(len, dep, th), mat); b.position.set(m[0], m[1], z); b.rotation.z = rot; g.add(b);
+    if (posts) for (let k = -2; k <= 2; k++) { const q = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, z, 8), pm); q.rotation.x = Math.PI / 2; const ux = Math.cos(rot), uy = Math.sin(rot); q.position.set(m[0] + ux * k * len / 5 + e.n[0] * dep * 0.35, m[1] + uy * k * len / 5 + e.n[1] * dep * 0.35, z / 2); g.add(q); }
+  };
+  slab(fc, fc.L + 6, 5.5, 0.7, fc.h + 0.35, 2.2, false);
+  slab(fc, fc.L + 6.5, 0.45, 0.9, fc.h + 0.9, 4.6, false, dark);
+  if (fc.back) { const L = Math.min(70, fc.back.L * 0.55); slab(fc.back, L, 12, 0.55, 5.5, 5.5, true); }
+  const ux = (fc.b[0] - fc.a[0]) / fc.L, uy = (fc.b[1] - fc.a[1]) / fc.L; const nJ = Math.max(2, Math.min(10, Math.floor(fc.L / 42)));
+  for (let i = 0; i < nJ; i++) {
+    const t = (i + 0.5) / nJ; const px = fc.a[0] + ux * fc.L * t + fc.n[0] * 3, py = fc.a[1] + uy * fc.L * t + fc.n[1] * 3;
+    const rot = Math.atan2(fc.n[1], fc.n[0]);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(4.2, 28, 3.2), glass); arm.position.set(px + fc.n[0] * 16, py + fc.n[1] * 16, 6.2); arm.rotation.z = rot + Math.PI / 2; g.add(arm);
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(5.5, 6, 3.6), mt); cab.position.set(px + fc.n[0] * 30, py + fc.n[1] * 30, 5.4); cab.rotation.z = rot + Math.PI / 2; g.add(cab);
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.6, 5.2, 8), pm); leg.rotation.x = Math.PI / 2; leg.position.set(px + fc.n[0] * 22, py + fc.n[1] * 22, 2.6); g.add(leg);
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(11, 24), padM); pad.position.set(px + fc.n[0] * 36, py + fc.n[1] * 36, 0.08); g.add(pad);
+  }
+  const F = j.features || []; const tw = F.filter((f: any) => f.properties.kind === "taxiway" && f.geometry.type === "LineString").slice(0, 40);
+  const bulb = new THREE.MeshStandardMaterial({ color: "#ffe08a", emissive: "#ffcc44", emissiveIntensity: E ? 0 : 1.2, roughness: 0.4 });
+  let lit = 0;
+  for (const f of tw) {
+    const pts = f.geometry.coordinates.map(toL); if (pts.length < 2) continue;
+    for (let i = 0; i < pts.length - 1 && lit < 180; i++) {
+      const a = pts[i], b = pts[i + 1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 8) continue;
+      const steps = Math.max(1, Math.floor(L / 28));
+      for (let s = 0; s < steps && lit < 180; s++) {
+        const t = (s + 0.5) / steps; const qx = a[0] + (b[0] - a[0]) * t, qy = a[1] + (b[1] - a[1]) * t;
+        if (Math.hypot(qx - (fc.a[0] + fc.b[0]) / 2, qy - (fc.a[1] + fc.b[1]) / 2) > 700) continue;
+        const o = new THREE.Mesh(new THREE.SphereGeometry(0.45, 6, 6), bulb); o.position.set(qx, qy, 0.35); g.add(o); lit++;
+      }
+    }
+  }
+  return g;
+}
 
 type Fix = { a: any; lon: number; lat: number; t: number; x: number; y: number; z: number; obj?: THREE.Group; mk?: maplibregl.Marker };
 
@@ -161,7 +247,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
             { id: "rwyl", type: "symbol", source: "apt", filter: ["all", ["==", ["get", "kind"], "runway"], ["!=", ["get", "name"], ""]], layout: { "symbol-placement": "line", "text-field": ["get", "name"], "text-size": 12, "text-font": ["Open Sans Bold"] }, paint: { "text-color": fg, "text-halo-color": bg, "text-halo-width": 1.5 } },
             { id: "trl", type: "line", source: "trl", layout: { visibility: "none" }, paint: { "line-color": eink() ? "#000" : "#ffd166", "line-width": 2, "line-opacity": 0.8 } },
             { id: "bld", type: "fill-extrusion", source: "apt", filter: ["in", ["get", "kind"], ["literal", ["building", "bridge"]]], paint: { "fill-extrusion-color": eink() ? ["match", ["get", "sub"], "parking", "#eee", "#d6d6d6"] : ["case", ["!=", ["coalesce", ["get", "col"], ""], ""], ["get", "col"], ["match", ["get", "sub"], "hangar", dark ? "#8a94a6" : "#dfe3ea", "parking", dark ? "#4b505a" : "#b9bdc4", "bridge", dark ? "#aab4c4" : "#eef1f5", dark ? "#5d677c" : "#d9dde4"]], "fill-extrusion-height": ["match", ["get", "sub"], "bridge", 6, ["max", ["get", "h"], 4]], "fill-extrusion-base": ["match", ["get", "sub"], "bridge", 3, 0], "fill-extrusion-opacity": 0.95, "fill-extrusion-vertical-gradient": true } },
-            { id: "term", type: "fill-extrusion", source: "apt", filter: ["==", ["get", "kind"], "terminal"], paint: { ...(eink() ? {} : { "fill-extrusion-pattern": "cw" }), "fill-extrusion-color": eink() ? "#bbb" : ["case", ["!=", ["coalesce", ["get", "col"], ""], ""], ["get", "col"], dark ? "#4f7db0" : "#8fb4d8"], "fill-extrusion-height": ["max", 6, ["-", ["get", "h"], 2.5]], "fill-extrusion-opacity": 0.92, "fill-extrusion-vertical-gradient": true } },
+            { id: "term", type: "fill-extrusion", source: "apt", filter: ["==", ["get", "kind"], "terminal"], paint: { ...(eink() ? {} : { "fill-extrusion-pattern": "cw" }), "fill-extrusion-color": eink() ? "#bbb" : ["case", ["!=", ["coalesce", ["get", "col"], ""], ""], ["get", "col"], dark ? "#4f7db0" : "#8fb4d8"], "fill-extrusion-height": ["max", 6, ["-", ["get", "h"], 2.5]], "fill-extrusion-opacity": 0.97, "fill-extrusion-vertical-gradient": true } },
             { id: "termroof", type: "fill-extrusion", source: "apt", filter: ["==", ["get", "kind"], "terminal"], paint: { "fill-extrusion-color": eink() ? "#eee" : dark ? "#d7dde6" : "#f7f8fa", "fill-extrusion-base": ["max", 6, ["-", ["get", "h"], 2.5]], "fill-extrusion-height": ["max", 7.5, ["get", "h"]], "fill-extrusion-opacity": 1 } },
             { id: "twr", type: "fill-extrusion", source: "apt", filter: ["==", ["get", "kind"], "tower"], paint: { "fill-extrusion-color": eink() ? "#888" : "#e9edf2", "fill-extrusion-height": ["get", "h"], "fill-extrusion-opacity": 1 } },
             { id: "twrcab", type: "fill-extrusion", source: "apt", filter: ["==", ["get", "kind"], "tower"], paint: { "fill-extrusion-color": eink() ? "#000" : "#2c4f6e", "fill-extrusion-base": ["-", ["get", "h"], 6], "fill-extrusion-height": ["-", ["get", "h"], 1], "fill-extrusion-opacity": 1 } },
@@ -171,7 +257,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     // three.js custom layer
     let sign: THREE.Group | null = null; let scene: THREE.Scene, cam: THREE.Camera, ren: THREE.WebGLRenderer, origin: maplibregl.MercatorCoordinate, mpu = 1;
     const layer: any = { id: "planes3d", type: "custom", renderingMode: "3d",
-      onAdd(m: maplibregl.Map, gl: WebGLRenderingContext) { scene = new THREE.Scene(); cam = new THREE.Camera(); scene.add(new THREE.AmbientLight(0xffffff, 1.6)); const d = new THREE.DirectionalLight(0xffffff, 2); d.position.set(60, -80, 120); scene.add(d);
+      onAdd(m: maplibregl.Map, gl: WebGLRenderingContext) { scene = new THREE.Scene(); cam = new THREE.Camera(); scene.add(new THREE.HemisphereLight(0xbdd7ff, 0x3a3a28, 1.15)); scene.add(new THREE.AmbientLight(0xffffff, 0.55)); const d = new THREE.DirectionalLight(0xfff2dd, 2.4); d.position.set(80, -60, 140); scene.add(d); const fill = new THREE.DirectionalLight(0x9bb8ff, 0.7); fill.position.set(-50, 40, 60); scene.add(fill);
         ren = new THREE.WebGLRenderer({ canvas: m.getCanvas(), context: gl, antialias: true }); ren.autoClear = false; },
       render(_gl: any, o: any) { if (!origin) return; const now = Date.now(); const z = map.getZoom(); const k = Math.min(2.5, Math.max(1, Math.pow(2, (16.3 - z) * 0.6))); let moving = false;
         for (const f of Object.values(fx.current)) { if (!f.obj) continue; const a = f.a; let lon = a.lon, lat = a.lat;
@@ -186,7 +272,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     const sync = (L: any[]) => { const seen = new Set<string>();
       for (const a of L) { seen.add(a.hex); let f = fx.current[a.hex]; const cs = (a.flight || "").trim(); const l = liv(cs);
         if (!f) { const c = maplibregl.MercatorCoordinate.fromLngLat([a.lon, a.lat], 0); f = fx.current[a.hex] = { a, lon: a.lon, lat: a.lat, t: Date.now(), x: (c.x - origin.x) / mpu, y: -(c.y - origin.y) / mpu, z: 0 };
-          f.obj = glbModel(a.type || "", fam(a.type), l ? l[0] : accent, l ? l[2].replace(/ (UK|Europe|Austria|Ireland)$/, "") : "") || model(fam(a.type) as any, l ? l[0] : accent, l ? l[1] : "#8892a6"); scene.add(f.obj);
+          f.obj = glbModel(a.type || "", fam(a.type), cs, l ? l[0] : accent, l ? l[2].replace(/ (UK|Europe|Austria|Ireland)$/, "") : "") || model(fam(a.type) as any, l ? l[0] : accent, l ? l[1] : "#8892a6"); scene.add(f.obj);
           const d = document.createElement("button"); d.className = "a3lbl"; d.innerHTML = `<i style="background:${l ? l[0] : "#8892a6"}"></i>${cs || a.reg || a.hex}`; d.onclick = () => setSel({ ...fx.current[a.hex].a });
           f.mk = new maplibregl.Marker({ element: d, anchor: "bottom", offset: [0, -14] }).setLngLat([a.lon, a.lat]).addTo(map); }
         f.a = a; f.t = Date.now(); const T = (trails.current[a.hex] ||= []); const last = T.at(-1); if (!last || last[0] !== a.lon || last[1] !== a.lat) T.push([a.lon, a.lat]); if (T.length > 60) T.shift(); }
@@ -198,10 +284,10 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     map.on("load", async () => { map.addLayer(layer); await Promise.all(["B737_nologo", "A320_nologo", "A350_nologo"].map(loadGlb));
       try { const j = await api("/apt3d?iata=" + iata); if (stop) return; if (j.error) throw new Error(j.error); setInfo(j); ctr = j.center; origin = maplibregl.MercatorCoordinate.fromLngLat(j.center, 0); mpu = origin.meterInMercatorCoordinateUnits();
         (map.getSource("apt") as any).setData(j); (window as any).__a3info = j; const toL = (p: number[]): [number, number] => { const c = maplibregl.MercatorCoordinate.fromLngLat(p as any, 0); return [(c.x - origin.x) / mpu, -(c.y - origin.y) / mpu]; }; const fc = scene ? facade(j, toL) : null; let cam0: any = null;
-        if (fc) { const txt = (j.sign || j.name).replace(/["“”(].*$/, "").replace(/\s+/g, " ").trim().toUpperCase(); const col = eink() ? "#000000" : iata === "LPL" ? "#d6001c" : "#ffffff"; let size = Math.min(14, Math.max(4, fc.h * 0.4)); let r = facadeSign(txt, col, size); if (r.w > fc.L * 0.92) { size = Math.max(4, size * fc.L * 0.92 / r.w); r = facadeSign(txt, col, size); }
+        if (fc) { const SIGN: Record<string, string> = { LPL: "LIVERPOOL JOHN LENNON AIRPORT", MAN: "MANCHESTER AIRPORT", CFU: "CORFU IOANNIS KAPODISTRIAS", FRA: "FRANKFURT AIRPORT", STN: "LONDON STANSTED AIRPORT", DUB: "DUBLIN AIRPORT" }; const txt = (SIGN[iata] || (j.sign || j.name).replace(/["“”(].*$/, "").replace(/\s+/g, " ").trim()).toUpperCase(); const col = eink() ? "#000000" : iata === "LPL" ? "#d6001c" : "#ffffff"; let size = Math.min(14, Math.max(4, fc.h * 0.4)); let r = facadeSign(txt, col, size); if (r.w > fc.L * 0.92) { size = Math.max(4, size * fc.L * 0.92 / r.w); r = facadeSign(txt, col, size); }
           const mx = (fc.a[0] + fc.b[0]) / 2 + fc.n[0] * 0.8, my = (fc.a[1] + fc.b[1]) / 2 + fc.n[1] * 0.8; const onWall = fc.h > size * 1.6; r.o.position.set(mx + fc.n[0] * 4.2, my + fc.n[1] * 4.2, onWall ? fc.h - size * 1.35 : fc.h + 1.4); r.o.rotation.z = Math.atan2(fc.n[1], fc.n[0]) + Math.PI / 2; sign = r.o; sign.userData.n = fc.n; scene.add(sign);
           // dev-only render check (console hook, never shown to users): draws a model at the map centre so liveries can be inspected when no live plane is parked
-          (window as any).__a3demo = (type: string, c1: string, name: string) => { const q = [mx + fc.n[0] * 90, my + fc.n[1] * 90]; const o = glbModel(type, "nb", c1, name); if (!o) return false; o.position.set(q[0], q[1], 0); o.rotation.z = 0.6; scene.add(o); const ll = new maplibregl.MercatorCoordinate(origin.x + q[0] * mpu, origin.y - q[1] * mpu, 0).toLngLat(); mref.current!.jumpTo({ center: ll }); return true; }; scene.add(canopies(fc, eink())); (window as any).__a3sign = { txt, size, onWall, L: fc.L };
+          (window as any).__a3demo = (type: string, icao: string, name: string) => { const q = [mx + fc.n[0] * 90, my + fc.n[1] * 90]; const o = glbModel(type, "nb", icao, "#073590", name); if (!o) return false; o.position.set(q[0], q[1], 0); o.rotation.z = 0.6; scene.add(o); const ll = new maplibregl.MercatorCoordinate(origin.x + q[0] * mpu, origin.y - q[1] * mpu, 0).toLngLat(); mref.current!.jumpTo({ center: ll }); return true; }; scene.add(aptExtras(fc, j, toL, eink())); (window as any).__a3sign = { txt, size, onWall, L: fc.L };
           const ll = new maplibregl.MercatorCoordinate(origin.x + (mx + fc.n[0] * 60) * mpu, origin.y - (my + fc.n[1] * 60) * mpu, 0).toLngLat(); const brg = Math.atan2(-fc.n[0], -fc.n[1]) * 180 / Math.PI; cam0 = { center: [ll.lng, ll.lat], zoom: (() => { const cl = Math.cos(j.center[1] * Math.PI / 180); let z = 17.4; for (; z > 14; z -= 0.1) { const k = Math.min(3, Math.max(1, Math.pow(2, (16.2 - z) * 0.7))); if (r.w * k / (40075016 * cl / (512 * Math.pow(2, z))) <= 300) break; } return z; })(), pitch: 64, bearing: brg }; map.triggerRepaint(); }
         const b = j.focus || j.bbox; if (cam0) map.jumpTo(cam0); else fit(map, b, true); setLoad(""); poll(); }
       catch (e: any) { setLoad(""); setErr("Couldn't load the airport shapes: " + (e?.message || e) + ". OpenStreetMap's free Overpass service can be busy — try again in a minute."); } });
