@@ -24,7 +24,7 @@ const css = (v: string, d: string) => (getComputedStyle(document.documentElement
 const webgl = () => { try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch { return false; } };
 export const fam = (t = "") => /^(A33|A34|A35|A38|B74|B76|B77|B78|IL96|MD11|A30|A310)/.test(t) ? "wide" : /^(AT|DH8|E1|E2|E5|E7|CRJ|SF3|J31|BE|C2|P18|C30|C29|PC|DHC|SW|D32)/.test(t) ? "reg" : "narrow";
 const FAM = { narrow: "narrow-body", wide: "wide-body", reg: "regional / turboprop / small" } as const;
-const isPlane = (a: any) => a.type && !/^(GND|TWR|SERV|EMER|N\/A)$/.test(a.type) && a.lat != null;
+const isPlane = (a: any) => a && a.hex && a.lat != null && a.lon != null && !/^(GND|TWR|SERV|EMER|N\/A|GRND|VEH)$/i.test(a.type || "");
 const ago = (t: string) => { const m = Math.round((Date.now() - +new Date(t)) / 6e4); return m < 1 ? "just now" : m < 60 ? m + " min ago" : Math.round(m / 60) + " h ago"; };
 
 // ---- procedural aircraft (metres, nose along +y, up +z). Skyline's own generic shapes per size class, not real type models. ----
@@ -78,7 +78,15 @@ function shadowTex() { if (_st) return _st; const c = document.createElement("ca
 // Changed by Skyline: the model's livery colour is recoloured to the airline's colours and the airline name is painted on.
 const GLB: Record<string, Promise<THREE.Group | null>> = {}; const GOT: Record<string, THREE.Group | null> = {};
 const glbFile = (t = "", f: string) => f === "wide" ? "A350_nologo" : /^A3/.test(t) || f === "reg" ? "A320_nologo" : "B737_nologo";
-function loadGlb(n: string) { return GLB[n] ||= new Promise(r => new GLTFLoader().load(`/models/${n}.glb`, g => { GOT[n] = g.scene; r(g.scene); }, undefined, () => { GOT[n] = null; r(null); })); }
+function loadGlb(n: string) {
+  return GLB[n] ||= new Promise(r => {
+    let done = false; const finish = (v: THREE.Group | null) => { if (done) return; done = true; GOT[n] = v; r(v); };
+    const t = setTimeout(() => finish(null), 10000); // iOS Safari / flaky SW must not hang 3D forever
+    try {
+      new GLTFLoader().load(`/models/${n}.glb`, g => { clearTimeout(t); finish(g.scene); }, undefined, () => { clearTimeout(t); finish(null); });
+    } catch { clearTimeout(t); finish(null); }
+  });
+}
 const TEX: Record<string, THREE.Texture> = {};
 const MIR = 1;
 // Recolour the logo-free amvlab atlas into a simplified airline scheme (original Skyline paint — not exact liveries, no trademark logos).
@@ -222,7 +230,7 @@ type Fix = { a: any; lon: number; lat: number; t: number; x: number; y: number; 
 export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => void }) {
   const el = useRef<HTMLDivElement>(null), mref = useRef<maplibregl.Map | undefined>(undefined), fx = useRef<Record<string, Fix>>({}), trails = useRef<Record<string, [number, number][]>>({});
   const [ok] = useState(webgl); const [err, setErr] = useState(""); const [info, setInfo] = useState<any>(null); const [n, setN] = useState<number | null>(null);
-  const [sel, setSel] = useState<any>(null); const [flat, setFlat] = useState(false); const [brg, setBrg] = useState(0); const [lay, setLay] = useState(false); const [bld, setBld] = useState(true); const [sat, setSat] = useState(false); const [hist, setHist] = useState(false); const [load, setLoad] = useState("Loading OpenStreetMap shapes…");
+  const [sel, setSel] = useState<any>(null); const [flat, setFlat] = useState(false); const [brg, setBrg] = useState(0); const [lay, setLay] = useState(false); const [bld, setBld] = useState(true); const [sat, setSat] = useState(false); const [hist, setHist] = useState(false); const [load, setLoad] = useState("Loading OpenStreetMap shapes…"); const [looking, setLooking] = useState("");
   useEffect(() => {
     if (!ok || !el.current) return; let stop = false;
     const bg = css("--bg", "#0b1220"), fg = css("--fg", "#e8eefc"), accent = eink() ? "#000" : css("--accent", "#6aa8ff");
@@ -268,27 +276,60 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
         if (sign) { sign.scale.setScalar(Math.min(3, Math.max(1, Math.pow(2, (16.2 - z) * 0.7)))); const bb = mref.current ? mref.current.getBearing() * Math.PI / 180 : 0, sn = sign.userData.n; if (sn) sign.visible = Math.sin(bb) * sn[0] + Math.cos(bb) * sn[1] < 0.15; }
         const M = new THREE.Matrix4().fromArray(o.defaultProjectionData.mainMatrix); const T = new THREE.Matrix4().makeTranslation(origin.x, origin.y, origin.z).scale(new THREE.Vector3(mpu, -mpu, mpu));
         cam.projectionMatrix = M.multiply(T); ren.resetState(); try { ren.render(scene, cam); } catch (e: any) { if (!(window as any).__a3e) { (window as any).__a3e = 1; console.error('a3 render', e?.message); } } if (moving) map.triggerRepaint(); } };
-    const sync = (L: any[]) => { const seen = new Set<string>();
+    const mkPlane = (a: any) => {
+      const cs = (a.flight || "").trim(); const l = liv(cs); const c1 = l ? l[0] : accent; const c2 = l ? l[1] : "#8892a6";
+      const name = l ? l[2].replace(/ (UK|Europe|Austria|Ireland)$/, "") : "";
+      return glbModel(a.type || "", fam(a.type), cs, c1, name) || model(fam(a.type) as any, c1, c2);
+    };
+    const sync = (L: any[]) => {
+      if (!scene || !origin || stop) return; // custom layer onAdd may lag on iOS — next poll retries
+      const seen = new Set<string>();
       for (const a of L) { seen.add(a.hex); let f = fx.current[a.hex]; const cs = (a.flight || "").trim(); const l = liv(cs);
-        if (!f) { const c = maplibregl.MercatorCoordinate.fromLngLat([a.lon, a.lat], 0); f = fx.current[a.hex] = { a, lon: a.lon, lat: a.lat, t: Date.now(), x: (c.x - origin.x) / mpu, y: -(c.y - origin.y) / mpu, z: 0 };
-          f.obj = glbModel(a.type || "", fam(a.type), cs, l ? l[0] : accent, l ? l[2].replace(/ (UK|Europe|Austria|Ireland)$/, "") : "") || model(fam(a.type) as any, l ? l[0] : accent, l ? l[1] : "#8892a6"); scene.add(f.obj);
+        if (!f) {
+          const c = maplibregl.MercatorCoordinate.fromLngLat([a.lon, a.lat], 0);
+          f = fx.current[a.hex] = { a, lon: a.lon, lat: a.lat, t: Date.now(), x: (c.x - origin.x) / mpu, y: -(c.y - origin.y) / mpu, z: 0 };
+          f.obj = mkPlane(a); scene.add(f.obj);
           const d = document.createElement("button"); d.className = "a3lbl"; d.innerHTML = `<i style="background:${l ? l[0] : "#8892a6"}"></i>${cs || a.reg || a.hex}`; d.onclick = () => setSel({ ...fx.current[a.hex].a });
-          f.mk = new maplibregl.Marker({ element: d, anchor: "bottom", offset: [0, -14] }).setLngLat([a.lon, a.lat]).addTo(map); }
+          f.mk = new maplibregl.Marker({ element: d, anchor: "bottom", offset: [0, -18] }).setLngLat([a.lon, a.lat]).addTo(map);
+        } else if (f.obj && !(f as any).glb && GOT[glbFile(a.type || "", fam(a.type))]) {
+          // Upgrade procedural stand-in once the glTF finishes loading (common on slow phones)
+          scene.remove(f.obj); f.obj = mkPlane(a); (f as any).glb = !!GOT[glbFile(a.type || "", fam(a.type))]; scene.add(f.obj);
+        }
+        if (f.obj && GOT[glbFile(a.type || "", fam(a.type))]) (f as any).glb = true;
         f.a = a; f.t = Date.now(); const T = (trails.current[a.hex] ||= []); const last = T.at(-1); if (!last || last[0] !== a.lon || last[1] !== a.lat) T.push([a.lon, a.lat]); if (T.length > 60) T.shift(); }
       for (const k of Object.keys(fx.current)) if (!seen.has(k)) { const f = fx.current[k]; f.obj && scene.remove(f.obj); f.mk?.remove(); delete fx.current[k]; delete trails.current[k]; }
       (map.getSource("trl") as any)?.setData({ type: "FeatureCollection", features: Object.values(trails.current).filter(t => t.length > 1).map(c => ({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: c } })) });
-      map.triggerRepaint(); };
+      map.triggerRepaint();
+    };
     let ctr: [number, number] | null = null;
-    const poll = async () => { if (!ctr || stop) return; try { const r = await api(`/overhead?lat=${ctr[1]}&lon=${ctr[0]}&r=6`); if (stop) return; const L = (r.list || []).filter(isPlane).filter((a: any) => a.alt === "ground" || (+a.alt || 99999) < 6000).slice(0, 40); setN(L.length); sync(L); setSel((s: any) => s ? { ...(fx.current[s.hex]?.a || s) } : s); } catch { } };
-    map.on("load", async () => { map.addLayer(layer); await Promise.all(["B737_nologo", "A320_nologo", "A350_nologo"].map(loadGlb));
+    const poll = async () => {
+      if (!ctr || stop) return;
+      try {
+        // Wider ring so approaching/departing traffic shows; include low airborne + all ground ADS-B (real positions only)
+        const r = await api(`/overhead?lat=${ctr[1]}&lon=${ctr[0]}&r=12`);
+        if (stop) return;
+        const L = (r.list || []).filter(isPlane).filter((a: any) => a.alt === "ground" || (+a.alt || 99999) < 12000).slice(0, 60);
+        setN(L.length);
+        setLooking(L.length === 0 ? "No live aircraft near this airport right now — ADS-B updates every few seconds." : "");
+        sync(L);
+        setSel((s: any) => s ? { ...(fx.current[s.hex]?.a || s) } : s);
+      } catch (e: any) {
+        if (!stop) setLooking("Couldn't reach live aircraft yet — trying again…");
+      }
+    };
+    map.on("load", async () => {
+      map.addLayer(layer);
+      map.triggerRepaint(); // force custom-layer onAdd before first sync (iOS often delays it)
+      // Kick glTF in the background with a timeout — NEVER block airport shapes or the ADS-B poll on model download
+      const glbReady = Promise.all(["B737_nologo", "A320_nologo", "A350_nologo"].map(loadGlb)).then(() => { if (!stop) poll(); });
       try { const j = await api("/apt3d?iata=" + iata); if (stop) return; if (j.error) throw new Error(j.error); setInfo(j); ctr = j.center; origin = maplibregl.MercatorCoordinate.fromLngLat(j.center, 0); mpu = origin.meterInMercatorCoordinateUnits();
         (map.getSource("apt") as any).setData(j); (window as any).__a3info = j; const toL = (p: number[]): [number, number] => { const c = maplibregl.MercatorCoordinate.fromLngLat(p as any, 0); return [(c.x - origin.x) / mpu, -(c.y - origin.y) / mpu]; }; const fc = scene ? facade(j, toL) : null; let cam0: any = null;
         if (fc) { const SIGN: Record<string, string> = { LPL: "LIVERPOOL JOHN LENNON AIRPORT", MAN: "MANCHESTER AIRPORT", CFU: "CORFU IOANNIS KAPODISTRIAS", FRA: "FRANKFURT AIRPORT", STN: "LONDON STANSTED AIRPORT", DUB: "DUBLIN AIRPORT" }; const txt = (SIGN[iata] || (j.sign || j.name).replace(/["“”(].*$/, "").replace(/\s+/g, " ").trim()).toUpperCase(); const col = eink() ? "#000000" : iata === "LPL" ? "#d6001c" : "#ffffff"; let size = Math.min(14, Math.max(4, fc.h * 0.4)); let r = facadeSign(txt, col, size); if (r.w > fc.L * 0.92) { size = Math.max(4, size * fc.L * 0.92 / r.w); r = facadeSign(txt, col, size); }
           const mx = (fc.a[0] + fc.b[0]) / 2 + fc.n[0] * 0.8, my = (fc.a[1] + fc.b[1]) / 2 + fc.n[1] * 0.8; const onWall = fc.h > size * 1.6; r.o.position.set(mx + fc.n[0] * 4.2, my + fc.n[1] * 4.2, onWall ? fc.h - size * 1.35 : fc.h + 1.4); r.o.rotation.z = Math.atan2(fc.n[1], fc.n[0]) + Math.PI / 2; sign = r.o; sign.userData.n = fc.n; scene.add(sign);
           // dev-only render check (console hook, never shown to users): draws a model at the map centre so liveries can be inspected when no live plane is parked
-          (window as any).__a3demo = (type: string, icao: string, name: string) => { const q = [mx + fc.n[0] * 90, my + fc.n[1] * 90]; const o = glbModel(type, "nb", icao, "#073590", name); if (!o) return false; o.position.set(q[0], q[1], 0); o.rotation.z = 0.6; scene.add(o); const ll = new maplibregl.MercatorCoordinate(origin.x + q[0] * mpu, origin.y - q[1] * mpu, 0).toLngLat(); mref.current!.jumpTo({ center: ll }); return true; }; scene.add(aptExtras(fc, j, toL, eink())); (window as any).__a3sign = { txt, size, onWall, L: fc.L };
+          (window as any).__a3demo = (type: string, icao: string, name: string) => { const q = [mx + fc.n[0] * 90, my + fc.n[1] * 90]; const o = glbModel(type, "nb", icao, "#073590", name) || model("narrow", "#073590", "#f1c933"); o.position.set(q[0], q[1], 0); o.rotation.z = 0.6; scene.add(o); const ll = new maplibregl.MercatorCoordinate(origin.x + q[0] * mpu, origin.y - q[1] * mpu, 0).toLngLat(); mref.current!.jumpTo({ center: ll }); return true; }; scene.add(aptExtras(fc, j, toL, eink())); (window as any).__a3sign = { txt, size, onWall, L: fc.L };
           const ll = new maplibregl.MercatorCoordinate(origin.x + (mx + fc.n[0] * 60) * mpu, origin.y - (my + fc.n[1] * 60) * mpu, 0).toLngLat(); const brg = Math.atan2(-fc.n[0], -fc.n[1]) * 180 / Math.PI; cam0 = { center: [ll.lng, ll.lat], zoom: (() => { const cl = Math.cos(j.center[1] * Math.PI / 180); let z = 17.4; for (; z > 14; z -= 0.1) { const k = Math.min(3, Math.max(1, Math.pow(2, (16.2 - z) * 0.7))); if (r.w * k / (40075016 * cl / (512 * Math.pow(2, z))) <= 300) break; } return z; })(), pitch: 64, bearing: brg }; map.triggerRepaint(); }
-        const b = j.focus || j.bbox; if (cam0) map.jumpTo(cam0); else fit(map, b, true); setLoad(""); poll(); }
+        const b = j.focus || j.bbox; if (cam0) map.jumpTo(cam0); else fit(map, b, true); setLoad(""); setLooking("Looking for aircraft near this airport…"); poll(); void glbReady; }
       catch (e: any) { setLoad(""); setErr("Couldn't load the airport shapes: " + (e?.message || e) + ". OpenStreetMap's free Overpass service can be busy — try again in a minute."); } });
     const t = setInterval(poll, 8000);
     const clk = (e: any) => { let best: any = null, bd = 34; for (const f of Object.values(fx.current)) { if (!f.mk) continue; const p = map.project(f.mk.getLngLat()); const d = Math.hypot(p.x - e.point.x, p.y - e.point.y); if (d < bd) { bd = d; best = f.a; } } if (best) setSel({ ...best }); };
@@ -307,6 +348,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     <div className="a3side"><button className={"a3btn" + (hist ? " on" : "")} aria-label="History trails" onClick={() => setHist(!hist)}>⟲</button><button className="a3btn" aria-label="Fit airport" onClick={() => { const b = info?.focus || info?.bbox; b && mref.current && fit(mref.current, b, false); }}>➤</button><button className={"a3btn" + (lay ? " on" : "")} aria-label="Layers" onClick={() => setLay(!lay)}>≋</button></div>
     {lay && <div className="a3lay card sm"><label><input type="checkbox" checked={bld} onChange={e => setBld(e.target.checked)} /> 3D buildings</label><label><input type="checkbox" checked={sat} onChange={e => setSat(e.target.checked)} /> Satellite photo</label><label><input type="checkbox" checked={hist} onChange={e => setHist(e.target.checked)} /> Trails (since you opened this)</label></div>}
     <button className="a3btn a3flat" onClick={() => setFlat(!flat)}>{flat ? "3D" : "2D"}</button>
+    {!sel && looking && n === 0 && <div className="a3load card sm">{looking}</div>}
     {!sel && <div className="a3note sm">{info ? <>{info.features.length} OpenStreetMap shapes{info.counts?.terminal ? ` · ${info.counts.terminal} terminal${info.counts.terminal > 1 ? "s" : ""}` : " · no terminal mapped in OSM"}</> : null}{n != null && <> · {n} live aircraft on or near the airport (ADS-B)</>}<br /><span className="faint">Planes: 3D models by amvlab (CC BY 4.0, recoloured by Skyline with airline colours and name — not exact liveries). Tap a plane or its label.</span></div>}
     {sel && <Sheet a={sel} iata={iata} onClose={() => setSel(null)} />}
   </div>, document.body);
