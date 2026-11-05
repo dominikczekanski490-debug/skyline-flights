@@ -123,7 +123,25 @@ function livTex(n: string, src: any, lv: { f: string; b?: string; t: string; e: 
   // soft panel shading first so names stay crisp
   x.globalCompositeOperation = "multiply"; const grd = x.createLinearGradient(0, 0, 0, c.height); grd.addColorStop(0, "rgba(200,210,230,0.12)"); grd.addColorStop(0.5, "rgba(255,255,255,0)"); grd.addColorStop(1, "rgba(40,50,70,0.14)"); x.fillStyle = grd; x.fillRect(0, 0, c.width, c.height); x.globalCompositeOperation = "source-over";
   // belly cheatline bands on known fuselage UV strips (simplified — not surveyed paint)
-  if (lv.b) { x.fillStyle = lv.b; if (B7) { x.fillRect(40 * W, 95 * W, 620 * W, 22 * W); x.fillRect(40 * W, 240 * W, 620 * W, 22 * W); } else if (A) { x.fillRect(60 * W, 310 * W, 700 * W, 22 * W); x.fillRect(60 * W, 690 * W, 700 * W, 22 * W); } }
+  if (lv.b && A) { x.fillStyle = lv.b; x.fillRect(60 * W, 310 * W, 700 * W, 22 * W); x.fillRect(60 * W, 690 * W, 700 * W, 22 * W); }
+  // B737 belly: paint only the lower ~28% of each side strip (y bands that map under the windows, not the spine)
+  if (lv.b && B7) {
+    const d2 = x.getImageData(0, 0, c.width, c.height); const q = d2.data;
+    const [br, bg, bb] = hexRgb(lv.b);
+    for (let y = 0; y < c.height; y++) {
+      const yy = y / W;
+      // two side panels ~ y 40–210 and 210–380; belly = bottom 30% of each
+      const in1 = yy >= 50 && yy <= 100; const in2 = yy >= 210 && yy <= 255;
+      if (!in1 && !in2) continue;
+      for (let xx = 0; xx < c.width; xx++) {
+        if (xx < 40 * W || xx > 660 * W) continue;
+        const i = (y * c.width + xx) * 4;
+        // only recolor near-white fuselage (already painted), skip windows (dark)
+        if (q[i] > 180 && q[i + 1] > 180 && q[i + 2] > 180) { q[i] = br; q[i + 1] = bg; q[i + 2] = bb; }
+      }
+    }
+    x.putImageData(d2, 0, 0);
+  }
   const tx = lv.tx || lv.t || "#073590"; x.fillStyle = tx; x.font = `900 ${Math.round(52 * W)}px "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.textAlign = "center";
   const rows = A ? [258, 640] : B7 ? [134, 278] : [134, 278]; const cx = (A ? 480 : 440) * W;
   for (const [k, yy] of rows.entries()) { x.save(); x.translate(cx, yy * W); if ((A || B7) && k === MIR) x.scale(-1, 1); x.fillText((name || lv.n || "").toUpperCase(), 0, 0); x.restore(); }
