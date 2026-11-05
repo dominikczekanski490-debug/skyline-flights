@@ -123,7 +123,7 @@ function livTex(n: string, src: any, lv: { f: string; b?: string; t: string; e: 
   // soft panel shading first so names stay crisp
   x.globalCompositeOperation = "multiply"; const grd = x.createLinearGradient(0, 0, 0, c.height); grd.addColorStop(0, "rgba(200,210,230,0.12)"); grd.addColorStop(0.5, "rgba(255,255,255,0)"); grd.addColorStop(1, "rgba(40,50,70,0.14)"); x.fillStyle = grd; x.fillRect(0, 0, c.width, c.height); x.globalCompositeOperation = "source-over";
   // belly cheatline bands on known fuselage UV strips (simplified — not surveyed paint)
-  if (lv.b) { x.fillStyle = lv.b; if (B7) { x.fillRect(40 * W, 175 * W, 620 * W, 28 * W); x.fillRect(40 * W, 330 * W, 620 * W, 28 * W); } else if (A) { x.fillRect(60 * W, 310 * W, 700 * W, 22 * W); x.fillRect(60 * W, 690 * W, 700 * W, 22 * W); } }
+  if (lv.b) { x.fillStyle = lv.b; if (B7) { x.fillRect(40 * W, 95 * W, 620 * W, 22 * W); x.fillRect(40 * W, 240 * W, 620 * W, 22 * W); } else if (A) { x.fillRect(60 * W, 310 * W, 700 * W, 22 * W); x.fillRect(60 * W, 690 * W, 700 * W, 22 * W); } }
   const tx = lv.tx || lv.t || "#073590"; x.fillStyle = tx; x.font = `900 ${Math.round(52 * W)}px "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.textAlign = "center";
   const rows = A ? [258, 640] : B7 ? [134, 278] : [134, 278]; const cx = (A ? 480 : 440) * W;
   for (const [k, yy] of rows.entries()) { x.save(); x.translate(cx, yy * W); if ((A || B7) && k === MIR) x.scale(-1, 1); x.fillText((name || lv.n || "").toUpperCase(), 0, 0); x.restore(); }
