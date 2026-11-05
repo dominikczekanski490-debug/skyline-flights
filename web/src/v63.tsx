@@ -108,11 +108,9 @@ function livTex(n: string, src: any, lv: { f: string; b?: string; t: string; e: 
     const darkBlue = b > r + 40 && b < 170 && g < 100; // A320 dark accents / tail
     const lilac = r > 140 && r < 215 && b > 195 && b - r > 22 && g > 170;
     if (B7) {
-      if (green) { // fuselage block: upper → fuselage colour, lower third → belly
-        const local = (y % 200) / 200; const belly = local > 0.62 || (y > 220 && y < 400 && (y - 220) / 180 > 0.55);
-        if (belly && lv.b) { p[i] = bR; p[i + 1] = bG; p[i + 2] = bB; } else { p[i] = fR; p[i + 1] = fG; p[i + 2] = fB; }
-      } else if (xx > 680 && y > 640 && r > 180 && g > 180 && b > 180) { p[i] = tR; p[i + 1] = tG; p[i + 2] = tB; } // vertical fin
-      else if (xx > 820 && y > 40 && y < 220 && r > 100 && Math.abs(r - g) < 40) { p[i] = eR; p[i + 1] = eG; p[i + 2] = eB; } // rough engine cowling guess
+      if (green) { p[i] = fR; p[i + 1] = fG; p[i + 2] = fB; } // whole green fuselage → white/fuselage
+      else if (xx > 680 && y > 640 && r > 180 && g > 180 && b > 180) { p[i] = tR; p[i + 1] = tG; p[i + 2] = tB; }
+      else if (xx > 800 && y < 280 && Math.abs(r - g) < 50 && r > 90 && r < 210) { p[i] = eR; p[i + 1] = eG; p[i + 2] = eB; }
     } else if (A) {
       if (blueBody) { const belly = (y > 280 && y < 380) || (y > 640 && y < 740); if (belly && lv.b) { p[i] = bR; p[i + 1] = bG; p[i + 2] = bB; } else { p[i] = fR; p[i + 1] = fG; p[i + 2] = fB; } }
       else if (lilac) { p[i] = fR; p[i + 1] = fG; p[i + 2] = fB; }
@@ -122,22 +120,22 @@ function livTex(n: string, src: any, lv: { f: string; b?: string; t: string; e: 
     } else if (green) { if (y < 400) { p[i] = fR; p[i + 1] = fG; p[i + 2] = fB; } else { const l = Math.min(1.1, g / 70); p[i] = tR * l; p[i + 1] = tG * l; p[i + 2] = tB * l; } }
   }
   x.putImageData(d, 0, 0);
-  // name on both sides
-  const tx = lv.tx || lv.t || "#073590"; x.fillStyle = tx; x.font = `900 ${Math.round(48 * W)}px "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.textAlign = "center";
-  const rows = A ? [270, 645] : B7 ? [150, 300] : [134, 278]; const cx = (A ? 480 : 440) * W;
+  // soft panel shading first so names stay crisp
+  x.globalCompositeOperation = "multiply"; const grd = x.createLinearGradient(0, 0, 0, c.height); grd.addColorStop(0, "rgba(200,210,230,0.12)"); grd.addColorStop(0.5, "rgba(255,255,255,0)"); grd.addColorStop(1, "rgba(40,50,70,0.14)"); x.fillStyle = grd; x.fillRect(0, 0, c.width, c.height); x.globalCompositeOperation = "source-over";
+  // belly cheatline bands on known fuselage UV strips (simplified — not surveyed paint)
+  if (lv.b) { x.fillStyle = lv.b; if (B7) { x.fillRect(40 * W, 175 * W, 620 * W, 28 * W); x.fillRect(40 * W, 330 * W, 620 * W, 28 * W); } else if (A) { x.fillRect(60 * W, 310 * W, 700 * W, 22 * W); x.fillRect(60 * W, 690 * W, 700 * W, 22 * W); } }
+  const tx = lv.tx || lv.t || "#073590"; x.fillStyle = tx; x.font = `900 ${Math.round(52 * W)}px "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.textAlign = "center";
+  const rows = A ? [258, 640] : B7 ? [134, 278] : [134, 278]; const cx = (A ? 480 : 440) * W;
   for (const [k, yy] of rows.entries()) { x.save(); x.translate(cx, yy * W); if ((A || B7) && k === MIR) x.scale(-1, 1); x.fillText((name || lv.n || "").toUpperCase(), 0, 0); x.restore(); }
-  // tail motif (harp-ish / disc / etc.) — original geometry only
   const acc = lv.a || "#f1c933";
-  if (B7) paintMotif(x, lv.m || "plain", 860 * W, 780 * W, 90 * W, acc, "#fff8d0");
-  else if (A) paintMotif(x, lv.m || "plain", 880 * W, 200 * W, 70 * W, acc, "#ffffff");
+  if (B7) paintMotif(x, lv.m || "plain", 860 * W, 780 * W, 100 * W, acc, "#fff8d0");
+  else if (A) paintMotif(x, lv.m || "plain", 900 * W, 180 * W, 80 * W, acc, "#ffffff");
   else if (A35) paintMotif(x, lv.m || "plain", 900 * W, 850 * W, 80 * W, acc, "#ffffff");
-  // soft panel shading to reduce flat look
-  x.globalCompositeOperation = "multiply"; const grd = x.createLinearGradient(0, 0, 0, c.height); grd.addColorStop(0, "rgba(200,210,230,0.15)"); grd.addColorStop(0.5, "rgba(255,255,255,0)"); grd.addColorStop(1, "rgba(40,50,70,0.18)"); x.fillStyle = grd; x.fillRect(0, 0, c.width, c.height); x.globalCompositeOperation = "source-over";
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.flipY = src.flipY; t.anisotropy = 8; t.needsUpdate = true; return TEX[key] = t;
 }
 function glbModel(t: string, f: string, cs: string, fallbackC1: string, fallbackName: string) {
   const n = glbFile(t, f); const base = GOT[n]; if (!base) return null; const o = base.clone(true); const E = eink();
-  const lv = liveryFor(cs.slice(0, 3), cs.slice(0, 3)) || { n: fallbackName || "", f: "#ffffff", t: fallbackC1, e: fallbackC1, a: fallbackC1, m: "plain" as const, tx: fallbackC1 };
+  const lv = liveryFor(cs.slice(0, 3), cs.slice(0, 3)) || liveryFor(cs.slice(0, 2)) || { n: fallbackName || "", f: "#ffffff", t: fallbackC1, e: fallbackC1, a: fallbackC1, m: "plain" as const, tx: fallbackC1 };
   const name = (fallbackName || lv.n || "").replace(/ (UK|Europe|Austria|Ireland)$/, "");
   o.traverse((m: any) => { if (m.isMesh) { const src = m.material.map; m.material = new THREE.MeshStandardMaterial({ map: src && !E ? livTex(n, src, lv, name) : src, color: E ? "#dddddd" : "#ffffff", roughness: 0.42, metalness: 0.18, envMapIntensity: 0.8 }); m.castShadow = false; } });
   const g = new THREE.Group(); o.rotation.set(Math.PI / 2, 0, 0); const w = new THREE.Group(); w.add(o); w.rotation.z = Math.PI / 2; w.position.z = 2.8; if (f === "reg") w.scale.setScalar(0.74); g.add(w);
@@ -259,7 +257,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     const layer: any = { id: "planes3d", type: "custom", renderingMode: "3d",
       onAdd(m: maplibregl.Map, gl: WebGLRenderingContext) { scene = new THREE.Scene(); cam = new THREE.Camera(); scene.add(new THREE.HemisphereLight(0xbdd7ff, 0x3a3a28, 1.15)); scene.add(new THREE.AmbientLight(0xffffff, 0.55)); const d = new THREE.DirectionalLight(0xfff2dd, 2.4); d.position.set(80, -60, 140); scene.add(d); const fill = new THREE.DirectionalLight(0x9bb8ff, 0.7); fill.position.set(-50, 40, 60); scene.add(fill);
         ren = new THREE.WebGLRenderer({ canvas: m.getCanvas(), context: gl, antialias: true }); ren.autoClear = false; },
-      render(_gl: any, o: any) { if (!origin) return; const now = Date.now(); const z = map.getZoom(); const k = Math.min(2.5, Math.max(1, Math.pow(2, (16.3 - z) * 0.6))); let moving = false;
+      render(_gl: any, o: any) { if (!origin) return; const now = Date.now(); const z = map.getZoom(); const k = Math.min(2.2, Math.max(1, Math.pow(2, (16.5 - z) * 0.55))); let moving = false;
         for (const f of Object.values(fx.current)) { if (!f.obj) continue; const a = f.a; let lon = a.lon, lat = a.lat;
           if (!still() && a.gs > 2 && a.track != null) { const dt = Math.min(12, (now - f.t) / 1000), dm = a.gs * 0.5144 * dt; lat += dm * Math.cos(a.track * Math.PI / 180) / 111320; lon += dm * Math.sin(a.track * Math.PI / 180) / (111320 * Math.cos(lat * Math.PI / 180)); moving = true; }
           const c = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], 0); const tx = (c.x - origin.x) / mpu, ty = -(c.y - origin.y) / mpu, tz = a.alt === "ground" ? 0 : Math.min(+a.alt || 0, 6000) * 0.3048;
