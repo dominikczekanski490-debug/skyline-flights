@@ -80,7 +80,7 @@ async function build(a) {
 const busy = new Map();
 const xml = (s, tag) => [...s.matchAll(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "g"))].map(m => m[1]);
 const one = (s, tag) => (s.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`)) || [])[1]?.trim() || null;
-export function register(api, { AP, cached, wrap, HIST }) {
+export function register(api, { AP, cached, wrap, HIST, warmAds }) {
   const WK_RULE = "From Skyline's own flight log (official airport boards), last 7 days. Highlight = the single biggest logged departure delay (delays over 10 h are skipped as likely board date mix-ups). Also shown: the airport-day with the most cancellations (3+ needed).";
   api.get("/week-highlight", wrap(async (req, res) => { const r = await cached("wk63", 600, async () => { const since = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10); let top = null; const C = {}; let n = 0;
       for (const [num, o] of Object.entries(HIST)) for (const [id, x] of Object.entries(o)) { const date = id.slice(-10); if (date < since) continue; n++;
@@ -89,6 +89,7 @@ export function register(api, { AP, cached, wrap, HIST }) {
       return { since, rows: n, top: top && { ...top, oc: AP[top.o]?.city || null, tc: AP[top.t]?.city || null }, cx: cx ? { ap: cx[0].split("|")[0], city: AP[cx[0].split("|")[0]]?.city || null, date: cx[0].split("|")[1], n: cx[1] } : null }; });
     res.json({ ...r, rule: WK_RULE, source: "Skyline flight log (official airport boards)" }); }));
   api.get("/apt3d", wrap(async (req, res) => { const iata = String(req.query.iata || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3); const a = AP[iata]; if (!a) return res.status(404).json({ error: "unknown airport" });
+    try { warmAds && warmAds(a.lat, a.lon); } catch {}
     const pf = path.join(PRE, iata + ".json"); if (/^[A-Z]{3}$/.test(iata) && fs.existsSync(pf)) { res.type("json").set("cache-control", "public, max-age=86400"); return fs.createReadStream(pf).pipe(res); }
     const f = path.join(DIR, iata + ".json"); try { const st = fs.statSync(f); if (Date.now() - st.mtimeMs < 30 * 864e5) { res.type("json").set("cache-control", "public, max-age=86400"); return fs.createReadStream(f).pipe(res); } } catch {}
     if (busy.size >= 2 && !busy.has(iata)) return res.status(503).json({ error: "Busy building other airports, try again in a minute" });

@@ -1481,8 +1481,38 @@ const adsb = p => cached("adsb:" + p, 45, async () => { for (const u of ["https:
   const st = ADSB_STALE[p]; if (st && Date.now() - st.at < 600e3) return st.j; throw new Error("Live ADS-B sources are busy (rate-limited). Try again in a minute."); }).then(j => (j.ac || j.aircraft || []).map(slimAc));
 api.get("/squawks", wrap(async (req, res) => { const out = []; for (const s of ["7500", "7600", "7700"]) out.push(...(await adsb("sqk/" + s)).map(a => ({ ...a, code: s }))); res.json({ list: out, at: Date.now(), source: "adsb.lol" }); }));
 api.get("/mil", wrap(async (req, res) => res.json({ list: (await adsb("mil")).filter(a => a.lat).slice(0, 300), source: "adsb.lol" })));
+// Bypass the serial adq for the first 3D-airport poll: race public ADS-B mirrors with a short timeout so iPhone isn't stuck on "Looking…" for a minute.
+const adsbQuick = async (p) => {
+  const urls = ["https://api.adsb.lol/v2/" + p, "https://api.airplanes.live/v2/" + p, "https://opendata.adsb.fi/api/v2/" + fiPath(p)];
+  const tryU = async (u) => { const r = await fetch(u, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(4500) }); if (!r.ok) throw new Error(String(r.status)); const j = await r.json(); if (!(j.ac || j.aircraft)) throw new Error("empty"); return j; };
+  const errs = [];
+  for (const u of urls) { try { const j = await tryU(u); ADSB_STALE[p] = { j, at: Date.now() }; C.set("adsb:" + p, { v: j, exp: Date.now() + 45e3, at: Date.now() }); return (j.ac || j.aircraft || []).map(slimAc); } catch (e) { errs.push(e); } }
+  throw errs[0] || new Error("adsb quick failed");
+};
+const packOverhead = (lat, lon, j) => {
+  const l = (j.ac || j.aircraft || []).map(slimAc).filter(a => a.lat).map(a => ({ ...a, nm: Math.round(hav({ lat, lon }, a) / 1.852 * 10) / 10 })).sort((a, b) => a.nm - b.nm);
+  return { list: l, source: "adsb.lol" };
+};
+// Fast path for 3D airport: answer from stale ADS-B within ms when possible; never block the phone UI for 30–60s on a cold rate-limit queue.
 api.get("/overhead", wrap(async (req, res) => { const lat = +req.query.lat, lon = +req.query.lon, r = Math.min(250, +req.query.r || 25); if (!isFinite(lat) || !isFinite(lon)) return res.status(400).json({ error: "lat/lon required" });
-  const l = (await adsb(`point/${lat.toFixed(3)}/${lon.toFixed(3)}/${r}`)).filter(a => a.lat).map(a => ({ ...a, nm: Math.round(hav({ lat, lon }, a) / 1.852 * 10) / 10 })).sort((a, b) => a.nm - b.nm); res.json({ list: l, source: "adsb.lol" }); }));
+  const key = `point/${lat.toFixed(3)}/${lon.toFixed(3)}/${r}`;
+  const st = ADSB_STALE[key];
+  const refresh = adsb(key); // keep the shared cache warm for the rest of the app
+  if (st && Date.now() - st.at < 600e3) { res.json({ ...packOverhead(lat, lon, st.j), stale: Date.now() - st.at > 45e3 }); refresh.catch(() => {}); return; }
+  try {
+    const list = await Promise.race([
+      refresh,
+      adsbQuick(key),
+      new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error("adsb-slow"), { slow: true })), 6000)),
+    ]);
+    res.json({ list: list.filter(a => a.lat).map(a => ({ ...a, nm: Math.round(hav({ lat, lon }, a) / 1.852 * 10) / 10 })).sort((a, b) => a.nm - b.nm), source: "adsb.lol" });
+  } catch (e) {
+    const st2 = ADSB_STALE[key];
+    if (st2) return res.json({ ...packOverhead(lat, lon, st2.j), stale: true });
+    refresh.catch(() => {});
+    res.json({ list: [], source: "adsb.lol", pending: true });
+  }
+}));
 // v43 airport live map: aircraft within 40 nm classed as ground / approach / departure / holding / overflight.
 // Holding = Skyline estimate from the turn pattern Skyline itself observed (track turned >=300° in <=12 min at steady altitude); needs a few polls.
 const TRK = {};
@@ -1770,7 +1800,7 @@ const dist = path.join(__dir, "../web/dist");
 app.use(express.static(dist, { setHeaders: (r, p) => { if (p.endsWith("sw.js") || p.endsWith(".html") || p.endsWith("version.json")) r.setHeader("cache-control", "no-cache"); } }));
 app.get(/^\/(?!api).*/, (q, r) => r.sendFile(path.join(dist, "index.html")));
 reg36(api, { getJSON, cached, wrap, STATE, saveState, board, todayLondon, adsb });
-reg63(api, { AP, cached, wrap, HIST });
+reg63(api, { AP, cached, wrap, HIST, warmAds: (lat, lon) => { if (lat && lon) adsb(`point/${(+lat).toFixed(3)}/${(+lon).toFixed(3)}/12`).catch(() => {}); } });
 reg62(api, { HIST, AP, cached });
 reg61(api, { HIST, AP, cached });
 reg60(api, { HIST, AP, AL, cached });
