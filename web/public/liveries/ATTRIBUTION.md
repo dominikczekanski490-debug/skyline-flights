@@ -35,3 +35,7 @@ PNGs were rasterised from the SVGs with CairoSVG; colours re-tinted at runtime. 
 - FRA: (no facade name sign drawn) https://commons.wikimedia.org/wiki/File:Frankfurt_Airport_Terminal_1_departures_entrance_(Quintin_Soloviev).png (2023-09-18, CC BY-SA 4.0) shows blue Fraport pylons with white concourse letters at the T1 kerb and no big name sign on the facade, so the made-up name sign is removed.
 - CFU: the official Fraport Greece photo (https://www.fraport-greece.com/en/airport-profiles/corfu.html, new terminal) shows grey panels and blue portal blocks with no name lettering on the facade, so the made-up name sign is removed. Yellow/black Fraport wayfinding appears inside only. The photo is used as a reference only (not licensed, not embedded).
 - Everything else: the airport name is a map label, not a photographed sign.
+
+## Fraport logo
+| Fraport_Logo_2019.svg/.png | https://commons.wikimedia.org/wiki/File:Fraport_Logo_2019.svg | Fraport AG | Public domain (Commons); trademark (sha1 f673301535a64061577ccc0f37579c05d101a0d7) |
+It's drawn on a white rooftop panel only at Fraport-operated airports: FRA plus the 14 Fraport Greece airports. The rooftop position was the user's request. The reference photos (Fraport Greece CFU page, FRA T1 2023) show no roof logo, so this isn't a replica of a real sign.
