@@ -15,8 +15,11 @@ const atr = (l, k) => { const m = l.match(new RegExp(" " + k + "=\"([^\"]*)\""))
 const want = t => t.aeroway || t.building || /terminal/i.test(t.name || "");
 async function osmApi(a) {
   const d = 0.03, dl = d / Math.cos(a.lat * Math.PI / 180), T = 0.02, N = new Map(), W = new Map(), R = new Map();
-  for (let y = a.lat - d; y < a.lat + d - 1e-9; y += T) for (let x = a.lon - dl; x < a.lon + dl - 1e-9; x += T) {
-    const r = await fetch(`https://api.openstreetmap.org/api/0.6/map?bbox=${x.toFixed(5)},${y.toFixed(5)},${Math.min(x + T, a.lon + dl).toFixed(5)},${Math.min(y + T, a.lat + d).toFixed(5)}`, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(60000) });
+  // OSM API /map rejects a bbox with >50,000 nodes (HTTP 400 "too many nodes") — dense towns next to an airport (e.g. Horley by LGW) hit it.
+  // Split such a tile into quadrants (down to ~0.0025°) instead of failing the whole airport.
+  const tile = async (x0, y0, x1, y1, dep = 0) => {
+    const r = await fetch(`https://api.openstreetmap.org/api/0.6/map?bbox=${x0.toFixed(5)},${y0.toFixed(5)},${x1.toFixed(5)},${y1.toFixed(5)}`, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(60000) });
+    if (r.status === 400 && dep < 3) { const msg = await r.text().catch(() => ""); if (/too many nodes|smaller area/i.test(msg)) { const xm = (x0 + x1) / 2, ym = (y0 + y1) / 2; for (const [a0, b0, a1, b1] of [[x0, y0, xm, ym], [xm, y0, x1, ym], [x0, ym, xm, y1], [xm, ym, x1, y1]]) await tile(a0, b0, a1, b1, dep + 1); return; } throw new Error("OSM API 400 " + msg.slice(0, 80)); }
     if (!r.ok) throw new Error("OSM API " + r.status);
     let cur = null, buf = ""; const dec = new TextDecoder();
     const line = l => { l = l.trim();
@@ -29,7 +32,8 @@ async function osmApi(a) {
       else if (l.startsWith("<tag")) cur.tags[atr(l, "k")] = atr(l, "v"); };
     for await (const ch of r.body) { buf += dec.decode(ch, { stream: true }); const ls = buf.split("\n"); buf = ls.pop(); ls.forEach(line); }
     line(buf);
-  }
+  };
+  for (let y = a.lat - d; y < a.lat + d - 1e-9; y += T) for (let x = a.lon - dl; x < a.lon + dl - 1e-9; x += T) await tile(x, y, Math.min(x + T, a.lon + dl), Math.min(y + T, a.lat + d));
   const geo = w => w?.nd.map(i => N.get(i)).filter(Boolean).map(([lon, lat]) => ({ lat, lon }));
   const out = [];
   for (const r of R.values()) if (r.tags.aeroway === "aerodrome" || r.tags.aeroway === "terminal" || (r.tags.building && /terminal/i.test(r.tags.name || ""))) out.push({ type: "relation", tags: r.tags, members: r.mem.map(([id, role]) => ({ role, geometry: geo(W.get(id)) })).filter(m => m.geometry?.length) });
