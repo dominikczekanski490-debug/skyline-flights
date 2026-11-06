@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 // Illustrative 2D side-view aircraft drawn in an airline's livery colours. Original drawings, not photos.
 // Livery entries are a simplified colour scheme (fuselage, belly, tail, engine, accent, motif), not exact artwork.
+// Photo evidence + licences: web/public/refs/ATTRIBUTION.md — no trademark logos; not exact liveries.
 type Motif = "band" | "circle" | "chevron" | "split" | "stripes" | "disc" | "flag" | "plain";
 type Liv = { n: string; f: string; b?: string; t: string; e: string; a?: string; m: Motif; tx?: string; ch?: string };
 const L: Record<string, Liv> = {
-  BA: { n: "British Airways", f: "#f4f5f7", b: "#1b2a5c", t: "#1b2a5c", e: "#1b2a5c", a: "#d22630", m: "flag", tx: "#1b2a5c" },
-  EZY: { n: "easyJet", f: "#ffffff", t: "#ff6600", e: "#ff6600", a: "#ff6600", m: "plain", tx: "#ff6600" }, U2: { n: "easyJet", f: "#ffffff", t: "#ff6600", e: "#ff6600", a: "#ff6600", m: "plain", tx: "#ff6600" },
-  FR: { n: "Ryanair", f: "#ffffff", b: "#073590", t: "#073590", e: "#073590", a: "#f1c933", m: "disc", tx: "#073590" }, RYR: { n: "Ryanair", f: "#ffffff", b: "#073590", t: "#073590", e: "#073590", a: "#f1c933", m: "disc", tx: "#073590" },
+  BA: { n: "British Airways", f: "#f7f8fa", b: "#075aaa", t: "#075aaa", e: "#075aaa", a: "#eb2226", m: "flag", tx: "#075aaa" }, // colours from BA Chatham refs (Commons); not exact livery artwork
+  EZY: { n: "easyJet", f: "#ffffff", b: "#ff6600", t: "#ff6600", e: "#ff6600", a: "#ff6600", m: "plain", tx: "#ff6600" }, U2: { n: "easyJet", f: "#ffffff", b: "#ff6600", t: "#ff6600", e: "#ff6600", a: "#ff6600", m: "plain", tx: "#ff6600" }, // orange from easyJet A320 Commons refs; no logo
+  FR: { n: "Ryanair", f: "#ffffff", b: "#073590", t: "#073590", e: "#073590", a: "#f7d045", m: "disc", tx: "#073590" }, RYR: { n: "Ryanair", f: "#ffffff", b: "#073590", t: "#073590", e: "#073590", a: "#f7d045", m: "disc", tx: "#073590" }, // navy/yellow from EI-DCL CC BY 2.0 ref; geometric disc ≠ harp logo
   W6: { n: "Wizz Air", f: "#ffffff", t: "#c6007e", e: "#2c2a6b", a: "#2c2a6b", m: "split", tx: "#c6007e" },
   VS: { n: "Virgin Atlantic", f: "#ffffff", t: "#da0530", e: "#5b2a86", a: "#5b2a86", m: "stripes", tx: "#da0530" },
   LH: { n: "Lufthansa", f: "#ffffff", b: "#ffffff", t: "#05164d", e: "#05164d", a: "#ffffff", m: "circle", tx: "#05164d" },

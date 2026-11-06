@@ -42,3 +42,8 @@
 [data-skin=eink] .a3sheet{background:#fff;color:#000;border:2px solid #000}[data-skin=eink] .a3rt span,[data-skin=eink] .a3sub{color:#333}[data-skin=eink] .a3line{background:#000}[data-skin=eink] .a3acars{color:#000;border-color:#000}[data-skin=eink] .a3msg{background:#eee;color:#000}
 [data-skin=eink] .a3btn,[data-skin=eink] .a3cmp,[data-skin=eink] .a3ttl,[data-skin=eink] .a3note{background:#fff;color:#000;border:2px solid #000;backdrop-filter:none}
 @media (prefers-reduced-motion:reduce){.a3cmp svg{transition:none}}
+
+.a3follow{position:absolute;left:10px;right:10px;top:80px;z-index:4;background:rgba(15,40,70,.88);color:#fff;border-radius:14px;padding:8px 12px;font-size:12px;pointer-events:none}
+.a3followbtn{display:block;width:100%;margin:8px 0 4px;padding:10px 12px;border:0;border-radius:12px;background:#1e2a3d;color:#fff;font:700 14px system-ui;text-align:center}
+.a3followbtn.on{background:var(--accent,#6aa8ff);color:#0a1220}
+[data-skin=eink] .a3followbtn{background:#fff;color:#000;border:2px solid #000}[data-skin=eink] .a3followbtn.on{background:#000;color:#fff}

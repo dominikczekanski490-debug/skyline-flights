@@ -151,13 +151,23 @@ function glbModel(t: string, f: string, cs: string, fallbackC1: string, fallback
   const L = f === "wide" ? 67 : f === "reg" ? 28 : 38; const sh = new THREE.Mesh(new THREE.PlaneGeometry(L * 1.05, L * 0.55), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: E ? 0.12 : 0.38, depthWrite: false, map: shadowTex() })); sh.position.set(0, -L * 0.05, 0.12); g.add(sh); return g;
 }
 
-// Glass curtain wall: blue glass panes with white mullions (one row per storey band), used as the terminal facade pattern.
-function curtain() { const W = 128, H = 128, c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d")!;
-  const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#d7ebfb"); g.addColorStop(0.3, "#7eb4e0"); g.addColorStop(0.65, "#3f78b8"); g.addColorStop(1, "#1e4a7a"); x.fillStyle = g; x.fillRect(0, 0, W, H);
-  x.fillStyle = "rgba(255,255,255,.32)"; x.beginPath(); x.moveTo(0, 0); x.lineTo(48, 0); x.lineTo(0, 56); x.fill();
+// Glass curtain wall: procedural panes for EVERY airport (not surveyed). Optional per-IATA tint when a verified Commons colour cue exists (see web/public/refs/ATTRIBUTION.md). Photos are NOT embedded.
+const GLASS_GENERIC: [string, string, string, string] = ["#d7ebfb", "#7eb4e0", "#3f78b8", "#1e4a7a"];
+// Reference-verified glass tints only (colour cues from attributed photos — not hand-modelled buildings). All other airports use GLASS_GENERIC.
+const GLASS_REF: Record<string, [string, string, string, string]> = {
+  MAN: ["#e8f4fc", "#9ec9e8", "#4a8fc4", "#1f567f"], // Commons CC BY 4.0 T1/T2 refs
+  FRA: ["#dfe8f2", "#8a9ab8", "#4a678a", "#243a55"], // Commons colour cue only (SA — not embedded)
+  CFU: ["#f2f7fc", "#a8c8e0", "#5a8fb8", "#2a5a82"], // colour cue only (GR FoP + SA — not embedded)
+};
+function curtain(iata?: string) {
+  const W = 128, H = 128, c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d")!;
+  const cols = (iata && GLASS_REF[iata]) || GLASS_GENERIC;
+  const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, cols[0]); g.addColorStop(0.3, cols[1]); g.addColorStop(0.65, cols[2]); g.addColorStop(1, cols[3]); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.fillStyle = "rgba(255,255,255,.34)"; x.beginPath(); x.moveTo(0, 0); x.lineTo(48, 0); x.lineTo(0, 56); x.fill();
   x.fillStyle = "#f7f9fc"; for (let i = 0; i < W; i += 14) x.fillRect(i, 0, 2.5, H); for (let j = 0; j < H; j += 28) x.fillRect(0, j, W, 2.5);
   x.fillStyle = "rgba(10,30,60,.22)"; for (let i = 0; i < W; i += 14) for (let j = 0; j < H; j += 28) x.fillRect(i + 3, j + 5, 8, 18);
-  const d = x.getImageData(0, 0, W, H); return { width: W, height: H, data: new Uint8Array(d.data.buffer) }; }
+  const d = x.getImageData(0, 0, W, H); return { width: W, height: H, data: new Uint8Array(d.data.buffer) };
+}
 let _font: any = null; const font = () => _font ||= new FontLoader().parse(helvBold as any);
 const ascii = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[–—]/g, "-").replace(/[^\x20-\x7e]/g, " ").replace(/\s+/g, " ").trim();
 // Airport name as real 3D extruded letters, mounted on the main terminal's airside facade (text only, no logos).
@@ -231,6 +241,8 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
   const el = useRef<HTMLDivElement>(null), mref = useRef<maplibregl.Map | undefined>(undefined), fx = useRef<Record<string, Fix>>({}), trails = useRef<Record<string, [number, number][]>>({});
   const [ok] = useState(webgl); const [err, setErr] = useState(""); const [info, setInfo] = useState<any>(null); const [n, setN] = useState<number | null>(null);
   const [sel, setSel] = useState<any>(null); const [flat, setFlat] = useState(false); const [brg, setBrg] = useState(0); const [lay, setLay] = useState(false); const [bld, setBld] = useState(true); const [sat, setSat] = useState(false); const [hist, setHist] = useState(false); const [load, setLoad] = useState("Loading OpenStreetMap shapes…"); const [looking, setLooking] = useState("");
+  const [follow, setFollow] = useState(false); const [followSt, setFollowSt] = useState(""); // following | waiting | stale | lost
+  const followHex = useRef<string | null>(null); const followAt = useRef(0);
   useEffect(() => {
     if (!ok || !el.current) return; let stop = false;
     const bg = css("--bg", "#0b1220"), fg = css("--fg", "#e8eefc"), accent = eink() ? "#000" : css("--accent", "#6aa8ff");
@@ -260,7 +272,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
             { id: "twrcab", type: "fill-extrusion", source: "apt", filter: ["==", ["get", "kind"], "tower"], paint: { "fill-extrusion-color": eink() ? "#000" : "#2c4f6e", "fill-extrusion-base": ["-", ["get", "h"], 6], "fill-extrusion-height": ["-", ["get", "h"], 1], "fill-extrusion-opacity": 1 } },
             { id: "terml", type: "symbol", source: "apt", minzoom: 14.5, filter: ["==", ["get", "kind"], "lblpt"], layout: { "text-field": ["get", "label"], "text-size": ["interpolate", ["linear"], ["zoom"], 13, 11, 17, 17], "text-font": ["Open Sans Bold"], "text-max-width": 12, "symbol-z-order": "source" }, paint: { "text-color": eink() ? "#000" : dark ? "#fff" : "#1b2a4a", "text-halo-color": eink() ? "#fff" : dark ? "#111" : "#fff", "text-halo-width": 2.5 } }] } });
     } catch (e: any) { setErr("3D view could not start on this device (" + (e?.message || "WebGL error") + ")."); return; }
-    mref.current = map; (window as any).__a3 = map; (window as any).__a3fx = fx.current; map.on("error", e => console.warn("apt3d", e?.error?.message)); map.on("styleimagemissing", (e: any) => { if (e.id === "cw" && !map.hasImage("cw")) map.addImage("cw", curtain(), { pixelRatio: 1 }); }); map.on("rotate", () => setBrg(map.getBearing()));
+    mref.current = map; (window as any).__a3 = map; (window as any).__a3fx = fx.current; map.on("error", e => console.warn("apt3d", e?.error?.message)); map.on("styleimagemissing", (e: any) => { if (e.id === "cw" && !map.hasImage("cw")) map.addImage("cw", curtain(iata), { pixelRatio: 1 }); }); map.on("rotate", () => setBrg(map.getBearing()));
     // three.js custom layer
     let sign: THREE.Group | null = null; let scene: THREE.Scene, cam: THREE.Camera, ren: THREE.WebGLRenderer, origin: maplibregl.MercatorCoordinate, mpu = 1;
     const layer: any = { id: "planes3d", type: "custom", renderingMode: "3d",
@@ -272,7 +284,17 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
           const c = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], 0); const tx = (c.x - origin.x) / mpu, ty = -(c.y - origin.y) / mpu, tz = a.alt === "ground" ? 0 : Math.min(+a.alt || 0, 6000) * 0.3048;
           if (still()) { f.x = tx; f.y = ty; f.z = tz; } else { f.x += (tx - f.x) * 0.2; f.y += (ty - f.y) * 0.2; f.z += (tz - f.z) * 0.2; }
           f.obj.position.set(f.x, f.y, f.z); f.obj.scale.setScalar(k); f.obj.rotation.z = -((a.track ?? 0) * Math.PI / 180);
-          if (f.mk) { const ll = new maplibregl.MercatorCoordinate(origin.x + f.x * mpu, origin.y - f.y * mpu, 0).toLngLat(); f.mk.setLngLat(ll); } }
+          if (f.mk) { const ll = new maplibregl.MercatorCoordinate(origin.x + f.x * mpu, origin.y - f.y * mpu, 0).toLngLat(); f.mk.setLngLat(ll); }
+          // Follow: camera tracks this plane's position derived from the last real ADS-B report (no invented path when stale/lost)
+          if (followHex.current && f.a.hex === followHex.current && mref.current) {
+            const age = now - f.t;
+            if (age > 45000) { /* stale — leave camera; status updated in poll */ }
+            else {
+              const ll = new maplibregl.MercatorCoordinate(origin.x + f.x * mpu, origin.y - f.y * mpu, 0).toLngLat();
+              mref.current.jumpTo({ center: [ll.lng, ll.lat], bearing: a.track != null ? a.track - 20 : mref.current.getBearing() });
+            }
+          }
+        }
         if (sign) { sign.scale.setScalar(Math.min(3, Math.max(1, Math.pow(2, (16.2 - z) * 0.7)))); const bb = mref.current ? mref.current.getBearing() * Math.PI / 180 : 0, sn = sign.userData.n; if (sn) sign.visible = Math.sin(bb) * sn[0] + Math.cos(bb) * sn[1] < 0.15; }
         const M = new THREE.Matrix4().fromArray(o.defaultProjectionData.mainMatrix); const T = new THREE.Matrix4().makeTranslation(origin.x, origin.y, origin.z).scale(new THREE.Vector3(mpu, -mpu, mpu));
         cam.projectionMatrix = M.multiply(T); ren.resetState(); try { ren.render(scene, cam); } catch (e: any) { if (!(window as any).__a3e) { (window as any).__a3e = 1; console.error('a3 render', e?.message); } } if (moving) map.triggerRepaint(); } };
@@ -315,6 +337,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
         (window as any).__a3poll = { ...(window as any).__a3poll, list: L.length, sample: L[0]?.flight, pending: !!r.pending };
         if (r.pending && L.length === 0) {
           setLooking("Looking for aircraft near this airport…");
+          if (followHex.current) setFollowSt("waiting");
           return; // keep n null so the looking banner stays up
         }
         setN(L.length);
@@ -322,6 +345,15 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
         sync(L);
         (window as any).__a3poll = { ...(window as any).__a3poll, fx: Object.keys(fx.current).length, synced: true };
         setSel((s: any) => s ? { ...(fx.current[s.hex]?.a || s) } : s);
+        // Follow plane: only real ADS-B updates; clear inventing when lost/stale
+        if (followHex.current) {
+          const f = fx.current[followHex.current];
+          if (!f) { setFollowSt("lost"); setFollow(false); followHex.current = null; }
+          else if (r.stale || r.pending) { setFollowSt("stale"); followAt.current = f.t; }
+          else { setFollowSt("following"); followAt.current = f.t;
+            if (mref.current) mref.current.easeTo({ center: [f.a.lon, f.a.lat], duration: still() ? 0 : 400, bearing: f.a.track != null ? f.a.track - 20 : mref.current.getBearing() });
+          }
+        }
         // First time we get planes: always frame the nearest ground/low aircraft (facade cam often points at empty landside)
         if (!sawPlanes && L.length) {
           sawPlanes = true;
@@ -343,7 +375,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
       const glbReady = Promise.all(["B737_nologo", "A320_nologo", "A350_nologo"].map(loadGlb)).then(() => { if (!stop) poll(); });
       try { const j = await api("/apt3d?iata=" + iata); if (stop) return; if (j.error) throw new Error(j.error); setInfo(j); ctr = j.center; origin = maplibregl.MercatorCoordinate.fromLngLat(j.center, 0); mpu = origin.meterInMercatorCoordinateUnits();
         (map.getSource("apt") as any).setData(j); (window as any).__a3info = j; const toL = (p: number[]): [number, number] => { const c = maplibregl.MercatorCoordinate.fromLngLat(p as any, 0); return [(c.x - origin.x) / mpu, -(c.y - origin.y) / mpu]; }; const fc = scene ? facade(j, toL) : null; let cam0: any = null;
-        if (fc) { const SIGN: Record<string, string> = { LPL: "LIVERPOOL JOHN LENNON AIRPORT", MAN: "MANCHESTER AIRPORT", CFU: "CORFU IOANNIS KAPODISTRIAS", FRA: "FRANKFURT AIRPORT", STN: "LONDON STANSTED AIRPORT", DUB: "DUBLIN AIRPORT", LHR: "HEATHROW AIRPORT", ATL: "HARTSFIELD-JACKSON ATLANTA", AMS: "AMSTERDAM SCHIPHOL" }; const txt = (SIGN[iata] || (j.sign || j.name).replace(/["“”(].*$/, "").replace(/\s+/g, " ").trim()).toUpperCase(); const col = eink() ? "#000000" : iata === "LPL" ? "#d6001c" : "#ffffff"; let size = Math.min(14, Math.max(4, fc.h * 0.4)); let r = facadeSign(txt, col, size); if (r.w > fc.L * 0.92) { size = Math.max(4, size * fc.L * 0.92 / r.w); r = facadeSign(txt, col, size); }
+        if (fc) { const SIGN: Record<string, string> = { LPL: "LIVERPOOL JOHN LENNON AIRPORT", MAN: "MANCHESTER AIRPORT", CFU: "CORFU IOANNIS KAPODISTRIAS", FRA: "FRANKFURT AIRPORT", STN: "LONDON STANSTED AIRPORT", DUB: "DUBLIN AIRPORT", LHR: "HEATHROW AIRPORT", ATL: "HARTSFIELD-JACKSON ATLANTA", AMS: "AMSTERDAM SCHIPHOL" }; const txt = (SIGN[iata] || (j.sign || j.name).replace(/["“”(].*$/, "").replace(/\s+/g, " ").trim()).toUpperCase(); const col = eink() ? "#000000" : iata === "LPL" ? "#d6001c" : "#ffffff"; /* white 3D name on every airport; LPL red accent only */ let size = Math.min(14, Math.max(4, fc.h * 0.4)); let r = facadeSign(txt, col, size); if (r.w > fc.L * 0.92) { size = Math.max(4, size * fc.L * 0.92 / r.w); r = facadeSign(txt, col, size); }
           const mx = (fc.a[0] + fc.b[0]) / 2 + fc.n[0] * 0.8, my = (fc.a[1] + fc.b[1]) / 2 + fc.n[1] * 0.8; const onWall = fc.h > size * 1.6; r.o.position.set(mx + fc.n[0] * 4.2, my + fc.n[1] * 4.2, onWall ? fc.h - size * 1.35 : fc.h + 1.4); r.o.rotation.z = Math.atan2(fc.n[1], fc.n[0]) + Math.PI / 2; sign = r.o; sign.userData.n = fc.n; scene.add(sign);
           // dev-only render check (console hook, never shown to users): draws a model at the map centre so liveries can be inspected when no live plane is parked
           (window as any).__a3demo = (type: string, icao: string, name: string) => { const q = [mx + fc.n[0] * 90, my + fc.n[1] * 90]; const o = glbModel(type, "nb", icao, "#073590", name) || model("narrow", "#073590", "#f1c933"); o.position.set(q[0], q[1], 0); o.rotation.z = 0.6; scene.add(o); const ll = new maplibregl.MercatorCoordinate(origin.x + q[0] * mpu, origin.y - q[1] * mpu, 0).toLngLat(); mref.current!.jumpTo({ center: ll }); return true; }; scene.add(aptExtras(fc, j, toL, eink())); (window as any).__a3sign = { txt, size, onWall, L: fc.L };
@@ -353,7 +385,9 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     const t = setInterval(poll, 5000);
     const clk = (e: any) => { let best: any = null, bd = 34; for (const f of Object.values(fx.current)) { if (!f.mk) continue; const p = map.project(f.mk.getLngLat()); const d = Math.hypot(p.x - e.point.x, p.y - e.point.y); if (d < bd) { bd = d; best = f.a; } } if (best) setSel({ ...best }); };
     map.on("click", clk);
-    return () => { stop = true; clearInterval(t); for (const f of Object.values(fx.current)) f.mk?.remove(); fx.current = {}; trails.current = {}; map.remove(); };
+    const stopFollow = () => { if (!followHex.current) return; followHex.current = null; setFollow(false); setFollowSt(""); };
+    map.on("dragstart", stopFollow);
+    return () => { stop = true; clearInterval(t); map.off("dragstart", stopFollow); for (const f of Object.values(fx.current)) f.mk?.remove(); fx.current = {}; trails.current = {}; map.remove(); };
   }, [ok, iata]);
   useEffect(() => { const m = mref.current; if (!m || !m.isStyleLoaded()) return; m.easeTo({ pitch: flat ? 0 : 60, duration: still() ? 0 : 700 }); }, [flat]);
   useEffect(() => { const m = mref.current; if (!m) return; const v = (id: string, on: boolean) => { try { m.setLayoutProperty(id, "visibility", on ? "visible" : "none"); } catch { } };
@@ -368,12 +402,16 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     {lay && <div className="a3lay card sm"><label><input type="checkbox" checked={bld} onChange={e => setBld(e.target.checked)} /> 3D buildings</label><label><input type="checkbox" checked={sat} onChange={e => setSat(e.target.checked)} /> Satellite photo</label><label><input type="checkbox" checked={hist} onChange={e => setHist(e.target.checked)} /> Trails (since you opened this)</label></div>}
     <button className="a3btn a3flat" onClick={() => setFlat(!flat)}>{flat ? "3D" : "2D"}</button>
     {!sel && looking && (n == null || n === 0) && <div className="a3load card sm">{looking}{n != null ? ` (${n})` : ""}</div>}
-    {!sel && <div className="a3note sm">{info ? <>{info.features.length} OpenStreetMap shapes{info.counts?.terminal ? ` · ${info.counts.terminal} terminal${info.counts.terminal > 1 ? "s" : ""}` : " · no terminal mapped in OSM"}</> : null}{n != null && <> · {n} live aircraft on or near the airport (ADS-B)</>}<br /><span className="faint">Planes: 3D models by amvlab (CC BY 4.0, recoloured by Skyline with airline colours and name — not exact liveries). Tap a plane or its label.</span></div>}
-    {sel && <Sheet a={sel} iata={iata} onClose={() => setSel(null)} />}
+    {!sel && <div className="a3note sm">{info ? <>{info.features.length} OpenStreetMap shapes{info.counts?.terminal ? ` · ${info.counts.terminal} terminal${info.counts.terminal > 1 ? "s" : ""}` : " · no terminal mapped in OSM"}{GLASS_REF[iata] ? " · glass tint from verified photo refs" : " · generic glass (OSM geometry)"}</> : null}{n != null && <> · {n} live aircraft on or near the airport (ADS-B)</>}<br /><span className="faint">Buildings = OSM extrusions for every airport (not surveyed). Planes: amvlab models (CC BY 4.0) with airline colours and name — not exact liveries. Follow tracks live ADS-B only. Tap a plane or its label.</span></div>}
+    {followSt && (follow || followSt === "lost") && <div className="a3follow card sm" role="status">{followSt === "following" ? "Following live ADS-B position…" : followSt === "waiting" ? "Waiting for live ADS-B…" : followSt === "stale" ? "ADS-B data is stale — showing last known position" : followSt === "lost" ? "Lost contact with this aircraft" : followSt}</div>}
+    {sel && <Sheet a={sel} iata={iata} follow={follow && followHex.current === sel.hex} followSt={followSt}
+      onFollow={() => { if (followHex.current === sel.hex) { followHex.current = null; setFollow(false); setFollowSt(""); }
+        else { followHex.current = sel.hex; setFollow(true); setFollowSt("following"); if (mref.current) mref.current.easeTo({ center: [sel.lon, sel.lat], zoom: Math.max(mref.current.getZoom(), 16.2), duration: still() ? 0 : 600 }); } }}
+      onClose={() => { setSel(null); }} />}
   </div>, document.body);
 }
 
-function Sheet({ a, iata, onClose }: { a: any; iata: string; onClose: () => void }) {
+function Sheet({ a, iata, onClose, follow, followSt, onFollow }: { a: any; iata: string; onClose: () => void; follow?: boolean; followSt?: string; onFollow?: () => void }) {
   const cs = (a.flight || "").trim(); const l = liv(cs); const [route, setRoute] = useState<any>(undefined); const [ac, setAc] = useState<any>(null); const [open, setOpen] = useState(false);
   useEffect(() => { setRoute(undefined); setAc(null); setOpen(false); if (cs) api("/callsign/" + cs).then(r => setRoute(r.route || null)).catch(() => setRoute(null)); else setRoute(null);
     api("/acars/" + a.hex).then(setAc).catch(() => setAc({ error: true })); }, [a.hex]);
@@ -382,6 +420,7 @@ function Sheet({ a, iata, onClose }: { a: any; iata: string; onClose: () => void
   return <div className="a3sheet"><div className="a3grab" />
     <div className="row g8" style={{ alignItems: "center" }}><span className="a3logo" style={{ background: l ? l[0] : "#555", color: l ? l[1] : "#fff" }}>{cs.slice(0, 3) || "?"}</span><b className="a3cs">{cs || a.reg || a.hex.toUpperCase()}</b><span className="a3sub">{a.reg && a.reg !== cs ? a.reg : ""}</span><span className="a3sub">{a.type || ""}</span><button className="a3x" onClick={onClose} aria-label="Close">✕</button></div>
     <div className="row between a3mid"><span className="muted">{l ? l[2] : a.desc || "Airline not known"}</span><span><b className="a3big">{a.gs != null ? Math.round(a.gs) : "–"}</b> <span className="muted sm">kt</span> &nbsp; <b className="a3big">{gnd ? "GND" : a.alt != null ? a.alt + " ft" : "–"}</b></span></div>
+    <button type="button" className={"a3followbtn" + (follow ? " on" : "")} onClick={onFollow} aria-pressed={!!follow}>{follow ? "Following · drag map to stop" : "Follow plane"}{follow && followSt === "stale" ? " · stale" : follow && followSt === "waiting" ? " · waiting" : ""}</button>
     {route === undefined ? <div className="muted sm a3rt">Looking up route…</div> : route ? <div className="a3rt row between"><div><b>{route.origin?.iata_code}</b><span>{route.origin?.municipality || route.origin?.name}</span></div><div className="a3line" /><div style={{ textAlign: "right" }}><b>{route.destination?.iata_code}</b><span>{route.destination?.municipality || route.destination?.name}</span></div></div> : <div className="muted sm a3rt">No route on file for this callsign.</div>}
     {route && <div className="faint sm">Route for this callsign from adsbdb — airlines reuse callsigns, so it can be out of date.</div>}
     <button className="a3acars" onClick={() => setOpen(!open)} disabled={!typed.length}><span className="tag">ACARS</span> {ac == null ? "checking…" : ac.error ? "couldn't reach airframes.io" : typed.length ? <>{typed.length} typed message{typed.length > 1 ? "s" : ""} · {ago(typed[0].t)}</> : msgs.length ? `${msgs.length} data-only message${msgs.length > 1 ? "s" : ""}, no typed text` : "no messages heard recently"}<span style={{ marginLeft: "auto" }}>{typed.length ? (open ? "▴" : "▾") : ""}</span></button>
