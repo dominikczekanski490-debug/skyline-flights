@@ -203,7 +203,10 @@ export const BUILD = typeof __BUILD__ !== "undefined" ? __BUILD__ : "dev";
 export async function checkUpdate(): Promise<string | null> { try { const r = await fetch("/version.json", { cache: "no-store" }); const j = await r.json(); return j.build && j.build !== BUILD ? j.build : null; } catch { return null; } }
 export async function applyUpdate() { const reg = await navigator.serviceWorker?.getRegistration("/"); await reg?.update().catch(() => {}); const ks = await caches?.keys?.().catch(() => []) || []; await Promise.all(ks.map(k => caches.delete(k))); location.reload(); }
 export function UpdateBanner() { const [nb, setNb] = useState<string | null>(null);
-  useEffect(() => { const go = () => checkUpdate().then(setNb); go(); const f = () => document.visibilityState === "visible" && go(); document.addEventListener("visibilitychange", f); return () => document.removeEventListener("visibilitychange", f); }, []);
+  useEffect(() => { const go = () => checkUpdate().then(setNb); go(); const f = () => document.visibilityState === "visible" && go(); document.addEventListener("visibilitychange", f);
+    // A hash-only link (e.g. #board=CFU&apt3d=CFU) never reloads the page, so an open tab kept running the old JS after a deploy. Reload onto the new build then.
+    const h = () => checkUpdate().then(b => { if (b) applyUpdate(); else setNb(null); }); window.addEventListener("hashchange", h);
+    return () => { document.removeEventListener("visibilitychange", f); window.removeEventListener("hashchange", h); }; }, []);
   if (!nb) return null; return <div className="warm press" onClick={applyUpdate}><div><b>New version of Skyline available</b><small>Tap to update (you have {BUILD}, latest is {nb})</small></div></div>; }
 // ---------- Notification checklist ----------
 export function PushChecklist({ refresh }: { refresh?: number }) {
