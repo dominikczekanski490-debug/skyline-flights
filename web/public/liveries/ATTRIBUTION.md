@@ -21,6 +21,9 @@ PNGs were rasterised from the SVGs with CairoSVG; colours re-tinted at runtime. 
 | Jet2holidays (G-HLYI) | https://commons.wikimedia.org/wiki/File:G-HLYI-Jet2holidays-EGCC.jpg | Oscaracton | 2026-05-17 | CC BY 4.0 |
 | Jet2holidays (G-JZBP) | https://commons.wikimedia.org/wiki/File:G-JZBP-Jet2holidays-EGCC.jpg | Oscaracton | 2026-05-17 | CC BY 4.0 |
 
+## Not supported
+- A350: its paint-map layout isn't verified, so there are no logo decals or tail marks, just the plain-text name.
+
 ## Approximations (drawn by Skyline, not the real artwork)
 - BA fin: PD Union Flag geometry standing in for the Chatham Dockyard tail.
 - Jet2holidays fin: simple sun rays on blue; Jet2 titles are plain text (no licensed Jet2 logo file found on Commons).
@@ -29,6 +32,6 @@ PNGs were rasterised from the SVGs with CairoSVG; colours re-tinted at runtime. 
 
 ## Airport signs
 - LPL: red facade lettering colour from https://commons.wikimedia.org/wiki/File:Liverpool_John_Lennon_Airport_terminal_building_-_geograph.org.uk_-_6207868.jpg (2019-06-28, CC BY-SA 2.0).
-- FRA: https://commons.wikimedia.org/wiki/File:Frankfurt_Airport_Terminal_1_departures_entrance_(Quintin_Soloviev).png (2023-09-18, CC BY-SA 4.0) shows blue Fraport wayfinding pylons, but no facade name sign → no override.
-- CFU: the only photos found (2014, CC BY-SA 3.0) are from before Fraport Greece took over (2017) → no Fraport branding applied.
+- FRA: (no facade name sign drawn) https://commons.wikimedia.org/wiki/File:Frankfurt_Airport_Terminal_1_departures_entrance_(Quintin_Soloviev).png (2023-09-18, CC BY-SA 4.0) shows blue Fraport pylons with white concourse letters at the T1 kerb and no big name sign on the facade, so the made-up name sign is removed.
+- CFU: the official Fraport Greece photo (https://www.fraport-greece.com/en/airport-profiles/corfu.html, new terminal) shows grey panels and blue portal blocks with no name lettering on the facade, so the made-up name sign is removed. Yellow/black Fraport wayfinding appears inside only. The photo is used as a reference only (not licensed, not embedded).
 - Everything else: the airport name is a map label, not a photographed sign.
