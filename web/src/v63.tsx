@@ -242,7 +242,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
   const [ok] = useState(webgl); const [err, setErr] = useState(""); const [info, setInfo] = useState<any>(null); const [n, setN] = useState<number | null>(null);
   const [sel, setSel] = useState<any>(null); const [flat, setFlat] = useState(false); const [brg, setBrg] = useState(0); const [lay, setLay] = useState(false); const [bld, setBld] = useState(true); const [sat, setSat] = useState(false); const [hist, setHist] = useState(false); const [load, setLoad] = useState("Loading OpenStreetMap shapes…"); const [looking, setLooking] = useState("");
   const [follow, setFollow] = useState(false); const [followSt, setFollowSt] = useState(""); // following | waiting | stale | lost
-  const followHex = useRef<string | null>(null); const followAt = useRef(0);
+  const followHex = useRef<string | null>(null); const followAt = useRef(0); const userCam = useRef(/a3view=terminal/.test(location.hash)); // user chose the terminal overview: never auto-jump to a plane
   useEffect(() => {
     if (!ok || !el.current) return; let stop = false;
     const bg = css("--bg", "#0b1220"), fg = css("--fg", "#e8eefc"), accent = eink() ? "#000" : css("--accent", "#6aa8ff");
@@ -357,11 +357,13 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
         // First time we get planes: always frame the nearest ground/low aircraft (facade cam often points at empty landside)
         if (!sawPlanes && L.length) {
           sawPlanes = true;
+          if (userCam.current) { /* keep terminal overview */ } else {
           const gnd = L.filter((a: any) => a.alt === "ground" || (+a.alt || 99999) < 3500);
           const pick = (gnd.length ? gnd : L).slice().sort((a: any, b: any) => (a.nm || 0) - (b.nm || 0))[0];
           if (pick && mref.current) {
             mref.current.easeTo({ center: [pick.lon, pick.lat], zoom: 16.2, bearing: pick.track != null ? pick.track - 30 : mref.current.getBearing(), pitch: flat ? 0 : 56, duration: still() ? 0 : 1100 });
           }
+        }
         }
       } catch (e: any) {
         (window as any).__a3poll = { ...(window as any).__a3poll, err: String(e?.message || e) };
@@ -385,7 +387,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     const t = setInterval(poll, 5000);
     const clk = (e: any) => { let best: any = null, bd = 34; for (const f of Object.values(fx.current)) { if (!f.mk) continue; const p = map.project(f.mk.getLngLat()); const d = Math.hypot(p.x - e.point.x, p.y - e.point.y); if (d < bd) { bd = d; best = f.a; } } if (best) setSel({ ...best }); };
     map.on("click", clk);
-    const stopFollow = () => { if (!followHex.current) return; followHex.current = null; setFollow(false); setFollowSt(""); };
+    const stopFollow = () => { userCam.current = true; if (!followHex.current) return; followHex.current = null; setFollow(false); setFollowSt(""); };
     map.on("dragstart", stopFollow);
     return () => { stop = true; clearInterval(t); map.off("dragstart", stopFollow); for (const f of Object.values(fx.current)) f.mk?.remove(); fx.current = {}; trails.current = {}; map.remove(); };
   }, [ok, iata]);
@@ -398,7 +400,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     <div className="a3top"><button className="a3btn" onClick={onClose} aria-label="Back">‹</button><div className="a3ttl"><b>{info?.name || iata}</b><span>{iata} · 3D · BETA</span></div>
       <button className="a3cmp" aria-label="Point north" onClick={() => mref.current?.easeTo({ bearing: 0, duration: still() ? 0 : 500 })}><svg viewBox="0 0 40 40" style={{ transform: `rotate(${-brg}deg)` }}><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" strokeOpacity=".4" /><path d="M20 5 25 20H15z" fill="#e5484d" /><path d="M20 35 15 20h10z" fill="currentColor" opacity=".5" /><text x="20" y="15" fontSize="7" textAnchor="middle" fill="#fff">N</text></svg></button></div>
     {load && <div className="a3load card sm">{load}</div>}
-    <div className="a3side"><button className={"a3btn" + (hist ? " on" : "")} aria-label="History trails" onClick={() => setHist(!hist)}>⟲</button><button className="a3btn" aria-label="Fit airport" onClick={() => { const b = info?.focus || info?.bbox; b && mref.current && fit(mref.current, b, false); }}>➤</button><button className={"a3btn" + (lay ? " on" : "")} aria-label="Layers" onClick={() => setLay(!lay)}>≋</button></div>
+    <div className="a3side"><button className={"a3btn" + (hist ? " on" : "")} aria-label="History trails" onClick={() => setHist(!hist)}>⟲</button><button className="a3btn" aria-label="Terminal overview" title="Terminal overview" onClick={() => { userCam.current = true; followHex.current = null; setFollow(false); setFollowSt(""); const b = info?.focus || info?.bbox; b && mref.current && fit(mref.current, b, false); }}>➤</button><button className={"a3btn" + (lay ? " on" : "")} aria-label="Layers" onClick={() => setLay(!lay)}>≋</button></div>
     {lay && <div className="a3lay card sm"><label><input type="checkbox" checked={bld} onChange={e => setBld(e.target.checked)} /> 3D buildings</label><label><input type="checkbox" checked={sat} onChange={e => setSat(e.target.checked)} /> Satellite photo</label><label><input type="checkbox" checked={hist} onChange={e => setHist(e.target.checked)} /> Trails (since you opened this)</label></div>}
     <button className="a3btn a3flat" onClick={() => setFlat(!flat)}>{flat ? "3D" : "2D"}</button>
     {!sel && looking && (n == null || n === 0) && <div className="a3load card sm">{looking}{n != null ? ` (${n})` : ""}</div>}
