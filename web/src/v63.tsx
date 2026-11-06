@@ -78,8 +78,15 @@ function shadowTex() { if (_st) return _st; const c = document.createElement("ca
 // Changed by Skyline: the model's livery colour is recoloured to the airline's colours and the airline name is painted on.
 const GLB: Record<string, Promise<THREE.Group | null>> = {}; const GOT: Record<string, THREE.Group | null> = {};
 const glbFile = (t = "", f: string) => f === "wide" ? "A350_nologo" : /^A3/.test(t) || f === "reg" ? "A320_nologo" : "B737_nologo";
+// Public-domain (Wikimedia Commons, text-logo/simple-geometry PD) airline wordmarks, rasterised from SVG — see /liveries/ATTRIBUTION.md
+const LOGO_SRC: Record<string, string> = { FR: "Ryanair_wordmark", EZY: "EasyJet_logo", BA: "BRITISH_AIRWAYS_logo", LH: "Lufthansa_Logo_2018" };
+const LOGO: Record<string, HTMLImageElement> = {};
+const logosReady = Promise.all(Object.entries(LOGO_SRC).map(([k, f]) => new Promise<void>(res => { const im = new Image(); im.onload = () => { LOGO[k] = im; res(); }; im.onerror = () => res(); im.src = `/liveries/${f}.png`; setTimeout(res, 6000); })));
+// Jet2 sub-brands are both callsign EXS; scheme only asserted for registrations seen in dated Commons photos (see ATTRIBUTION.md).
+const JET2_REG: Record<string, "com" | "hol"> = { "G-GDFX": "com", "G-SUNS": "com", "G-HLYI": "hol", "G-JZBP": "hol" };
+function tint(im: CanvasImageSource, w: number, h: number, col: string, sx = 0, sy = 0, sw?: number, sh?: number) { const c = document.createElement("canvas"); c.width = Math.max(1, w | 0); c.height = Math.max(1, h | 0); const x = c.getContext("2d")!; const I: any = im; x.drawImage(im, sx, sy, sw ?? I.width, sh ?? I.height, 0, 0, c.width, c.height); x.globalCompositeOperation = "source-in"; x.fillStyle = col; x.fillRect(0, 0, c.width, c.height); return c; }
 function loadGlb(n: string) {
-  return GLB[n] ||= new Promise(r => {
+  return GLB[n] ||= new Promise(async r => { await logosReady;
     let done = false; const finish = (v: THREE.Group | null) => { if (done) return; done = true; GOT[n] = v; r(v); };
     const t = setTimeout(() => finish(null), 10000); // iOS Safari / flaky SW must not hang 3D forever
     try {
@@ -89,7 +96,7 @@ function loadGlb(n: string) {
 }
 const TEX: Record<string, THREE.Texture> = {};
 const MIR = 1;
-// Recolour the logo-free amvlab atlas into a simplified airline scheme (original Skyline paint — not exact liveries, no trademark logos).
+// Recolour the logo-free amvlab atlas into a simplified airline scheme. RYR/EZY/BA/LH get real public-domain wordmark decals; other airlines get plain-text names. Simplified schemes, not exact liveries.
 function hexRgb(h: string) { const x = (h || "#888888").replace("#", ""); return [parseInt(x.slice(0, 2), 16) || 0, parseInt(x.slice(2, 4), 16) || 0, parseInt(x.slice(4, 6), 16) || 0] as [number, number, number]; }
 function paintMotif(x: CanvasRenderingContext2D, m: string, cx: number, cy: number, s: number, col: string, acc: string) {
   x.save(); x.translate(cx, cy); x.fillStyle = col; x.strokeStyle = acc; x.lineWidth = Math.max(2, s * 0.06);
@@ -103,8 +110,8 @@ function paintMotif(x: CanvasRenderingContext2D, m: string, cx: number, cy: numb
   else { x.beginPath(); x.arc(0, 0, s * 0.35, 0, Math.PI * 2); x.fill(); }
   x.restore();
 }
-function livTex(n: string, src: any, lv: { f: string; b?: string; t: string; e: string; a?: string; m?: string; tx?: string; n?: string }, name: string) {
-  const key = n + (lv.t || "") + (lv.b || "") + (lv.a || "") + name + (lv.m || ""); if (TEX[key]) return TEX[key];
+function livTex(n: string, src: any, lv: { f: string; b?: string; t: string; e: string; a?: string; m?: string; tx?: string; n?: string }, name: string, brand = "") {
+  const key = n + (lv.t || "") + (lv.b || "") + (lv.a || "") + name + (lv.m || "") + brand; if (TEX[key]) return TEX[key];
   const im = src.image; const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; const x = c.getContext("2d")!; x.drawImage(im, 0, 0);
   const d = x.getImageData(0, 0, c.width, c.height), p = d.data; const W = c.width / 1024;
   const [fR, fG, fB] = hexRgb(lv.f || "#ffffff"), [bR, bG, bB] = hexRgb(lv.b || lv.f || "#ffffff"), [tR, tG, tB] = hexRgb(lv.t || "#333333"), [eR, eG, eB] = hexRgb(lv.e || lv.t || "#333");
@@ -133,20 +140,52 @@ function livTex(n: string, src: any, lv: { f: string; b?: string; t: string; e: 
   // belly cheatline bands on known fuselage UV strips (simplified — not surveyed paint)
   if (lv.b && A) { x.fillStyle = lv.b; x.fillRect(60 * W, 310 * W, 700 * W, 22 * W); x.fillRect(60 * W, 690 * W, 700 * W, 22 * W); }
 
-  const tx = lv.tx || lv.t || "#073590"; x.fillStyle = tx; x.font = `900 ${Math.round(52 * W)}px "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.textAlign = "center";
   const rows = A ? [258, 640] : B7 ? [134, 278] : [134, 278]; const cx = (A ? 480 : 440) * W;
-  for (const [k, yy] of rows.entries()) { x.save(); x.translate(cx, yy * W); if ((A || B7) && k === MIR) x.scale(-1, 1); x.fillText((name || lv.n || "").toUpperCase(), 0, 0); x.restore(); }
-  const acc = lv.a || "#f1c933";
-  if (B7) { paintMotif(x, lv.m || "plain", 860 * W, 780 * W, 110 * W, acc, "#fff8d0"); paintMotif(x, lv.m || "plain", 920 * W, 860 * W, 70 * W, acc, "#fff8d0"); }
-  else if (A) paintMotif(x, lv.m || "plain", 900 * W, 180 * W, 80 * W, acc, "#ffffff");
-  else if (A35) paintMotif(x, lv.m || "plain", 900 * W, 850 * W, 80 * W, acc, "#ffffff");
+  const side = (k: number, f: () => void) => { x.save(); x.translate(cx, rows[k] * W); if ((A || B7) && k === MIR) x.scale(-1, 1); f(); x.restore(); };
+  const LG = LOGO[brand]; const acc = lv.a || "#f1c933";
+  // tail regions on the amvlab atlases (measured from the PNGs): A320 top-right, B737 bottom-right, A350 bottom-right
+  const tails: [number, number, number][] = B7 ? [[860, 780, 110], [920, 860, 70]] : A ? [[900, 180, 80]] : [[900, 850, 80]];
+  if (LG) { // real PD wordmark decal on both fuselage sides
+    const col = brand === "EZY" ? "#ff6600" : brand === "BA" ? "#1f3c78" : brand === "LH" ? "#05164d" : "#073590";
+    const sx = brand === "LH" ? LG.height * 1.3 : 0, sw = LG.width - sx; const lw = 360 * W, lh = lw * LG.height / sw; const img = tint(LG, lw, lh, col, sx, 0, sw, LG.height); // LH: wordmark only, roundel goes on the fin
+    for (const k of [0, 1]) side(k, () => x.drawImage(img, -lw / 2, -lh / 2));
+  } else if (brand === "J2COM" || brand === "J2HOL") { // Jet2 has no licensed logo file: plain-text titles in photo colours (not the logo)
+    x.fillStyle = "#d4002a"; x.font = `900 ${Math.round(54 * W)}px "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.textAlign = "center";
+    for (const k of [0, 1]) side(k, () => x.fillText(brand === "J2COM" ? "Jet2" : "jet2holidays", 0, 0));
+  } else {
+    const tx = lv.tx || lv.t || "#073590"; x.fillStyle = tx; x.font = `900 ${Math.round(52 * W)}px "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.textAlign = "center";
+    for (const k of [0, 1]) side(k, () => x.fillText((name || lv.n || "").toUpperCase(), 0, 0));
+  }
+  for (const [tx0, ty0, ts] of tails) {
+    const X = tx0 * W, Y = ty0 * W, S = ts * W;
+    if (brand === "LH" && LG) { const cw = LG.height; const im2 = tint(LG, S * 1.1, S * 1.1, "#ffffff", 0, 0, cw, LG.height); x.drawImage(im2, X - S * 0.55, Y - S * 0.55); } // crane roundel = left square of the PD 2018 logo
+    else if (brand === "EZY" && LG) { const w2 = S * 1.6, h2 = w2 * LG.height / LG.width; const im2 = tint(LG, w2, h2, "#ffffff"); x.save(); x.translate(X, Y); x.rotate(-Math.PI / 2); x.drawImage(im2, -w2 / 2, -h2 / 2); x.restore(); }
+    else if (brand === "BA") { // Union Flag geometry (PD flag) as a simplified stand-in for the Chatham Dockyard tail — approximate, not the artwork
+      x.save(); x.translate(X, Y); const w2 = S * 1.4, h2 = S * 0.9; x.beginPath(); x.rect(-w2 / 2, -h2 / 2, w2, h2); x.clip(); x.fillStyle = "#012169"; x.fillRect(-w2 / 2, -h2 / 2, w2, h2);
+      x.strokeStyle = "#fff"; x.lineWidth = h2 * 0.2; x.beginPath(); x.moveTo(-w2 / 2, -h2 / 2); x.lineTo(w2 / 2, h2 / 2); x.moveTo(w2 / 2, -h2 / 2); x.lineTo(-w2 / 2, h2 / 2); x.stroke();
+      x.strokeStyle = "#c8102e"; x.lineWidth = h2 * 0.067; x.stroke(); x.fillStyle = "#fff"; x.fillRect(-w2 / 2, -h2 / 6, w2, h2 / 3); x.fillRect(-h2 / 6, -h2 / 2, h2 / 3, h2);
+      x.fillStyle = "#c8102e"; x.fillRect(-w2 / 2, -h2 / 10, w2, h2 / 5); x.fillRect(-h2 / 10, -h2 / 2, h2 / 5, h2); x.restore(); }
+    else if (brand === "J2HOL") { // photo-observed: blue fin with orange/red/yellow sunburst (simplified rays, not the artwork)
+      x.save(); x.translate(X, Y + S * 0.2); for (let i = 0; i < 9; i++) { x.fillStyle = ["#ff6a13", "#ffc72c", "#e4002b"][i % 3]; x.beginPath(); x.moveTo(0, 0); const a0 = Math.PI + i * Math.PI / 9, a1 = a0 + Math.PI / 18; x.lineTo(Math.cos(a0) * S * 0.7, Math.sin(a0) * S * 0.7); x.lineTo(Math.cos(a1) * S * 0.7, Math.sin(a1) * S * 0.7); x.fill(); } x.fillStyle = "#ffc72c"; x.beginPath(); x.arc(0, 0, S * 0.22, Math.PI, 0); x.fill(); x.restore(); }
+    else if (brand === "J2COM") { x.save(); x.translate(X, Y); x.rotate(-Math.PI / 2); x.fillStyle = "#fff"; x.font = `900 ${Math.round(S * 0.32)}px Arial`; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText("Jet2.com", 0, 0); x.restore(); }
+    else if (brand === "FR") { /* no PD harp asset found — leave fin plain navy rather than invent one */ }
+    else paintMotif(x, lv.m || "plain", X, Y, S, acc, B7 ? "#fff8d0" : "#ffffff");
+  }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.flipY = src.flipY; t.anisotropy = 8; t.needsUpdate = true; return TEX[key] = t;
 }
-function glbModel(t: string, f: string, cs: string, fallbackC1: string, fallbackName: string) {
-  const n = glbFile(t, f); const base = GOT[n]; if (!base) return null; const o = base.clone(true); const E = eink();
-  const lv = liveryFor(cs.slice(0, 3), cs.slice(0, 3)) || liveryFor(cs.slice(0, 2)) || { n: fallbackName || "", f: "#ffffff", t: fallbackC1, e: fallbackC1, a: fallbackC1, m: "plain" as const, tx: fallbackC1 };
+function brandOf(cs: string, reg: string) {
+  const p = cs.slice(0, 3).toUpperCase(); const p2 = cs.slice(0, 2).toUpperCase();
+  if (p === "RYR" || p === "RUK" || p2 === "FR") return "FR"; if (["EZY", "EJU", "EZS"].includes(p) || p2 === "U2") return "EZY";
+  if (p === "BAW" || p2 === "BA") return "BA"; if (p === "DLH" || p2 === "LH") return "LH";
+  if (p === "EXS" || p2 === "LS") { const j = JET2_REG[(reg || "").toUpperCase().trim()]; return j === "com" ? "J2COM" : j === "hol" ? "J2HOL" : "J2"; }
+  return "";
+}
+const J2: Record<string, any> = { J2COM: { n: "Jet2", f: "#c9ccd1", b: "#c9ccd1", t: "#d4002a", e: "#d4002a", a: "#ffffff", m: "plain", tx: "#d4002a" }, J2HOL: { n: "Jet2holidays", f: "#ffffff", b: "#ffffff", t: "#0057b8", e: "#0057b8", a: "#ffc72c", m: "plain", tx: "#d4002a" }, J2: { n: "Jet2", f: "#ffffff", t: "#8a8f98", e: "#8a8f98", a: "#8a8f98", m: "plain", tx: "#d4002a" } };
+function glbModel(t: string, f: string, cs: string, fallbackC1: string, fallbackName: string, reg = "") {
+  const n = glbFile(t, f); const base = GOT[n]; if (!base) return null; const o = base.clone(true); const E = eink(); const brand = brandOf(cs, reg);
+  const lv = J2[brand] || liveryFor(cs.slice(0, 3), cs.slice(0, 3)) || liveryFor(cs.slice(0, 2)) || { n: fallbackName || "", f: "#ffffff", t: fallbackC1, e: fallbackC1, a: fallbackC1, m: "plain" as const, tx: fallbackC1 };
   const name = (fallbackName || lv.n || "").replace(/ (UK|Europe|Austria|Ireland)$/, "");
-  o.traverse((m: any) => { if (m.isMesh) { const src = m.material.map; m.material = new THREE.MeshStandardMaterial({ map: src && !E ? livTex(n, src, lv, name) : src, color: E ? "#dddddd" : "#ffffff", roughness: 0.42, metalness: 0.18, envMapIntensity: 0.8 }); m.castShadow = false; } });
+  o.traverse((m: any) => { if (m.isMesh) { const src = m.material.map; m.material = new THREE.MeshStandardMaterial({ map: src && !E ? livTex(n, src, lv, name, brand) : src, color: E ? "#dddddd" : "#ffffff", roughness: 0.42, metalness: 0.18, envMapIntensity: 0.8 }); m.castShadow = false; } });
   const g = new THREE.Group(); o.rotation.set(Math.PI / 2, 0, 0); const w = new THREE.Group(); w.add(o); w.rotation.z = Math.PI / 2; w.position.z = 2.8; if (f === "reg") w.scale.setScalar(0.74); g.add(w);
   const L = f === "wide" ? 67 : f === "reg" ? 28 : 38; const sh = new THREE.Mesh(new THREE.PlaneGeometry(L * 1.05, L * 0.55), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: E ? 0.12 : 0.38, depthWrite: false, map: shadowTex() })); sh.position.set(0, -L * 0.05, 0.12); g.add(sh); return g;
 }
@@ -154,6 +193,10 @@ function glbModel(t: string, f: string, cs: string, fallbackC1: string, fallback
 // Glass curtain wall: procedural panes for EVERY airport (not surveyed). Optional per-IATA tint when a verified Commons colour cue exists (see web/public/refs/ATTRIBUTION.md). Photos are NOT embedded.
 const GLASS_GENERIC: [string, string, string, string] = ["#d7ebfb", "#7eb4e0", "#3f78b8", "#1e4a7a"];
 // Reference-verified glass tints only (colour cues from attributed photos — not hand-modelled buildings). All other airports use GLASS_GENERIC.
+// Per-airport building-sign overrides, only where a dated photo shows it. Everything else = a name LABEL, not a photographed sign.
+const SIGN_REF: Record<string, { col: string; src: string; date: string; what: string }> = {
+  LPL: { col: "#d6001c", src: "https://commons.wikimedia.org/wiki/File:Liverpool_John_Lennon_Airport_terminal_building_-_geograph.org.uk_-_6207868.jpg", date: "2019-06-28", what: "red facade lettering colour (text too small to read; position approximate)" },
+};
 const GLASS_REF: Record<string, [string, string, string, string]> = {
   MAN: ["#e8f4fc", "#9ec9e8", "#4a8fc4", "#1f567f"], // Commons CC BY 4.0 T1/T2 refs
   FRA: ["#dfe8f2", "#8a9ab8", "#4a678a", "#243a55"], // Commons colour cue only (SA — not embedded)
@@ -301,7 +344,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     const mkPlane = (a: any) => {
       const cs = (a.flight || "").trim(); const l = liv(cs); const c1 = l ? l[0] : accent; const c2 = l ? l[1] : "#8892a6";
       const name = l ? l[2].replace(/ (UK|Europe|Austria|Ireland)$/, "") : "";
-      return glbModel(a.type || "", fam(a.type), cs, c1, name) || model(fam(a.type) as any, c1, c2);
+      return glbModel(a.type || "", fam(a.type), cs, c1, name, a.r || a.reg || "") || model(fam(a.type) as any, c1, c2);
     };
     const sync = (L: any[]) => {
       if (!scene || !origin || stop) return; // custom layer onAdd may lag on iOS — next poll retries
@@ -377,7 +420,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
       const glbReady = Promise.all(["B737_nologo", "A320_nologo", "A350_nologo"].map(loadGlb)).then(() => { if (!stop) poll(); });
       try { const j = await api("/apt3d?iata=" + iata); if (stop) return; if (j.error) throw new Error(j.error); setInfo(j); ctr = j.center; origin = maplibregl.MercatorCoordinate.fromLngLat(j.center, 0); mpu = origin.meterInMercatorCoordinateUnits();
         (map.getSource("apt") as any).setData(j); (window as any).__a3info = j; const toL = (p: number[]): [number, number] => { const c = maplibregl.MercatorCoordinate.fromLngLat(p as any, 0); return [(c.x - origin.x) / mpu, -(c.y - origin.y) / mpu]; }; const fc = scene ? facade(j, toL) : null; let cam0: any = null;
-        if (fc) { const SIGN: Record<string, string> = { LPL: "LIVERPOOL JOHN LENNON AIRPORT", MAN: "MANCHESTER AIRPORT", CFU: "CORFU IOANNIS KAPODISTRIAS", FRA: "FRANKFURT AIRPORT", STN: "LONDON STANSTED AIRPORT", DUB: "DUBLIN AIRPORT", LHR: "HEATHROW AIRPORT", ATL: "HARTSFIELD-JACKSON ATLANTA", AMS: "AMSTERDAM SCHIPHOL" }; const txt = (SIGN[iata] || (j.sign || j.name).replace(/["“”(].*$/, "").replace(/\s+/g, " ").trim()).toUpperCase(); const col = eink() ? "#000000" : iata === "LPL" ? "#d6001c" : "#ffffff"; /* white 3D name on every airport; LPL red accent only */ let size = Math.min(14, Math.max(4, fc.h * 0.4)); let r = facadeSign(txt, col, size); if (r.w > fc.L * 0.92) { size = Math.max(4, size * fc.L * 0.92 / r.w); r = facadeSign(txt, col, size); }
+        if (fc) { const SIGN: Record<string, string> = { LPL: "LIVERPOOL JOHN LENNON AIRPORT", MAN: "MANCHESTER AIRPORT", CFU: "CORFU IOANNIS KAPODISTRIAS", FRA: "FRANKFURT AIRPORT", STN: "LONDON STANSTED AIRPORT", DUB: "DUBLIN AIRPORT", LHR: "HEATHROW AIRPORT", ATL: "HARTSFIELD-JACKSON ATLANTA", AMS: "AMSTERDAM SCHIPHOL" }; const txt = (SIGN[iata] || (j.sign || j.name).replace(/["“”(].*$/, "").replace(/\s+/g, " ").trim()).toUpperCase(); const col = eink() ? "#000000" : SIGN_REF[iata]?.col || "#ffffff"; /* white name label everywhere; photo-verified colour override where SIGN_REF has one */ let size = Math.min(14, Math.max(4, fc.h * 0.4)); let r = facadeSign(txt, col, size); if (r.w > fc.L * 0.92) { size = Math.max(4, size * fc.L * 0.92 / r.w); r = facadeSign(txt, col, size); }
           const mx = (fc.a[0] + fc.b[0]) / 2 + fc.n[0] * 0.8, my = (fc.a[1] + fc.b[1]) / 2 + fc.n[1] * 0.8; const onWall = fc.h > size * 1.6; r.o.position.set(mx + fc.n[0] * 4.2, my + fc.n[1] * 4.2, onWall ? fc.h - size * 1.35 : fc.h + 1.4); r.o.rotation.z = Math.atan2(fc.n[1], fc.n[0]) + Math.PI / 2; sign = r.o; sign.userData.n = fc.n; scene.add(sign);
           // dev-only render check (console hook, never shown to users): draws a model at the map centre so liveries can be inspected when no live plane is parked
           (window as any).__a3demo = (type: string, icao: string, name: string) => { const q = [mx + fc.n[0] * 90, my + fc.n[1] * 90]; const o = glbModel(type, "nb", icao, "#073590", name) || model("narrow", "#073590", "#f1c933"); o.position.set(q[0], q[1], 0); o.rotation.z = 0.6; scene.add(o); const ll = new maplibregl.MercatorCoordinate(origin.x + q[0] * mpu, origin.y - q[1] * mpu, 0).toLngLat(); mref.current!.jumpTo({ center: ll }); return true; }; scene.add(aptExtras(fc, j, toL, eink())); (window as any).__a3sign = { txt, size, onWall, L: fc.L };
@@ -404,7 +447,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
     {lay && <div className="a3lay card sm"><label><input type="checkbox" checked={bld} onChange={e => setBld(e.target.checked)} /> 3D buildings</label><label><input type="checkbox" checked={sat} onChange={e => setSat(e.target.checked)} /> Satellite photo</label><label><input type="checkbox" checked={hist} onChange={e => setHist(e.target.checked)} /> Trails (since you opened this)</label></div>}
     <button className="a3btn a3flat" onClick={() => setFlat(!flat)}>{flat ? "3D" : "2D"}</button>
     {!sel && looking && (n == null || n === 0) && <div className="a3load card sm">{looking}{n != null ? ` (${n})` : ""}</div>}
-    {!sel && <div className="a3note sm">{info ? <>{info.features.length} OpenStreetMap shapes{info.counts?.terminal ? ` · ${info.counts.terminal} terminal${info.counts.terminal > 1 ? "s" : ""}` : " · no terminal mapped in OSM"}{GLASS_REF[iata] ? " · glass tint from verified photo refs" : " · generic glass (OSM geometry)"}</> : null}{n != null && <> · {n} live aircraft on or near the airport (ADS-B)</>}<br /><span className="faint">Buildings = OSM extrusions for every airport (not surveyed). Planes: amvlab models (CC BY 4.0) with airline colours and name — not exact liveries. Follow tracks live ADS-B only. Tap a plane or its label.</span></div>}
+    {!sel && <div className="a3note sm">{info ? <>{info.features.length} OpenStreetMap shapes{info.counts?.terminal ? ` · ${info.counts.terminal} terminal${info.counts.terminal > 1 ? "s" : ""}` : " · no terminal mapped in OSM"}{GLASS_REF[iata] ? " · glass tint from verified photo refs" : " · generic glass (OSM geometry)"}{SIGN_REF[iata] ? ` · sign colour from ${SIGN_REF[iata].date} photo` : " · name is a map label, not a real building sign"}</> : null}{n != null && <> · {n} live aircraft on or near the airport (ADS-B)</>}<br /><span className="faint">Buildings = OSM extrusions for every airport (not surveyed). Planes: amvlab models (CC BY 4.0) in simplified airline colours; Ryanair, easyJet, BA and Lufthansa carry their real public-domain wordmarks; Jet2.com/Jet2holidays scheme only when the registration matches a dated photo — still not exact liveries. Follow tracks live ADS-B only. Tap a plane or its label.</span></div>}
     {followSt && (follow || followSt === "lost") && <div className="a3follow card sm" role="status">{followSt === "following" ? "Following live ADS-B position…" : followSt === "waiting" ? "Waiting for live ADS-B…" : followSt === "stale" ? "ADS-B data is stale — showing last known position" : followSt === "lost" ? "Lost contact with this aircraft" : followSt}</div>}
     {sel && <Sheet a={sel} iata={iata} follow={follow && followHex.current === sel.hex} followSt={followSt}
       onFollow={() => { if (followHex.current === sel.hex) { followHex.current = null; setFollow(false); setFollowSt(""); }
