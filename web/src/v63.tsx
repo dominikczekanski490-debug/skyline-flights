@@ -426,10 +426,12 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
       try { const j = await api("/apt3d?iata=" + iata); if (stop) return; if (j.error) throw new Error(j.error); setInfo(j); ctr = j.center; origin = maplibregl.MercatorCoordinate.fromLngLat(j.center, 0); mpu = origin.meterInMercatorCoordinateUnits();
         (map.getSource("apt") as any).setData(j); (window as any).__a3info = j; const toL = (p: number[]): [number, number] => { const c = maplibregl.MercatorCoordinate.fromLngLat(p as any, 0); return [(c.x - origin.x) / mpu, -(c.y - origin.y) / mpu]; }; const fc = scene ? facade(j, toL) : null; let cam0: any = null;
         if (fc && FRAPORT.has(iata) && !eink()) { // real PD Fraport 2019 logo (Commons). Rooftop placement = user's choice, not seen in reference photos.
-          const tl = new THREE.TextureLoader().load("/liveries/Fraport_Logo_2019.png", () => map.triggerRepaint()); tl.colorSpace = THREE.SRGBColorSpace; tl.anisotropy = 8;
-          const w = Math.min(90, fc.L * 0.35), h = w * 519 / 1200; const g = new THREE.Group();
-          const panel = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.08, h * 1.15), new THREE.MeshBasicMaterial({ color: "#ffffff", side: THREE.DoubleSide })); g.add(panel);
-          const logo = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tl, transparent: true, side: THREE.DoubleSide, depthWrite: false })); logo.position.z = 0.15; g.add(logo);
+          // Bake the logo into one opaque canvas texture (white panel + logo) — no second transparent layer that can lose the depth fight or show its back.
+          const cv = document.createElement("canvas"); cv.width = 1296; cv.height = 640; const cx2 = cv.getContext("2d")!; cx2.fillStyle = "#ffffff"; cx2.fillRect(0, 0, cv.width, cv.height);
+          const tl = new THREE.CanvasTexture(cv); tl.colorSpace = THREE.SRGBColorSpace; tl.anisotropy = 8;
+          const li = new Image(); li.onload = () => { cx2.drawImage(li, 48, 60, 1200, 519); tl.needsUpdate = true; (window as any).__a3fraport = "ok"; map.triggerRepaint(); }; li.onerror = () => { (window as any).__a3fraport = "error"; console.error("a3 fraport logo failed"); }; li.src = "/liveries/Fraport_Logo_2019.png";
+          const w = Math.min(90, fc.L * 0.35), h = w * 640 / 1296; const g = new THREE.Group();
+          const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tl, side: THREE.DoubleSide })); g.add(panel);
           const holder = new THREE.Group(); holder.add(g); g.rotation.x = Math.PI / 2; g.position.z = h * 0.6;
           const mx = (fc.a[0] + fc.b[0]) / 2, my = (fc.a[1] + fc.b[1]) / 2; holder.position.set(mx - fc.n[0] * 3, my - fc.n[1] * 3, fc.h); holder.rotation.z = Math.atan2(fc.n[1], fc.n[0]) + Math.PI / 2; scene.add(holder);
         }
