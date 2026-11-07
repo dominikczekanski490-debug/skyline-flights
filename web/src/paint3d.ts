@@ -56,7 +56,7 @@ export function buildAtlas(g: Geo, W: number, H: number): Atlas {
     const per = Math.max(Math.hypot(bx - ax, by - ay), Math.hypot(cx - bx, cy - by), Math.hypot(ax - cx, ay - cy)); const eps = pad / Math.max(1, per) * 2;
     for (let py = mny; py <= mxy; py++) for (let px = mnx; px <= mxx; px++) {
       const qx = px + 0.5, qy = py + 0.5; const l1 = ((by - cy) * (qx - cx) + (cx - bx) * (qy - cy)) / den, l2 = ((cy - ay) * (qx - cx) + (ax - cx) * (qy - cy)) / den, l3 = 1 - l1 - l2;
-      if (l1 < -eps || l2 < -eps || l3 < -eps) continue; const k = py * W + px; const inside = l1 >= 0 && l2 >= 0 && l3 >= 0; if (cls[k] && !inside) continue;
+      if (l1 < -eps || l2 < -eps || l3 < -eps) continue; const k = py * W + px; const inside = l1 >= 0 && l2 >= 0 && l3 >= 0; if (cls[k] && !inside) continue; if (cls[k] && cls[k] !== C_OTHER && tc[t] === C_OTHER) continue; // shared UV (e.g. A320 nacelle + pylon/fan pieces): painted surface wins
       const m1 = Math.min(1, Math.max(0, l1)), m2 = Math.min(1, Math.max(0, l2)), m3 = Math.max(0, 1 - m1 - m2);
       cls[k] = tc[t]; X[k] = P[3 * a] * m1 + P[3 * b] * m2 + P[3 * c] * m3; Y[k] = P[3 * a + 1] * m1 + P[3 * b + 1] * m2 + P[3 * c + 1] * m3; Z[k] = P[3 * a + 2] * m1 + P[3 * b + 2] * m2 + P[3 * c + 2] * m3;
     }
@@ -99,7 +99,7 @@ export function paint(base: Img, A: Atlas, S: Scheme, imgs: Record<string, Img>)
       const dx = (x - q.cx) * side, dy = y - q.cy; const lx = dx * q.cr + dy * q.sr - q.ox, ly = -dx * q.sr + dy * q.cr; const u = lx / q.w + 0.5, v = 0.5 - ly / q.h; if (u < 0 || u >= 1 || v < 0 || v >= 1) continue;
       const ix = Math.min(q.im.w - 1, q.sx + Math.floor(u * q.sw)), iy = Math.min(q.im.h - 1, Math.floor(v * q.im.h)), o = 4 * (iy * q.im.w + ix); const a = q.im.data[o + 3] / 255; if (a <= 0) continue;
       const tr = q.t ? q.t[0] : q.im.data[o], tg = q.t ? q.t[1] : q.im.data[o + 1], tb = q.t ? q.t[2] : q.im.data[o + 2]; r = r * (1 - a) + tr * a; g = g * (1 - a) + tg * a; b = b * (1 - a) + tb * a; }
-    if (c === C_FUS || c === C_ENG) { const dl = lum(bk) - box(px, py, 4); if (Math.abs(dl) > 28) { const m = 0.82; r = r * (1 - m) + 28 * m; g = g * (1 - m) + 34 * m; b = b * (1 - m) + 44 * m; } } // keep windows/doors from the model's own art
+    if (c === C_FUS) { const dl = lum(bk) - box(px, py, 4); if (Math.abs(dl) > 28) { const m = 0.82; r = r * (1 - m) + 28 * m; g = g * (1 - m) + 34 * m; b = b * (1 - m) + 44 * m; } } // keep windows/doors from the model's own art
     out[4 * bk] = r; out[4 * bk + 1] = g; out[4 * bk + 2] = b; out[4 * bk + 3] = 255;
   }
   return out;

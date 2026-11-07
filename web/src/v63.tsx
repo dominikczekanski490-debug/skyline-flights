@@ -195,7 +195,7 @@ function projTex(n: string, root: THREE.Object3D, mesh: any, id: string) { const
     const idx = g.index ? g.index.array : Uint32Array.from({ length: pa.count }, (_, i) => i); const im = src.image; ATL[n] = buildAtlas({ pos, uv: ua.array, idx }, im.width, im.height); (window as any).__a3atlas = { ...(window as any).__a3atlas, [n]: ATL[n].meta }; }
   const base = imgData(src.image); const out = paint(base, ATL[n], SCHEMES[id], decalImgs()); const c = document.createElement("canvas"); c.width = base.w; c.height = base.h; c.getContext("2d")!.putImageData(new ImageData(out as any, base.w, base.h), 0, 0);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.flipY = src.flipY; t.anisotropy = 8; return PT[key] = t; }
-export { loadGlb, brandOf };
+export { loadGlb, brandOf, glbFile };
 export function glbModel(t: string, f: string, cs: string, fallbackC1: string, fallbackName: string, reg = "") {
   const n = glbFile(t, f); const base = GOT[n]; if (!base) return null; const o = base.clone(true); const E = eink(); const brand = brandOf(cs, reg);
   const lv = J2[brand] || liveryFor(cs.slice(0, 3), cs.slice(0, 3)) || liveryFor(cs.slice(0, 2)) || { n: fallbackName || "", f: "#ffffff", t: fallbackC1, e: fallbackC1, a: fallbackC1, m: "plain" as const, tx: fallbackC1 };

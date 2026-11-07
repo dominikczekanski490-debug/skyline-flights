@@ -1,7 +1,7 @@
 // Livery preview: renders the REAL in-app 3D models + painter (v63 glbModel) for each scheme. Clearly labelled preview, not live ADS-B traffic.
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { glbModel, loadGlb } from "./v63";
+import { glbModel, loadGlb, glbFile } from "./v63";
 import { SCHEMES, JET2_REG } from "./schemes3d";
 import { BUILD } from "./extras";
 // sample callsign/registration that the app's own brandOf() maps to each scheme
@@ -9,15 +9,15 @@ const CASES: Record<string, { cs: string; reg: string; name: string }> = {
   FR: { cs: "RYR1AB", reg: "EI-GXL", name: "Ryanair" }, EZY: { cs: "EZY12A", reg: "G-UZHS", name: "easyJet" }, BA: { cs: "BAW123", reg: "G-TTNS", name: "British Airways" },
   LH: { cs: "DLH4AB", reg: "D-AINF", name: "Lufthansa" }, J2COM: { cs: "EXS12A", reg: "G-SUNS", name: "Jet2.com" }, J2HOL: { cs: "EXS34B", reg: "G-HLYI", name: "Jet2holidays" }, J2: { cs: "EXS99Z", reg: "G-XXXX", name: "Jet2 (unknown reg)" },
 };
-const TYPES: Record<string, [string, string]> = { A320: ["A20N", "narrow"], B737: ["B738", "narrow"], A350: ["A359", "wide"] };
+const TYPES: Record<string, [string, string]> = { A320: ["A320", "narrow"], B737: ["B738", "narrow"], A350: ["A359", "wide"] };
 export default function LivPreview() {
   const h = location.hash; const sch = (h.match(/livpreview=(\w+)/)?.[1] || "J2HOL").toUpperCase(); const mdl = (h.match(/model=(\w+)/)?.[1] || "A320").toUpperCase(); const sideV = h.match(/side=(\w)/)?.[1] || "q";
   const el = useRef<HTMLDivElement>(null); const [st, setSt] = useState("loading model…");
-  useEffect(() => { const c = el.current!; const W = c.clientWidth, H = c.clientHeight; const ren = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); ren.setPixelRatio(Math.min(2, devicePixelRatio)); ren.setSize(W, H); ren.outputColorSpace = THREE.SRGBColorSpace; c.appendChild(ren.domElement);
+  useEffect(() => { const c = el.current!; const W = c.clientWidth, H = c.clientHeight; let ren: THREE.WebGLRenderer; try { ren = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); } catch (e: any) { setSt("ERROR: WebGL unavailable: " + (e?.message || e)); return; } ren.setPixelRatio(Math.min(2, devicePixelRatio)); ren.setSize(W, H); ren.outputColorSpace = THREE.SRGBColorSpace; c.appendChild(ren.domElement);
     const sc = new THREE.Scene(); sc.background = new THREE.Color("#cfd8e3"); sc.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 2.2)); const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(30, -40, 60); sc.add(dl);
     const cam = new THREE.PerspectiveCamera(30, W / H, 1, 1000); cam.up.set(0, 0, 1); let stop = false, raf = 0;
     const [ty, fam] = TYPES[mdl] || TYPES.A320; const k = CASES[sch] || CASES.J2HOL;
-    loadGlb(fam === "wide" ? "A350_nologo" : mdl === "B737" ? "B737_nologo" : "A320_nologo").then(() => { if (stop) return; const t0 = performance.now(); const o = glbModel(ty, fam, k.cs, "#888888", k.name, k.reg); if (!o) { setSt("model failed to load"); return; } sc.add(o);
+    const file = glbFile(ty, fam); loadGlb(file).then((g: any) => { if (!g) { setSt(`ERROR: /models/${file}.glb did not load (GLTFLoader error or 10 s timeout)`); return; } if (stop) return; const t0 = performance.now(); let o: any; try { o = glbModel(ty, fam, k.cs, "#888888", k.name, k.reg); } catch (e: any) { setSt("ERROR painting: " + (e?.message || e)); console.error(e); return; } if (!o) { setSt(`ERROR: glbModel returned null for ${file}`); return; } sc.add(o);
       setSt(`painted in ${Math.round(performance.now() - t0)} ms`); (window as any).__livprev = { sch, mdl, ok: true };
       let a = sideV === "l" ? -Math.PI / 2 : sideV === "r" ? Math.PI / 2 : -Math.PI / 2 + 0.6; const R = fam === "wide" ? 120 : 75;
       const loop = () => { if (stop) return; if (sideV === "s") a += 0.004; cam.position.set(Math.cos(a) * R, Math.sin(a) * R, sideV === "q" || sideV === "s" ? R * 0.28 : 4); cam.lookAt(0, 0, 3); ren.render(sc, cam); raf = requestAnimationFrame(loop); }; loop(); });
