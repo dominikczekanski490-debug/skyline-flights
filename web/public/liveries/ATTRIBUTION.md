@@ -6,6 +6,7 @@
 | Ryanair_wordmark.svg/.png | https://commons.wikimedia.org/wiki/File:Ryanair_wordmark.svg | Ryanair (text logo) | Public domain (below threshold of originality); trademark |
 | EasyJet_logo.svg/.png | https://commons.wikimedia.org/wiki/File:EasyJet_logo.svg | easyJet | Public domain (text logo); trademark |
 | BRITISH_AIRWAYS_logo.svg/.png | https://commons.wikimedia.org/wiki/File:BRITISH_AIRWAYS_logo.svg | British Airways | Public domain (text logo); trademark |
+| Jet2Logo.svg/.png | https://commons.wikimedia.org/wiki/File:Jet2Logo.svg | Jet2.com | Public domain (Commons); trademark (sha1 e111251ac02f8642c459082785e594891578add1) |
 | Lufthansa_Logo_2018.svg/.png | https://commons.wikimedia.org/wiki/File:Lufthansa_Logo_2018.svg | Lufthansa | Public domain (simple geometry/text); trademark |
 PNGs were rasterised from the SVGs with CairoSVG; colours re-tinted at runtime. Trademarks belong to their owners; used here only to identify the airline.
 
@@ -21,14 +22,12 @@ PNGs were rasterised from the SVGs with CairoSVG; colours re-tinted at runtime. 
 | Jet2holidays (G-HLYI) | https://commons.wikimedia.org/wiki/File:G-HLYI-Jet2holidays-EGCC.jpg | Oscaracton | 2026-05-17 | CC BY 4.0 |
 | Jet2holidays (G-JZBP) | https://commons.wikimedia.org/wiki/File:G-JZBP-Jet2holidays-EGCC.jpg | Oscaracton | 2026-05-17 | CC BY 4.0 |
 
-## Not supported
-- A350: its paint-map layout isn't verified, so there are no logo decals or tail marks, just the plain-text name.
-
-## Approximations (drawn by Skyline, not the real artwork)
-- BA fin: PD Union Flag geometry standing in for the Chatham Dockyard tail.
-- Jet2holidays fin: simple sun rays on blue; Jet2 titles are plain text (no licensed Jet2 logo file found on Commons).
-- Ryanair fin: plain navy — no public-domain harp file found, so none is drawn.
-- Jet2 aircraft whose registration isn't in the photo list: generic grey fin + "JET2" text (scheme unknown).
+## 3D paint (paint3d.ts + schemes3d.ts, since Nov 2026)
+Paint is placed by projection: each texel of the amvlab atlas is mapped back to its 3D point, so fuselage/fin/engine paint and logos land on the real surfaces for A320, B737 and A350 (no hand-guessed UV boxes). Schemes are simplified, stylised reconstructions of the reference photos above — not exact liveries.
+- Real PD logo files: Ryanair wordmark, easyJet, BRITISH AIRWAYS, Lufthansa (wordmark + crane roundel), Jet2.com (Jet2Logo.svg; also used for the 'Jet2' glyphs of Jet2holidays).
+- Drawn by Skyline (approximations): Ryanair fin harp, BA fin bands (stand-in for Chatham Dockyard), Jet2holidays sunburst, 'holidays' word (system bold font), all cheatlines/sweeps.
+- Jet2 sub-brand only for registrations in schemes3d.ts JET2_REG (photo-checked); other EXS = neutral grey fallback with Jet2.com logo.
+- Preview route: /#livpreview=<FR|EZY|BA|LH|J2COM|J2HOL|J2>&model=<A320|B737|A350>&side=<l|r|q|s> (labelled preview, not live traffic).
 
 ## Airport signs
 - LPL: red facade lettering colour from https://commons.wikimedia.org/wiki/File:Liverpool_John_Lennon_Airport_terminal_building_-_geograph.org.uk_-_6207868.jpg (2019-06-28, CC BY-SA 2.0).

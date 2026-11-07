@@ -17,6 +17,8 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { api } from "./lib";
 import { liv } from "./v36";
 import { liveryFor } from "./livery";
+import { buildAtlas, paint, type Atlas, type Img } from "./paint3d";
+import { SCHEMES, LOGO_FILES, JET2_REG as J2REG } from "./schemes3d";
 maplibregl.setWorkerUrl(workerUrl);
 
 const still = () => document.documentElement.dataset.skin === "eink" || matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -80,11 +82,10 @@ function shadowTex() { if (_st) return _st; const c = document.createElement("ca
 const GLB: Record<string, Promise<THREE.Group | null>> = {}; const GOT: Record<string, THREE.Group | null> = {};
 const glbFile = (t = "", f: string) => f === "wide" ? "A350_nologo" : /^A3/.test(t) || f === "reg" ? "A320_nologo" : "B737_nologo";
 // Public-domain (Wikimedia Commons, text-logo/simple-geometry PD) airline wordmarks, rasterised from SVG — see /liveries/ATTRIBUTION.md
-const LOGO_SRC: Record<string, string> = { FR: "Ryanair_wordmark", EZY: "EasyJet_logo", BA: "BRITISH_AIRWAYS_logo", LH: "Lufthansa_Logo_2018" };
+const LOGO_SRC: Record<string, string> = LOGO_FILES;
 const LOGO: Record<string, HTMLImageElement> = {};
 const logosReady = Promise.all(Object.entries(LOGO_SRC).map(([k, f]) => new Promise<void>(res => { const im = new Image(); im.onload = () => { LOGO[k] = im; res(); }; im.onerror = () => res(); im.src = `/liveries/${f}.png`; setTimeout(res, 6000); })));
 // Jet2 sub-brands are both callsign EXS; scheme only asserted for registrations seen in dated Commons photos (see ATTRIBUTION.md).
-const JET2_REG: Record<string, "com" | "hol"> = { "G-GDFX": "com", "G-SUNS": "com", "G-HLYI": "hol", "G-JZBP": "hol" };
 function tint(im: CanvasImageSource, w: number, h: number, col: string, sx = 0, sy = 0, sw?: number, sh?: number) { const c = document.createElement("canvas"); c.width = Math.max(1, w | 0); c.height = Math.max(1, h | 0); const x = c.getContext("2d")!; const I: any = im; x.drawImage(im, sx, sy, sw ?? I.width, sh ?? I.height, 0, 0, c.width, c.height); x.globalCompositeOperation = "source-in"; x.fillStyle = col; x.fillRect(0, 0, c.width, c.height); return c; }
 function loadGlb(n: string) {
   return GLB[n] ||= new Promise(async r => { await logosReady;
@@ -178,15 +179,28 @@ function brandOf(cs: string, reg: string) {
   const p = cs.slice(0, 3).toUpperCase(); const p2 = cs.slice(0, 2).toUpperCase();
   if (p === "RYR" || p === "RUK" || p2 === "FR") return "FR"; if (["EZY", "EJU", "EZS"].includes(p) || p2 === "U2") return "EZY";
   if (p === "BAW" || p2 === "BA") return "BA"; if (p === "DLH" || p2 === "LH") return "LH";
-  if (p === "EXS" || p2 === "LS") { const j = JET2_REG[(reg || "").toUpperCase().trim()]; return j === "com" ? "J2COM" : j === "hol" ? "J2HOL" : "J2"; }
+  if (p === "EXS" || p2 === "LS") { return J2REG[(reg || "").toUpperCase().trim()]?.b || "J2"; }
   return "";
 }
 const J2: Record<string, any> = { J2COM: { n: "Jet2", f: "#c9ccd1", b: "#c9ccd1", t: "#d4002a", e: "#d4002a", a: "#ffffff", m: "plain", tx: "#d4002a" }, J2HOL: { n: "Jet2holidays", f: "#ffffff", b: "#ffffff", t: "#0057b8", e: "#0057b8", a: "#ffc72c", m: "plain", tx: "#d4002a" }, J2: { n: "Jet2", f: "#ffffff", t: "#8a8f98", e: "#8a8f98", a: "#8a8f98", m: "plain", tx: "#d4002a" } };
-function glbModel(t: string, f: string, cs: string, fallbackC1: string, fallbackName: string, reg = "") {
+// Projection painter (paint3d.ts): texel → 3D point map per model, cached; one painted texture per model+scheme.
+const ATL: Record<string, Atlas> = {}; const PT: Record<string, THREE.Texture> = {};
+const imgData = (im: CanvasImageSource & { width: number; height: number }): Img => { const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; const x = c.getContext("2d")!; x.drawImage(im, 0, 0); return { w: c.width, h: c.height, data: x.getImageData(0, 0, c.width, c.height).data }; };
+let DIMG: Record<string, Img> | null = null;
+function decalImgs() { if (DIMG) return DIMG; const o: Record<string, Img> = {}; for (const k of Object.keys(LOGO)) o[k] = imgData(LOGO[k]);
+  const c = document.createElement("canvas"); c.width = 760; c.height = 170; const x = c.getContext("2d")!; x.font = `italic 900 150px "Arial Black", "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.fillStyle = "#fff"; x.fillText("holidays", 4, 88); o["txt:holidays"] = imgData(c); return DIMG = o; }
+function projTex(n: string, root: THREE.Object3D, mesh: any, id: string) { const key = n + id; if (PT[key]) return PT[key]; const src = mesh.material.map; if (!src?.image) return null;
+  if (!ATL[n]) { root.updateMatrixWorld(true); const g = mesh.geometry; const pa = g.attributes.position, ua = g.attributes.uv; const v = new THREE.Vector3(); const pos = new Float32Array(pa.count * 3);
+    const inv = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(mesh.matrixWorld); for (let i = 0; i < pa.count; i++) { v.fromBufferAttribute(pa, i).applyMatrix4(inv); pos[3 * i] = v.x; pos[3 * i + 1] = v.y; pos[3 * i + 2] = v.z; }
+    const idx = g.index ? g.index.array : Uint32Array.from({ length: pa.count }, (_, i) => i); const im = src.image; ATL[n] = buildAtlas({ pos, uv: ua.array, idx }, im.width, im.height); (window as any).__a3atlas = { ...(window as any).__a3atlas, [n]: ATL[n].meta }; }
+  const base = imgData(src.image); const out = paint(base, ATL[n], SCHEMES[id], decalImgs()); const c = document.createElement("canvas"); c.width = base.w; c.height = base.h; c.getContext("2d")!.putImageData(new ImageData(out as any, base.w, base.h), 0, 0);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.flipY = src.flipY; t.anisotropy = 8; return PT[key] = t; }
+export { loadGlb, brandOf };
+export function glbModel(t: string, f: string, cs: string, fallbackC1: string, fallbackName: string, reg = "") {
   const n = glbFile(t, f); const base = GOT[n]; if (!base) return null; const o = base.clone(true); const E = eink(); const brand = brandOf(cs, reg);
   const lv = J2[brand] || liveryFor(cs.slice(0, 3), cs.slice(0, 3)) || liveryFor(cs.slice(0, 2)) || { n: fallbackName || "", f: "#ffffff", t: fallbackC1, e: fallbackC1, a: fallbackC1, m: "plain" as const, tx: fallbackC1 };
   const name = (fallbackName || lv.n || "").replace(/ (UK|Europe|Austria|Ireland)$/, "");
-  o.traverse((m: any) => { if (m.isMesh) { const src = m.material.map; m.material = new THREE.MeshStandardMaterial({ map: src && !E ? livTex(n, src, lv, name, brand) : src, color: E ? "#dddddd" : "#ffffff", roughness: 0.42, metalness: 0.18, envMapIntensity: 0.8 }); m.castShadow = false; } });
+  o.traverse((m: any) => { if (m.isMesh) { const src = m.material.map; m.material = new THREE.MeshStandardMaterial({ map: src && !E ? (SCHEMES[brand] && projTex(n, o, m, brand)) || livTex(n, src, lv, name, brand) : src, color: E ? "#dddddd" : "#ffffff", roughness: 0.42, metalness: 0.18, envMapIntensity: 0.8 }); m.castShadow = false; } });
   const g = new THREE.Group(); o.rotation.set(Math.PI / 2, 0, 0); const w = new THREE.Group(); w.add(o); w.rotation.z = Math.PI / 2; w.position.z = 2.8; if (f === "reg") w.scale.setScalar(0.74); g.add(w);
   const L = f === "wide" ? 67 : f === "reg" ? 28 : 38; const sh = new THREE.Mesh(new THREE.PlaneGeometry(L * 1.05, L * 0.55), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: E ? 0.12 : 0.38, depthWrite: false, map: shadowTex() })); sh.position.set(0, -L * 0.05, 0.12); g.add(sh); return g;
 }
