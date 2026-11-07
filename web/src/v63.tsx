@@ -188,7 +188,7 @@ const ATL: Record<string, Atlas> = {}; const PT: Record<string, THREE.Texture> =
 const imgData = (im: CanvasImageSource & { width: number; height: number }): Img => { const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; const x = c.getContext("2d")!; x.drawImage(im, 0, 0); return { w: c.width, h: c.height, data: x.getImageData(0, 0, c.width, c.height).data }; };
 let DIMG: Record<string, Img> | null = null;
 function decalImgs() { if (DIMG) return DIMG; const o: Record<string, Img> = {}; for (const k of Object.keys(LOGO)) o[k] = imgData(LOGO[k]);
-  const c = document.createElement("canvas"); c.width = 760; c.height = 170; const x = c.getContext("2d")!; x.font = `italic 900 150px "Arial Black", "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.fillStyle = "#fff"; x.fillText("holidays", 4, 88); o["txt:holidays"] = imgData(c); for (const [k, f] of Object.entries(SHAPES)) o[k] = f() as Img; return DIMG = o; }
+  const c = document.createElement("canvas"); c.width = 760; c.height = 170; const x = c.getContext("2d")!; x.font = `italic 900 150px "Arial Black", "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.fillStyle = "#fff"; x.fillText("holidays", 4, 88); o["txt:holidays"] = imgData(c); { const c2 = document.createElement("canvas"); c2.width = 1400; c2.height = 110; const y = c2.getContext("2d")!; y.font = `700 88px "Helvetica Neue", Arial, sans-serif`; y.textBaseline = "middle"; y.fillStyle = "#fff"; y.fillText("Package holidays you can trust", 6, 58); o["txt:slogan"] = imgData(c2); } for (const [k, f] of Object.entries(SHAPES)) o[k] = f() as Img; return DIMG = o; }
 function projTex(n: string, root: THREE.Object3D, mesh: any, id: string) { const key = n + id; if (PT[key]) return PT[key]; const src = mesh.material.map; if (!src?.image) return null;
   if (!ATL[n]) { root.updateMatrixWorld(true); const g = mesh.geometry; const pa = g.attributes.position, ua = g.attributes.uv; const v = new THREE.Vector3(); const pos = new Float32Array(pa.count * 3);
     const inv = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(mesh.matrixWorld); for (let i = 0; i < pa.count; i++) { v.fromBufferAttribute(pa, i).applyMatrix4(inv); pos[3 * i] = v.x; pos[3 * i + 1] = v.y; pos[3 * i + 2] = v.z; }
@@ -198,7 +198,7 @@ function projTex(n: string, root: THREE.Object3D, mesh: any, id: string) { const
 export { loadGlb, brandOf, glbFile };
 // Landing gear (procedural, Skyline-made): positions from public type dimensions (wheelbase/track/wheel size), model frame metres
 // measured from the amvlab GLBs (x1 = nose tip, yb = fuselage belly, ymin = nacelle bottom). lift puts the wheels on the ground
-// with the nacelle above it. Not from telemetry: ADS-B has no gear state, so gear is shown when on-ground or below 2,000 ft (inferred).
+// with the nacelle above it. Not from telemetry: ADS-B has no gear state, so gear is shown only when ADS-B reports on-ground.
 type GearM = { lift: number; yb: number; nose: number; base: number; track: number; dm: number; dn: number; bogie: boolean };
 const GEAR: Record<string, GearM> = {
   A320_nologo: { lift: 3.3, yb: -1.64, nose: 15.78 - 5.0, base: 12.64, track: 7.59, dm: 1.14, dn: 0.76, bogie: false },
@@ -368,7 +368,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
           if (!still() && a.gs > 2 && a.track != null) { const dt = Math.min(12, (now - f.t) / 1000), dm = a.gs * 0.5144 * dt; lat += dm * Math.cos(a.track * Math.PI / 180) / 111320; lon += dm * Math.sin(a.track * Math.PI / 180) / (111320 * Math.cos(lat * Math.PI / 180)); moving = true; }
           const c = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], 0); const tx = (c.x - origin.x) / mpu, ty = -(c.y - origin.y) / mpu, tz = a.alt === "ground" ? 0 : Math.min(+a.alt || 0, 6000) * 0.3048;
           if (still()) { f.x = tx; f.y = ty; f.z = tz; } else { f.x += (tx - f.x) * 0.2; f.y += (ty - f.y) * 0.2; f.z += (tz - f.z) * 0.2; }
-          f.obj.position.set(f.x, f.y, f.z); f.obj.scale.setScalar(k); { const gr = f.obj.userData?.gear; if (gr) gr.visible = a.alt === "ground" || (+a.alt || 99999) < 2000; } // inferred: ADS-B on-ground flag or < 2,000 ft f.obj.rotation.z = -((a.track ?? 0) * Math.PI / 180);
+          f.obj.position.set(f.x, f.y, f.z); f.obj.scale.setScalar(k); { const gr = f.obj.userData?.gear; if (gr) gr.visible = a.alt === "ground"; } // ADS-B on-ground flag only (no gear telemetry; airport elevation unknown, so no altitude guess) f.obj.rotation.z = -((a.track ?? 0) * Math.PI / 180);
           if (f.mk) { const ll = new maplibregl.MercatorCoordinate(origin.x + f.x * mpu, origin.y - f.y * mpu, 0).toLngLat(); f.mk.setLngLat(ll); }
           // Follow: camera tracks this plane's position derived from the last real ADS-B report (no invented path when stale/lost)
           if (followHex.current && f.a.hex === followHex.current && mref.current) {

@@ -7,6 +7,7 @@
 | EasyJet_logo.svg/.png | https://commons.wikimedia.org/wiki/File:EasyJet_logo.svg | easyJet | Public domain (text logo); trademark |
 | BRITISH_AIRWAYS_logo.svg/.png | https://commons.wikimedia.org/wiki/File:BRITISH_AIRWAYS_logo.svg | British Airways | Public domain (text logo); trademark |
 | Jet2Logo.svg/.png | https://commons.wikimedia.org/wiki/File:Jet2Logo.svg | Jet2.com | Public domain (Commons); trademark (sha1 e111251ac02f8642c459082785e594891578add1) |
+| Ryanair_harp_from_CommonsB737.png (+ .svg = the full source drawing) | https://commons.wikimedia.org/wiki/File:Ryanair_B737-800.svg (EI-DCF side-view drawing, 2020-01-22) | Wikimedia Commons uploader (credited 'Ryanair / Revell') | CC BY-SA 4.0 — harp extracted from the fin of this drawing (yellow pixels, small hole-fill); the extracted PNG is shared under CC BY-SA 4.0. Trademark of Ryanair |
 | Lufthansa_Logo_2018.svg/.png | https://commons.wikimedia.org/wiki/File:Lufthansa_Logo_2018.svg | Lufthansa | Public domain (simple geometry/text); trademark |
 PNGs were rasterised from the SVGs with CairoSVG; colours re-tinted at runtime. Trademarks belong to their owners; used here only to identify the airline.
 
@@ -25,8 +26,9 @@ PNGs were rasterised from the SVGs with CairoSVG; colours re-tinted at runtime. 
 ## 3D paint (paint3d.ts + schemes3d.ts, since Nov 2026)
 Paint is placed by projection: each texel of the amvlab atlas is mapped back to its 3D point, so fuselage/fin/engine paint and logos land on the real surfaces for A320, B737 and A350 (no hand-guessed UV boxes). Schemes are simplified, stylised reconstructions of the reference photos above — not exact liveries.
 - Real PD logo files: Ryanair wordmark, easyJet, BRITISH AIRWAYS, Lufthansa (wordmark + crane roundel), Jet2.com (Jet2Logo.svg; also used for the 'Jet2' glyphs of Jet2holidays).
-- Drawn by Skyline (approximations): Ryanair fin harp, BA fin bands (stand-in for Chatham Dockyard), Jet2holidays sunburst, 'holidays' word (system bold font), all cheatlines/sweeps.
+- Drawn by Skyline (approximations): BA fin bands (stand-in for Chatham Dockyard), Jet2holidays sunburst (big orange sun + red spikes, from G-HLYI photo), 'holidays' word and 'Package holidays you can trust' slogan (system bold font), all cheatlines/sweeps.
 - Jet2 sub-brand only for registrations in schemes3d.ts JET2_REG (photo-checked); other EXS = neutral grey fallback with Jet2.com logo.
+- Landing gear: Skyline-made from public wheelbase/track/wheel sizes; live view shows it only when ADS-B reports on-ground.
 - Preview route: /#livpreview=<FR|EZY|BA|LH|J2COM|J2HOL|J2>&model=<A320|B737|A350>&side=<l|r|q|s> (labelled preview, not live traffic).
 
 ## Airport signs

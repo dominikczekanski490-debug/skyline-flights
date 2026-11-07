@@ -73,8 +73,8 @@ export type RGB = [number, number, number];
 export const hex = (h: string): RGB => { const x = h.replace("#", ""); return [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2, 4), 16), parseInt(x.slice(4, 6), 16)]; };
 // Decal: an image placed on the fuselage (centre s,h in 0..1, width ws as a fraction of fuselage length) or fin (fs,fh, width as a fraction of fin chord).
 // rot = degrees counter-clockwise as seen with the nose to the right. Images stay readable on both sides (like real titles).
-export type Part = { img: string; x: number; w: number; tint?: string; sx?: number; sw?: number };
-export type Decal = { parts?: Part[]; img: string; on: "fus" | "fin"; s: number; h: number; ws: number; rot?: number; tint?: string; sx?: number; sw?: number; mirrorFixed?: boolean };
+export type Part = { img: string; x: number; w: number; tint?: string; sx?: number; sw?: number; fwd?: boolean };
+export type Decal = { parts?: Part[]; img: string; on: "fus" | "fin"; s: number; h: number; ws: number; rot?: number; fwd?: boolean; tint?: string; sx?: number; sw?: number; mirrorFixed?: boolean };
 export type Scheme = { id: string; fus: (s: number, h: number) => string; fin: (fs: number, fh: number, side: number) => string; eng: string; other?: string; decals: Decal[] };
 
 export function paint(base: Img, A: Atlas, S: Scheme, imgs: Record<string, Img>): Uint8ClampedArray {
@@ -88,7 +88,7 @@ export function paint(base: Img, A: Atlas, S: Scheme, imgs: Record<string, Img>)
   const finH = (M.fy1 - M.fy0) || 1;
   const lerpq = (a: number, b: number, fh: number) => a + (b - a) * (fh - 0.12) / 0.78; // band centres fh 0.12 (root) and 0.9 (tip)
   const teX = (fh: number) => lerpq(M.te0, M.te1, fh), chord = (fh: number) => Math.max(0.3, lerpq(M.le0, M.le1, fh) - teX(fh));
-  const dec = S.decals.flatMap(d0 => (d0.parts || [{ img: d0.img, x: 0, w: 1, tint: d0.tint, sx: d0.sx, sw: d0.sw }]).map(pt => ({ d0, pt }))).map(({ d0, pt }) => { const d: Decal = { ...d0, img: pt.img, tint: pt.tint, sx: pt.sx, sw: pt.sw }; const im = imgs[d.img]; if (!im) return null; const sx = d.sx || 0, sw = d.sw || im.w - sx;
+  const dec = S.decals.flatMap(d0 => (d0.parts || [{ img: d0.img, x: 0, w: 1, tint: d0.tint, sx: d0.sx, sw: d0.sw }]).map(pt => ({ d0, pt }))).map(({ d0, pt }) => { const d: Decal = { ...d0, img: pt.img, tint: pt.tint, sx: pt.sx, sw: pt.sw, fwd: pt.fwd ?? d0.fwd }; const im = imgs[d.img]; if (!im) return null; const sx = d.sx || 0, sw = d.sw || im.w - sx;
     const r = (d.rot || 0) * Math.PI / 180; let W0 = d.on === "fus" ? d.ws * L : d.ws * chord(d.h);
     if (d.on === "fin") { const ar = (d0.parts ? 1 : 1) * im.h / sw; const bh = W0 * (Math.abs(Math.sin(r)) + ar * Math.abs(Math.cos(r))), bwid = W0 * (Math.abs(Math.cos(r)) + ar * Math.abs(Math.sin(r)));
       const lim = Math.min(1, (0.8 * finH * Math.min(d.h, 1 - d.h) * 2) / bh, (0.85 * chord(d.h)) / bwid); W0 *= lim; } // keep fin art inside the fin's own height/chord
@@ -106,7 +106,7 @@ export function paint(base: Img, A: Atlas, S: Scheme, imgs: Record<string, Img>)
     else { const l = lum(bk); const g = S.other ? col(S.other) : null; rgb = g ? [g[0] * l / 200, g[1] * l / 200, g[2] * l / 200] as RGB : [l * 0.97, l, l * 1.02]; }
     let r = rgb[0] * shade, g = rgb[1] * shade, b = rgb[2] * shade;
     if (c === C_FUS || c === C_FIN || c === C_ENG) for (const q of dec) { if (!q || (q.d.on === "fus" ? c !== C_FUS : c !== C_FIN)) continue;
-      const dx = (x - q.cx) * side, dy = y - q.cy; const lx = dx * q.cr + dy * q.sr - q.ox, ly = -dx * q.sr + dy * q.cr; const u = lx / q.w + 0.5, v = 0.5 - ly / q.h; if (u < 0 || u >= 1 || v < 0 || v >= 1) continue;
+      const dx = (x - q.cx) * side, dy = y - q.cy; const lx = dx * q.cr + dy * q.sr - q.ox, ly = -dx * q.sr + dy * q.cr; let u = lx / q.w + 0.5; const v = 0.5 - ly / q.h; if (q.d.fwd && side > 0) u = 1 - u; /* art whose left edge faces the nose on both sides */ if (u < 0 || u >= 1 || v < 0 || v >= 1) continue;
       const ix = Math.min(q.im.w - 1, q.sx + Math.floor(u * q.sw)), iy = Math.min(q.im.h - 1, Math.floor(v * q.im.h)), o = 4 * (iy * q.im.w + ix); const a = q.im.data[o + 3] / 255; if (a <= 0) continue;
       const tr = q.t ? q.t[0] : q.im.data[o], tg = q.t ? q.t[1] : q.im.data[o + 1], tb = q.t ? q.t[2] : q.im.data[o + 2]; r = r * (1 - a) + tr * a; g = g * (1 - a) + tg * a; b = b * (1 - a) + tb * a; }
     if (c === C_FUS) { const dl = lum(bk) - box(px, py, 4); if (Math.abs(dl) > 28) { const m = 0.82; r = r * (1 - m) + 28 * m; g = g * (1 - m) + 34 * m; b = b * (1 - m) + 44 * m; } } // keep windows/doors from the model's own art
