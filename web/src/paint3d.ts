@@ -7,8 +7,8 @@
 export type Img = { w: number; h: number; data: Uint8ClampedArray | Uint8Array };
 export type Geo = { pos: ArrayLike<number>; uv: ArrayLike<number>; idx: ArrayLike<number> };
 export const C_NONE = 0, C_FUS = 1, C_FIN = 2, C_ENG = 3, C_OTHER = 4;
-export type Meta = { x0: number; x1: number; yb: number; yt: number; yc: number; R: number; fx0: number; fx1: number; fy0: number; fy1: number; ex0: number; ex1: number; counts: number[] };
-export type Atlas = { W: number; H: number; cls: Uint8Array; X: Float32Array; Y: Float32Array; Z: Float32Array; meta: Meta };
+export type Meta = { x0: number; x1: number; yb: number; yt: number; yc: number; R: number; fx0: number; fx1: number; fy0: number; fy1: number; ex0: number; ex1: number; counts: number[]; te0: number; te1: number; le0: number; le1: number };
+export type Atlas = { W: number; H: number; shared: Uint8Array; cls: Uint8Array; X: Float32Array; Y: Float32Array; Z: Float32Array; meta: Meta };
 
 // Classify triangles from geometry alone (model frame: X along fuselage, nose at +X; Y up; Z lateral).
 export function classify(g: Geo) {
@@ -39,14 +39,18 @@ export function classify(g: Geo) {
   { let ymin = Infinity; const ct: number[][] = []; for (let t = 0; t < nT; t++) if (tc[t] === C_ENG) { const a = I[3 * t], b = I[3 * t + 1], c = I[3 * t + 2]; const q = [(vx(a) + vx(b) + vx(c)) / 3, (vy(a) + vy(b) + vy(c)) / 3, Math.abs((vz(a) + vz(b) + vz(c)) / 3), t]; ct.push(q); ymin = Math.min(ymin, q[1]); }
     const low = ct.filter(q => q[1] < ymin + R * 0.12).map(q => q[2]).sort((p, q) => p - q); const zc = low[low.length >> 1] ?? 0;
     const side = ct.filter(q => q[1] < ymin + R * 0.9).map(q => Math.abs(q[2] - zc)).sort((p, q) => p - q); const r = Math.max(0.5, side[Math.floor(side.length * 0.95)] ?? 1); const yE = ymin + r;
-    const bx = ct.filter(q => q[1] < yE - r * 0.5).map(q => q[0]); const bx0 = Math.min(...bx) - r * 0.6, bx1 = Math.max(...bx) + r * 0.6;
+    const bx = ct.filter(q => q[1] < yE - r * 0.5).map(q => q[0]); const bx0 = Math.min(...bx) - r * 0.3, bx1 = Math.max(...bx) + r * 0.3;
     ex0 = Infinity; ex1 = -Infinity; counts[C_ENG] = 0;
     for (const q of ct) { const t = q[3]; if (Math.hypot(q[2] - zc, q[1] - yE) > r * 1.12 || q[0] < bx0 || q[0] > bx1) { tc[t] = C_OTHER; counts[C_OTHER]++; } else { counts[C_ENG]++; ex0 = Math.min(ex0, q[0]); ex1 = Math.max(ex1, q[0]); } } }
-  return { tc, meta: { x0, x1, yb, yt, yc, R, fx0, fx1, fy0, fy1, ex0, ex1, counts, noseSign } as Meta & { noseSign: number } };
+  // fin planform: trailing/leading edge X near the root and near the tip, so fin paint/decals use the LOCAL chord (swept fins)
+  let te0 = Infinity, le0 = -Infinity, te1 = Infinity, le1 = -Infinity; const fH = fy1 - fy0;
+  for (let t = 0; t < nT; t++) if (tc[t] === C_FIN) for (const v of [I[3 * t], I[3 * t + 1], I[3 * t + 2]]) { const q = (vy(v) - fy0) / fH; if (q < 0.25) { te0 = Math.min(te0, vx(v)); le0 = Math.max(le0, vx(v)); } if (q > 0.8) { te1 = Math.min(te1, vx(v)); le1 = Math.max(le1, vx(v)); } }
+  // extrapolate the 0.25 / 0.8 bands to root (0) and tip (1) is unnecessary for paint; store band values at fh≈0.12 / 0.9
+  return { tc, meta: { x0, x1, yb, yt, yc, R, fx0, fx1, fy0, fy1, ex0, ex1, counts, noseSign, te0, te1, le0, le1 } as Meta & { noseSign: number } };
 }
 
 export function buildAtlas(g: Geo, W: number, H: number): Atlas {
-  const { tc, meta } = classify(g); const cls = new Uint8Array(W * H), X = new Float32Array(W * H), Y = new Float32Array(W * H), Z = new Float32Array(W * H); const P = g.pos, U = g.uv, I = g.idx;
+  const { tc, meta } = classify(g); const shared = new Uint8Array(W * H); const cls = new Uint8Array(W * H), X = new Float32Array(W * H), Y = new Float32Array(W * H), Z = new Float32Array(W * H); const P = g.pos, U = g.uv, I = g.idx;
   const pad = 1.5; // texels: covers bilinear/mip bleed at island edges
   for (let t = 0; t < I.length / 3; t++) {
     const a = I[3 * t], b = I[3 * t + 1], c = I[3 * t + 2];
@@ -58,10 +62,11 @@ export function buildAtlas(g: Geo, W: number, H: number): Atlas {
       const qx = px + 0.5, qy = py + 0.5; const l1 = ((by - cy) * (qx - cx) + (cx - bx) * (qy - cy)) / den, l2 = ((cy - ay) * (qx - cx) + (ax - cx) * (qy - cy)) / den, l3 = 1 - l1 - l2;
       if (l1 < -eps || l2 < -eps || l3 < -eps) continue; const k = py * W + px; const inside = l1 >= 0 && l2 >= 0 && l3 >= 0; if (cls[k] && !inside) continue; if (cls[k] && cls[k] !== C_OTHER && tc[t] === C_OTHER) continue; // shared UV (e.g. A320 nacelle + pylon/fan pieces): painted surface wins
       const m1 = Math.min(1, Math.max(0, l1)), m2 = Math.min(1, Math.max(0, l2)), m3 = Math.max(0, 1 - m1 - m2);
+      if (cls[k] && inside && Math.sign(Z[k] || 1) !== Math.sign((P[3 * a + 2] + P[3 * b + 2] + P[3 * c + 2]) || 1)) shared[k] = 1; // same texel used by both sides (mirrored UVs)
       cls[k] = tc[t]; X[k] = P[3 * a] * m1 + P[3 * b] * m2 + P[3 * c] * m3; Y[k] = P[3 * a + 1] * m1 + P[3 * b + 1] * m2 + P[3 * c + 1] * m3; Z[k] = P[3 * a + 2] * m1 + P[3 * b + 2] * m2 + P[3 * c + 2] * m3;
     }
   }
-  return { W, H, cls, X, Y, Z, meta };
+  return { W, H, shared, cls, X, Y, Z, meta };
 }
 
 export type RGB = [number, number, number];
@@ -80,10 +85,15 @@ export function paint(base: Img, A: Atlas, S: Scheme, imgs: Record<string, Img>)
   const ii = new Float64Array((W + 1) * (H + 1)); for (let y = 0; y < H; y++) { let r = 0; for (let x = 0; x < W; x++) { const k = Math.min(base.h - 1, Math.floor(y * bw)) * base.w + Math.min(base.w - 1, Math.floor(x * bw)); r += lum(k); ii[(y + 1) * (W + 1) + x + 1] = ii[y * (W + 1) + x + 1] + r; } }
   const box = (x: number, y: number, r: number) => { const a0 = Math.max(0, x - r), a1 = Math.min(W, x + r + 1), b0 = Math.max(0, y - r), b1 = Math.min(H, y + r + 1); return (ii[b1 * (W + 1) + a1] - ii[b0 * (W + 1) + a1] - ii[b1 * (W + 1) + a0] + ii[b0 * (W + 1) + a0]) / ((a1 - a0) * (b1 - b0)); };
   const cache: Record<string, RGB> = {}; const col = (h: string) => cache[h] ||= hex(h);
-  const finC = (M.fx1 - M.fx0) || 1, finH = (M.fy1 - M.fy0) || 1;
+  const finH = (M.fy1 - M.fy0) || 1;
+  const lerpq = (a: number, b: number, fh: number) => a + (b - a) * (fh - 0.12) / 0.78; // band centres fh 0.12 (root) and 0.9 (tip)
+  const teX = (fh: number) => lerpq(M.te0, M.te1, fh), chord = (fh: number) => Math.max(0.3, lerpq(M.le0, M.le1, fh) - teX(fh));
   const dec = S.decals.flatMap(d0 => (d0.parts || [{ img: d0.img, x: 0, w: 1, tint: d0.tint, sx: d0.sx, sw: d0.sw }]).map(pt => ({ d0, pt }))).map(({ d0, pt }) => { const d: Decal = { ...d0, img: pt.img, tint: pt.tint, sx: pt.sx, sw: pt.sw }; const im = imgs[d.img]; if (!im) return null; const sx = d.sx || 0, sw = d.sw || im.w - sx;
-    const W0 = d.on === "fus" ? d.ws * L : d.ws * finC; const w = W0 * pt.w; const h = w * im.h / sw; const r = (d.rot || 0) * Math.PI / 180; const ox = (pt.x + pt.w / 2 - 0.5) * W0;
-    const bx = d.on === "fus" ? M.x0 + d.s * L : M.fx0 + d.s * finC, by = d.on === "fus" ? M.yb + d.h * D : M.fy0 + d.h * finH;
+    const r = (d.rot || 0) * Math.PI / 180; let W0 = d.on === "fus" ? d.ws * L : d.ws * chord(d.h);
+    if (d.on === "fin") { const ar = (d0.parts ? 1 : 1) * im.h / sw; const bh = W0 * (Math.abs(Math.sin(r)) + ar * Math.abs(Math.cos(r))), bwid = W0 * (Math.abs(Math.cos(r)) + ar * Math.abs(Math.sin(r)));
+      const lim = Math.min(1, (0.8 * finH * Math.min(d.h, 1 - d.h) * 2) / bh, (0.85 * chord(d.h)) / bwid); W0 *= lim; } // keep fin art inside the fin's own height/chord
+    const w = W0 * pt.w; const h = w * im.h / sw; const ox = (pt.x + pt.w / 2 - 0.5) * W0;
+    const bx = d.on === "fus" ? M.x0 + d.s * L : teX(d.h) + d.s * chord(d.h), by = d.on === "fus" ? M.yb + d.h * D : M.fy0 + d.h * finH;
     return { d, im, sx, sw, w, h, ox, cx: bx, cy: by, cr: Math.cos(r), sr: Math.sin(r), t: d.tint ? hex(d.tint) : null }; });
   for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
     const k = py * W + px, c = cls[k]; if (!c) continue;
@@ -91,7 +101,7 @@ export function paint(base: Img, A: Atlas, S: Scheme, imgs: Record<string, Img>)
     const x = X[k], y = Y[k], z = Z[k], side = z >= 0 ? 1 : -1;
     let rgb: RGB; let shade = 1;
     if (c === C_FUS) { const s = (x - M.x0) / L, h = (y - M.yb) / D; rgb = col(S.fus(s, h)); shade = 0.93 + 0.1 * Math.min(1, Math.max(0, h)); }
-    else if (c === C_FIN) rgb = col(S.fin((x - M.fx0) / finC, (y - M.fy0) / finH, side));
+    else if (c === C_FIN) { const fh = (y - M.fy0) / finH; rgb = col(S.fin((x - teX(fh)) / chord(fh), fh, side)); }
     else if (c === C_ENG) rgb = col(S.eng);
     else { const l = lum(bk); const g = S.other ? col(S.other) : null; rgb = g ? [g[0] * l / 200, g[1] * l / 200, g[2] * l / 200] as RGB : [l * 0.97, l, l * 1.02]; }
     let r = rgb[0] * shade, g = rgb[1] * shade, b = rgb[2] * shade;

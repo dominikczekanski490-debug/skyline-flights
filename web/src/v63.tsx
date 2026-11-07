@@ -18,7 +18,7 @@ import { api } from "./lib";
 import { liv } from "./v36";
 import { liveryFor } from "./livery";
 import { buildAtlas, paint, type Atlas, type Img } from "./paint3d";
-import { SCHEMES, LOGO_FILES, JET2_REG as J2REG } from "./schemes3d";
+import { SCHEMES, LOGO_FILES, JET2_REG as J2REG, SHAPES } from "./schemes3d";
 maplibregl.setWorkerUrl(workerUrl);
 
 const still = () => document.documentElement.dataset.skin === "eink" || matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -188,7 +188,7 @@ const ATL: Record<string, Atlas> = {}; const PT: Record<string, THREE.Texture> =
 const imgData = (im: CanvasImageSource & { width: number; height: number }): Img => { const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; const x = c.getContext("2d")!; x.drawImage(im, 0, 0); return { w: c.width, h: c.height, data: x.getImageData(0, 0, c.width, c.height).data }; };
 let DIMG: Record<string, Img> | null = null;
 function decalImgs() { if (DIMG) return DIMG; const o: Record<string, Img> = {}; for (const k of Object.keys(LOGO)) o[k] = imgData(LOGO[k]);
-  const c = document.createElement("canvas"); c.width = 760; c.height = 170; const x = c.getContext("2d")!; x.font = `italic 900 150px "Arial Black", "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.fillStyle = "#fff"; x.fillText("holidays", 4, 88); o["txt:holidays"] = imgData(c); return DIMG = o; }
+  const c = document.createElement("canvas"); c.width = 760; c.height = 170; const x = c.getContext("2d")!; x.font = `italic 900 150px "Arial Black", "Helvetica Neue", Arial, sans-serif`; x.textBaseline = "middle"; x.fillStyle = "#fff"; x.fillText("holidays", 4, 88); o["txt:holidays"] = imgData(c); for (const [k, f] of Object.entries(SHAPES)) o[k] = f() as Img; return DIMG = o; }
 function projTex(n: string, root: THREE.Object3D, mesh: any, id: string) { const key = n + id; if (PT[key]) return PT[key]; const src = mesh.material.map; if (!src?.image) return null;
   if (!ATL[n]) { root.updateMatrixWorld(true); const g = mesh.geometry; const pa = g.attributes.position, ua = g.attributes.uv; const v = new THREE.Vector3(); const pos = new Float32Array(pa.count * 3);
     const inv = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(mesh.matrixWorld); for (let i = 0; i < pa.count; i++) { v.fromBufferAttribute(pa, i).applyMatrix4(inv); pos[3 * i] = v.x; pos[3 * i + 1] = v.y; pos[3 * i + 2] = v.z; }
@@ -196,12 +196,34 @@ function projTex(n: string, root: THREE.Object3D, mesh: any, id: string) { const
   const base = imgData(src.image); const out = paint(base, ATL[n], SCHEMES[id], decalImgs()); const c = document.createElement("canvas"); c.width = base.w; c.height = base.h; c.getContext("2d")!.putImageData(new ImageData(out as any, base.w, base.h), 0, 0);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.flipY = src.flipY; t.anisotropy = 8; return PT[key] = t; }
 export { loadGlb, brandOf, glbFile };
+// Landing gear (procedural, Skyline-made): positions from public type dimensions (wheelbase/track/wheel size), model frame metres
+// measured from the amvlab GLBs (x1 = nose tip, yb = fuselage belly, ymin = nacelle bottom). lift puts the wheels on the ground
+// with the nacelle above it. Not from telemetry: ADS-B has no gear state, so gear is shown when on-ground or below 2,000 ft (inferred).
+type GearM = { lift: number; yb: number; nose: number; base: number; track: number; dm: number; dn: number; bogie: boolean };
+const GEAR: Record<string, GearM> = {
+  A320_nologo: { lift: 3.3, yb: -1.64, nose: 15.78 - 5.0, base: 12.64, track: 7.59, dm: 1.14, dn: 0.76, bogie: false },
+  B737_nologo: { lift: 3.15, yb: -1.98, nose: 18.25 - 4.3, base: 15.6, track: 5.72, dm: 1.12, dn: 0.69, bogie: false },
+  A350_nologo: { lift: 4.6, yb: -2.25, nose: 33.7 - 6.2, base: 28.7, track: 10.6, dm: 1.37, dn: 1.05, bogie: true },
+};
+const GMAT = { tyre: new THREE.MeshStandardMaterial({ color: "#1b1d20", roughness: 0.9 }), strut: new THREE.MeshStandardMaterial({ color: "#a9b0ba", roughness: 0.4, metalness: 0.6 }), hub: new THREE.MeshStandardMaterial({ color: "#d7dbe0", roughness: 0.5, metalness: 0.4 }) };
+export function gearGroup(G: GearM) { const g = new THREE.Group(); g.name = "gear"; const gy = -G.lift; // ground in model frame (Y up)
+  const wheel = (x: number, z: number, d: number) => { const t = new THREE.Mesh(new THREE.CylinderGeometry(d / 2, d / 2, d * 0.36, 20), GMAT.tyre); t.rotation.x = Math.PI / 2; t.position.set(x, gy + d / 2, z); g.add(t);
+    const h = new THREE.Mesh(new THREE.CylinderGeometry(d * 0.27, d * 0.27, d * 0.38, 14), GMAT.hub); h.rotation.x = Math.PI / 2; h.position.copy(t.position); g.add(h); };
+  const strut = (x: number, z: number, y0: number, y1: number, r: number) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, y1 - y0, 10), GMAT.strut); m.position.set(x, (y0 + y1) / 2, z); g.add(m); };
+  // nose: twin wheels
+  const nx = G.nose; strut(nx, 0, gy + G.dn / 2, G.yb + 0.4, 0.12); for (const z of [-1, 1]) wheel(nx, z * G.dn * 0.24, G.dn);
+  // mains: twin wheels per leg (A320/B737) or 4-wheel bogie per leg (A350)
+  const mx = nx - G.base; for (const sd of [-1, 1]) { const z = sd * G.track / 2; strut(mx, z, gy + G.dm / 2, G.yb + 0.9, 0.2);
+    for (const dz of [-1, 1]) { if (G.bogie) { for (const dx of [-0.75, 0.75]) wheel(mx + dx * G.dm, z + dz * G.dm * 0.32, G.dm); } else wheel(mx, z + dz * G.dm * 0.3, G.dm); }
+    if (G.bogie) { const b = new THREE.Mesh(new THREE.BoxGeometry(G.dm * 2.4, 0.18, 0.22), GMAT.strut); b.position.set(mx, gy + G.dm / 2, z); g.add(b); } }
+  return g; }
 export function glbModel(t: string, f: string, cs: string, fallbackC1: string, fallbackName: string, reg = "") {
   const n = glbFile(t, f); const base = GOT[n]; if (!base) return null; const o = base.clone(true); const E = eink(); const brand = brandOf(cs, reg);
   const lv = J2[brand] || liveryFor(cs.slice(0, 3), cs.slice(0, 3)) || liveryFor(cs.slice(0, 2)) || { n: fallbackName || "", f: "#ffffff", t: fallbackC1, e: fallbackC1, a: fallbackC1, m: "plain" as const, tx: fallbackC1 };
   const name = (fallbackName || lv.n || "").replace(/ (UK|Europe|Austria|Ireland)$/, "");
   o.traverse((m: any) => { if (m.isMesh) { const src = m.material.map; m.material = new THREE.MeshStandardMaterial({ map: src && !E ? (SCHEMES[brand] && projTex(n, o, m, brand)) || livTex(n, src, lv, name, brand) : src, color: E ? "#dddddd" : "#ffffff", roughness: 0.42, metalness: 0.18, envMapIntensity: 0.8 }); m.castShadow = false; } });
-  const g = new THREE.Group(); o.rotation.set(Math.PI / 2, 0, 0); const w = new THREE.Group(); w.add(o); w.rotation.z = Math.PI / 2; w.position.z = 2.8; if (f === "reg") w.scale.setScalar(0.74); g.add(w);
+  const GM = GEAR[n]; const gear = GM ? gearGroup(GM) : null; if (gear) { o.add(gear); gear.visible = false; }
+  const g = new THREE.Group(); o.rotation.set(Math.PI / 2, 0, 0); const w = new THREE.Group(); w.add(o); w.rotation.z = Math.PI / 2; w.position.z = GM ? GM.lift : 2.8; g.userData.gear = gear; if (f === "reg") w.scale.setScalar(0.74); g.add(w);
   const L = f === "wide" ? 67 : f === "reg" ? 28 : 38; const sh = new THREE.Mesh(new THREE.PlaneGeometry(L * 1.05, L * 0.55), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: E ? 0.12 : 0.38, depthWrite: false, map: shadowTex() })); sh.position.set(0, -L * 0.05, 0.12); g.add(sh); return g;
 }
 
@@ -346,7 +368,7 @@ export default function Apt3D({ iata, onClose }: { iata: string; onClose: () => 
           if (!still() && a.gs > 2 && a.track != null) { const dt = Math.min(12, (now - f.t) / 1000), dm = a.gs * 0.5144 * dt; lat += dm * Math.cos(a.track * Math.PI / 180) / 111320; lon += dm * Math.sin(a.track * Math.PI / 180) / (111320 * Math.cos(lat * Math.PI / 180)); moving = true; }
           const c = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], 0); const tx = (c.x - origin.x) / mpu, ty = -(c.y - origin.y) / mpu, tz = a.alt === "ground" ? 0 : Math.min(+a.alt || 0, 6000) * 0.3048;
           if (still()) { f.x = tx; f.y = ty; f.z = tz; } else { f.x += (tx - f.x) * 0.2; f.y += (ty - f.y) * 0.2; f.z += (tz - f.z) * 0.2; }
-          f.obj.position.set(f.x, f.y, f.z); f.obj.scale.setScalar(k); f.obj.rotation.z = -((a.track ?? 0) * Math.PI / 180);
+          f.obj.position.set(f.x, f.y, f.z); f.obj.scale.setScalar(k); { const gr = f.obj.userData?.gear; if (gr) gr.visible = a.alt === "ground" || (+a.alt || 99999) < 2000; } // inferred: ADS-B on-ground flag or < 2,000 ft f.obj.rotation.z = -((a.track ?? 0) * Math.PI / 180);
           if (f.mk) { const ll = new maplibregl.MercatorCoordinate(origin.x + f.x * mpu, origin.y - f.y * mpu, 0).toLngLat(); f.mk.setLngLat(ll); }
           // Follow: camera tracks this plane's position derived from the last real ADS-B report (no invented path when stale/lost)
           if (followHex.current && f.a.hex === followHex.current && mref.current) {
