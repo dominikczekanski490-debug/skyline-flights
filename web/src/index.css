@@ -654,3 +654,12 @@ h1,.h1s{letter-spacing:-.6px}h3{letter-spacing:-.2px}.sect{font-size:12px;letter
 /* diversions / alternate airport (official feed remark) — amber on every theme */
 .tboard .tb-st.div,.tboard .c-st .div{color:#ffb000!important;font-weight:700}
 .divalt{margin:8px 12px;padding:10px 12px;border-radius:12px;background:rgba(255,176,0,.14);color:#ffb000;font-weight:700;border:1px solid rgba(255,176,0,.45)}
+/* Nov 2026 board polish: readable column headers, full airline logos on the Kraków board, amber diversion chip/banner */
+.tb-head{font-size:12px;opacity:.9;font-weight:600}
+.tb-krk .tb-head{font-size:12px;color:#d6d6d6;letter-spacing:.4px}
+.tb-krk .c-logo .card-tile,.tb-krk .c-logo .al-tile{width:88px!important;height:20px!important;padding:1px 3px}
+.tb-krk .c-logo .al-tile img{width:100%;height:100%;object-fit:contain}
+.tb-krk .c-logo .al-tile.m-name b{font-size:10px;white-space:nowrap;overflow:visible;letter-spacing:-.2px}
+.b2chip.div{background:rgba(255,176,0,.18);color:#ffb000;font-weight:700}
+.banner.amber{background:rgba(255,176,0,.12);border-color:rgba(255,176,0,.5);color:#ffb000}
+.tb-foot{font-size:11px}

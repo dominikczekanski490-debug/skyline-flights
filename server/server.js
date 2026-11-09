@@ -145,12 +145,13 @@ function parseDivert(dir, ...texts) {
     else if (dir === "arr" && ((m = t.match(/\bARRIV(?:AL|ES|ING)\s+(?:AT|TO|IN)\s+(.+)$/)) || (m = t.match(/\bPRZYLOT\s+(?:DO|NA)\s+(.+)$/)))) kind = "alt_arrival";
     if (!kind) continue; const place = m[1].trim(); if (!place) continue;
     const iata = /^[A-Z]{3}$/.test(place) && AP[place] ? place : DIV_CITY[place] || DIV_CITY[place.split(" ")[0]] || (typeof PLACE !== "undefined" && PLACE[place.toLowerCase()]) || null;
-    const ap = iata && AP[iata]; const city = ap?.city || place[0] + place.slice(1).toLowerCase();
+    const ap = iata && AP[iata]; const city = ap?.city || place.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
     return { kind, city, iata: iata || undefined, text: raw }; }
   return null; }
 const mkFlight = (apt, dir, otherIata, otherName, num, alCode, alName, t, statusText, status, source, extra = {}) => {
   statusText = DE_ST[statusText] || statusText;
-  { const dv = parseDivert(dir, statusText, extra.remarksLocal); if (dv) { extra = { ...extra, divert: dv };
+  { const dv = parseDivert(dir, extra.remarksRaw, statusText, extra.remarksLocal); if (dv) { const where = dv.city + (dv.iata ? ` (${dv.iata})` : "");
+      dv.label = dv.kind === "diverted" ? "Diverted to " + where : dv.kind === "alt_departure" ? "Departing from " + where : "Arriving at " + where; statusText = dv.label; extra = { ...extra, divert: dv };
       if (dv.kind === "diverted") { status = "diverted"; if (dv.iata) extra.diverted = airportOut(AP[dv.iata]) || { iata: dv.iata, city: dv.city }; }
       else if (status !== "cancelled" && status === "departed" && !t.act) status = "scheduled"; } } // "DEPARTURE FROM X" is not "departed"
   const here = AP[apt], there = AP[otherIata] || { iata: otherIata, name: otherName, city: otherName };
@@ -759,7 +760,7 @@ async function krkBoard(apt, dir, ymd) {
       for (const [x] of fl) { if (!x?.flight_no) continue; const iso = v => { const t = Array.isArray(v) ? v[0] : v; return t ? new Date(t).toISOString() : undefined; };
         const rmk = x.remarks || (x.is_cancelled ? "CANCELLED" : "SCHEDULED"); const st = x.is_cancelled ? "cancelled" : genStatus(rmk, dir); const done = st === "departed" || st === "landed";
         const ex = iso(x.expected_time) || iso(x.arrival_datetime_pl); const num = x.flight_no.replace(/\s+/g, "");
-        out.push(mkFlight(apt, dir, dir === "dep" ? x.destination_iata : x.origin_iata, dir === "dep" ? x.destination : x.origin, num, num.slice(0, 2), x.airline, { sched: iso(x.scheduled_datetime_pl), est: done ? undefined : ex, act: done ? ex : undefined, gate: x.gate_id || undefined, term: x.terminal || undefined }, rmk[0] + rmk.slice(1).toLowerCase(), st, "Kraków Airport official flight board (krakowairport.pl)", { localName: dir === "dep" ? x.destination : x.origin, remarksLocal: x.remarks_pl || undefined })); } }
+        out.push(mkFlight(apt, dir, dir === "dep" ? x.destination_iata : x.origin_iata, dir === "dep" ? x.destination : x.origin, num, num.slice(0, 2), x.airline, { sched: iso(x.scheduled_datetime_pl), est: done ? undefined : ex, act: done ? ex : undefined, gate: x.gate_id || undefined, term: x.terminal || undefined }, rmk[0] + rmk.slice(1).toLowerCase(), st, "Kraków Airport official flight board (krakowairport.pl)", { localName: dir === "dep" ? x.destination : x.origin, remarksLocal: x.remarks_pl || undefined, remarksRaw: x.remarks || undefined })); } }
     return out; });
   return all.filter(f => inDay((dir === "dep" ? f.dep : f.arr).scheduled, ymd)); }
 if (AP.KRK) OFFICIAL.KRK = { fn: krkBoard, label: "Kraków Airport official flight board", provider: "Official airport feed", site: "krakowairport.pl" };

@@ -362,7 +362,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
   const [fresh, setFresh] = useState<any>(null);
   const fpoll = usePoll(() => f.example || f.manual ? undefined : api(`/flight/${f.number}?date=${f.date}`).then(r => r.flight && setFresh(r.flight)).catch(() => {}), [f.id], TRACK_MS);
   const until = best(f.dep) ? (+new Date(best(f.dep)!) - Date.now()) / 60000 : 0;
-  const banner = f.status === "cancelled" ? ["Cancelled", "red"] : f.status === "landed" ? [`Arrived ${da != null ? lateLabel(da) : ""}`, da && da > 14 ? "red" : "green"] : f.status === "enroute" ? [`En route${lv?.eta ? ", ETA " + fmtT(lv.eta, f.destination?.tz) : ""}`, "blue"] : f.status === "departed" || (f.dep as any).actualKind === "offblock" ? (() => { const S = statusOf(f, lv); const D: any = f.dep; return /Taxiing|Pushback/.test(S.label) ? [`${S.label} · left gate ${fmtT(D.actual, f.origin?.tz)}`, "blue"] : [S.label + " " + (D.takeoff ? fmtT(D.takeoff, f.origin?.tz) : D.actualKind === "offblock" ? "" : D.actual ? fmtT(D.actual, f.origin?.tz) : ""), "blue"]; })() : until > 0 ? [`Gate Departure in ${dur(until)}`, dd && dd > 14 ? "red" : "green"] : [f.statusText || "Scheduled", "green"];
+  const banner = (f as any).divert ? [(f as any).divert.label || f.statusText, "amber"] : f.status === "cancelled" ? ["Cancelled", "red"] : f.status === "landed" ? [`Arrived ${da != null ? lateLabel(da) : ""}`, da && da > 14 ? "red" : "green"] : f.status === "enroute" ? [`En route${lv?.eta ? ", ETA " + fmtT(lv.eta, f.destination?.tz) : ""}`, "blue"] : f.status === "departed" || (f.dep as any).actualKind === "offblock" ? (() => { const S = statusOf(f, lv); const D: any = f.dep; return /Taxiing|Pushback/.test(S.label) ? [`${S.label} · left gate ${fmtT(D.actual, f.origin?.tz)}`, "blue"] : [S.label + " " + (D.takeoff ? fmtT(D.takeoff, f.origin?.tz) : D.actualKind === "offblock" ? "" : D.actual ? fmtT(D.actual, f.origin?.tz) : ""), "blue"]; })() : until > 0 ? [`Gate Departure in ${dur(until)}`, dd && dd > 14 ? "red" : "green"] : [f.statusText || "Scheduled", "green"];
   const tz = tzOffset(f.destination?.tz) - tzOffset(f.origin?.tz);
 
   const h = flights.filter((x: Flight) => x.origin?.iata === f.origin?.iata && x.destination?.iata === f.destination?.iata && !x.friend);
@@ -374,7 +374,7 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <div className="px"><FindMyPlane f={f} reg={reg} hex={hex} type={ac?.icaoType || lv?.type || ac?.type || f.aircraft?.model} flights={flights} inb={inb} rs={rs} /><div className="faint xs mt8">{PLANE_CREDITS}</div></div>
     <TimeBlock dir="dep" a={f.origin} t={f.dep} d={dd} badge={<Badge icon={Ic.gate} v={f.dep.gate} k={f.dep.terminal && `Terminal ${f.dep.terminal}`} />} />
     {f.diverted && <div className="divert">⑂ DIVERTED TO {f.diverted.iata}<span>Search for Recovery Flight ›</span></div>}
-    {f.divert && f.divert.kind !== "diverted" && <div className="divalt">⑂ {f.divert.kind === "alt_departure" ? "DEPARTING FROM" : "ARRIVING AT"} {(f.divert.city || "").toUpperCase()}{f.divert.iata ? ` (${f.divert.iata})` : ""}<div className="sm" style={{ fontWeight: 400, opacity: .85 }}>Airport remark: “{f.divert.text}”</div></div>}
+    {f.divert && f.divert.kind !== "diverted" && <div className="divalt">⑂ {f.divert.label || (f.divert.kind === "alt_departure" ? "Departing from " : "Arriving at ") + f.divert.city}<div className="sm" style={{ fontWeight: 400, opacity: .85 }}>Airport remark: “{f.divert.text}”</div></div>}
     {f.divert?.kind === "diverted" && <div className="divalt">Airport remark: “{f.divert.text}”{f.divert.city && !f.divert.iata ? ` · ${f.divert.city}` : ""}</div>}
     <div className="sep"><span><i className="sk-ii">{Ic.clock}</i> {dur(estDurMin(f.origin, f.destination))} • {dist(f.origin, f.destination).toLocaleString()} mi</span></div>
     <TimeBlock dir="arr" a={f.diverted || f.destination} t={g.arr} d={da} est={(g.arr as any).estimatedOnly} badge={<Badge icon={I.bag} v={f.arr.baggage || f.arr.gate} k={f.arr.terminal && `Terminal ${f.arr.terminal}`} />} />
@@ -447,11 +447,11 @@ function TimeBlock({ dir, a, t, d, badge, est }: any) {
 function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => void }) {
   const t = dir === "dep" ? f.dep : f.arr; const a = dir === "dep" ? f.destination : f.origin; const d = delay(t); const tz = (dir === "dep" ? f.origin : f.destination)?.tz;
   const st = f.status === "cancelled" ? ["Cancelled", "var(--red)"] : f.status === "landed" ? ["Landed " + (t.actual ? fmtT(t.actual, tz) : ""), "var(--green)"] : f.status === "departed" ? ["Departed " + lateLabel(d), lateColor(d)] : [lateLabel(d) || f.statusText || "Scheduled", lateColor(d)];
-  const bs = boardStatus(f, dir); const bsC = /bad/.test(bs.k) ? "var(--red)" : /warn/.test(bs.k) ? "var(--orange, #f59e0b)" : /ok/.test(bs.k) ? "var(--green)" : /dim/.test(bs.k) ? "var(--muted)" : st[1]; void st; void bsC;
+  const bs = boardStatus(f, dir); const bsC = /div/.test(bs.k) ? "#ffb000" : /bad/.test(bs.k) ? "var(--red)" : /warn/.test(bs.k) ? "var(--orange, #f59e0b)" : /ok/.test(bs.k) ? "var(--green)" : /dim/.test(bs.k) ? "var(--muted)" : st[1]; void st; void bsC;
   if (f.liveOnly) return <div className="brow press" onClick={onClick}><div className="bt"><span className="livedot" /><span className="faint sm">LIVE</span></div>
     <div className="grow"><b>{a?.city || a?.name || a?.iata || "Route unknown"}</b><div className="sm" style={{ color: f.status === "approaching" || f.status === "departed" ? "var(--blue)" : "var(--green)" }}>● {f.statusText}</div></div>
     <div className="right"><b>{f.number}</b><div className="faint sm">{f.aircraft?.type || ""} {f.live?.alt && f.live.alt !== "ground" ? `${Math.round(f.live.alt / 100) * 100}ft` : ""}</div></div></div>;
-  const chipK = /bad/.test(bs.k) ? "bad" : /warn/.test(bs.k) ? "warn" : /ok/.test(bs.k) ? "ok" : /dim/.test(bs.k) ? "dim" : d != null && d >= 15 ? "warn" : "ok";
+  const chipK = /div/.test(bs.k) ? "div" : /bad/.test(bs.k) ? "bad" : /warn/.test(bs.k) ? "warn" : /ok/.test(bs.k) ? "ok" : /dim/.test(bs.k) ? "dim" : d != null && d >= 15 ? "warn" : "ok";
   const late = d != null && Math.abs(d) >= 5; const pills = [t.terminal && "T" + String(t.terminal).replace(/^T/, ""), dir === "dep" ? (t.gate && "Gate " + t.gate) : (f.arr?.baggage && "Belt " + f.arr.baggage)].filter(Boolean) as string[];
   return <div className="brow2 press" onClick={onClick}>
     <div className="b2t"><b className={late ? "lt" : ""}>{fmtT(late ? t.actual || t.estimated : t.scheduled, tz)}</b>{late && <s>{fmtT(t.scheduled, tz)}</s>}</div>
@@ -463,7 +463,7 @@ function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => voi
 }
 function Board({ iata, x, push, term0 }: any) {
   const [info, setInfo] = useState(() => /[#&]info\b/.test(location.hash)); const [term, setTerm] = useState(() => !!term0 || /term=1/.test(location.hash));
-  const [dir, setDir] = useState("dep"); const [date, setDate] = useState(today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState(""); const [earlier, setEarlier] = useState(false); const [qf, setQf] = useState("");
+  const [dir, setDir] = useState(() => /[#&]dir=arr\b/.test(location.hash) ? "arr" : "dep"); const [date, setDate] = useState(today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState(""); const [earlier, setEarlier] = useState(false); const [qf, setQf] = useState("");
   const isGr = FRAPORT_GR.has(iata); const [gr, setGr] = useState(() => localStorage.getItem("sk.grboard") !== "off");
   useEffect(() => setD(null), [iata, dir, date]);
   const poll = usePoll(() => api(`/board/${iata}?dir=${dir}&date=${date}`).then(setD).catch(e => setD((p: any) => p && !p.error ? p : { error: e.message, needsKey: e.needsKey, airport: e.airport || p?.airport })), [iata, dir, date]);
