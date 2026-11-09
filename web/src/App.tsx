@@ -374,6 +374,8 @@ function FlightDetail({ f, upd, setFlights, flights, close, push, live }: any) {
     <div className="px"><FindMyPlane f={f} reg={reg} hex={hex} type={ac?.icaoType || lv?.type || ac?.type || f.aircraft?.model} flights={flights} inb={inb} rs={rs} /><div className="faint xs mt8">{PLANE_CREDITS}</div></div>
     <TimeBlock dir="dep" a={f.origin} t={f.dep} d={dd} badge={<Badge icon={Ic.gate} v={f.dep.gate} k={f.dep.terminal && `Terminal ${f.dep.terminal}`} />} />
     {f.diverted && <div className="divert">⑂ DIVERTED TO {f.diverted.iata}<span>Search for Recovery Flight ›</span></div>}
+    {f.divert && f.divert.kind !== "diverted" && <div className="divalt">⑂ {f.divert.kind === "alt_departure" ? "DEPARTING FROM" : "ARRIVING AT"} {(f.divert.city || "").toUpperCase()}{f.divert.iata ? ` (${f.divert.iata})` : ""}<div className="sm" style={{ fontWeight: 400, opacity: .85 }}>Airport remark: “{f.divert.text}”</div></div>}
+    {f.divert?.kind === "diverted" && <div className="divalt">Airport remark: “{f.divert.text}”{f.divert.city && !f.divert.iata ? ` · ${f.divert.city}` : ""}</div>}
     <div className="sep"><span><i className="sk-ii">{Ic.clock}</i> {dur(estDurMin(f.origin, f.destination))} • {dist(f.origin, f.destination).toLocaleString()} mi</span></div>
     <TimeBlock dir="arr" a={f.diverted || f.destination} t={g.arr} d={da} est={(g.arr as any).estimatedOnly} badge={<Badge icon={I.bag} v={f.arr.baggage || f.arr.gate} k={f.arr.terminal && `Terminal ${f.arr.terminal}`} />} />
     <FlightTimes f={f} fresh={fresh} />

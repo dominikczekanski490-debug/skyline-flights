@@ -645,3 +645,12 @@ h1,.h1s{letter-spacing:-.6px}h3{letter-spacing:-.2px}.sect{font-size:12px;letter
 .tb-tr{--bg:#0d0f13;--acc:#e30a17}.tb-tr .tb-title b{color:#fff}.tb-tr .tb-top{border-bottom:2px solid #e30a17}
 .tb-cy{--bg:#0f2346;--alt:#132b55}.tb-cy .tb-title b{color:#fff}
 .tb-mla{--bg:#14161a}.tb-mla .tb-top{border-bottom:2px solid #cf142b}
+/* Nov 2026: iPhone standalone PWA — the tboard already pads by the safe-area inset, so the top bar must not add it again (it pushed the buttons over the board title + column header row) */
+.tboard>.tb-fab{padding:10px calc(env(safe-area-inset-right,0px) + 10px) 10px 10px}
+.tb-head{position:relative;z-index:2}
+/* status column: wrap to two lines instead of cutting off ("PUSHBACK · LEFT G…") */
+.tb-row>span.c-st{overflow:hidden;white-space:normal;line-height:1.05;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:normal;overflow-wrap:anywhere}
+.tb-row>span.c-st .tb-st{white-space:normal}
+/* diversions / alternate airport (official feed remark) — amber on every theme */
+.tboard .tb-st.div,.tboard .c-st .div{color:#ffb000!important;font-weight:700}
+.divalt{margin:8px 12px;padding:10px 12px;border-radius:12px;background:rgba(255,176,0,.14);color:#ffb000;font-weight:700;border:1px solid rgba(255,176,0,.45)}

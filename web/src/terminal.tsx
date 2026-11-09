@@ -84,7 +84,11 @@ export function status(f: any, dir: string) {
   const t = dir === "dep" ? f.dep : f.arr; const d = delay(t); const s = (f.statusText || "").toLowerCase(); const tz = dir === "dep" ? f.origin?.tz : f.destination?.tz;
   const at = (x?: string | null) => x ? " " + fmtT(x, tz) : ""; const g = (f.statusText || "").match(/gate\s+([A-Z]?\d+[A-Z]?)/i)?.[1] || t.gate; const gs = g ? " · Gate " + g : "";
   if (f.status === "cancelled" || /cancel/.test(s)) return { txt: "Cancelled", k: "bad" };
-  if (f.status === "diverted" || /divert/.test(s)) return { txt: "Diverted", k: "bad" };
+  { const v = f.divert; const where = v ? v.city + (v.iata ? ` (${v.iata})` : "") : ""; // from the official feed's remark text only
+    if (v?.kind === "diverted") return { txt: "Diverted → " + where, k: "div" };
+    if (v?.kind === "alt_departure") return { txt: "Departing from " + where, k: "div" };
+    if (v?.kind === "alt_arrival") return { txt: "Arriving at " + where, k: "div" }; }
+  if (f.status === "diverted" || /divert/.test(s)) return { txt: f.diverted?.iata ? "Diverted → " + (f.diverted.city || f.diverted.iata) + ` (${f.diverted.iata})` : "Diverted", k: "div" };
   if (dir === "dep") {
     { const D: any = t; if (D.actualKind === "offblock" && !D.takeoff && !D.airborneText && !(f.live && typeof f.live.alt === "number" && (f.live.gs || 0) > 80)) { const m = (Date.now() - Date.parse(D.actual)) / 6e4;
         if (m <= 40) return { txt: (m < 4 ? "Pushback" : "Taxiing") + " · left gate" + at(D.actual), k: "blink ok" }; return { txt: "Departed (est.)", k: "ok" }; }
@@ -149,7 +153,7 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen }:
   const hiddenN = earlier ? 0 : (d?.flights || []).filter((f: any) => !f.liveOnly).length - rows.length;
   const live = d?.liveOnly; const portrait = vp.h > vp.w; const panels = (THEMES[th].panels || 1) > 1 && !portrait ? THEMES[th].panels! : 1;
   // "Fit width": lay the board out at a fixed design width that always has room for every column (status included), then scale it to the screen.
-  const designW = panels > 1 ? 1500 : portrait ? 720 : 1100; const s = Math.min(1, vp.w / designW) * zoom; const BAR = 66; const stageH = (vp.h - BAR) / s;
+  const designW = panels > 1 ? 1500 : portrait ? 720 : 1100; const s = Math.min(1, vp.w / designW) * zoom; const BAR = 66; const [ins, setIns] = useState({ t: 0, b: 0 }); useEffect(() => { const el = ref.current; if (!el) return; const cs = getComputedStyle(el); const v = { t: parseFloat(cs.paddingTop) || 0, b: parseFloat(cs.paddingBottom) || 0 }; if (v.t !== ins.t || v.b !== ins.b) setIns(v); }); const stageH = (vp.h - BAR - ins.t - ins.b) / s; // iPhone PWA: subtract safe-area insets so the header row is never pushed under the bar
   const rowH = th === "mag" ? 50 : 40; const per = Math.max(6, Math.min(30, Math.floor((stageH - (th === "mag" ? 150 : 110)) / rowH))); const pages = Math.max(1, Math.ceil(rows.length / (per * panels)));
   useEffect(() => { if (paused) return; const t = setInterval(() => setPage(p => (p + 1) % pages), 9000); return () => clearInterval(t); }, [paused, pages]);
   const pg = Math.min(page, pages - 1); void 0; const vis = rows.slice(pg * per, pg * per + per); const solari = th === "solari" || th === "ita";

@@ -134,8 +134,25 @@ async function magBoard(apt, dir, ymd) {
 const AVINOR = "OSL BGO TRD SVG TOS BOO AES KRS EVE HAU MOL KSU ALF BDU BJF BNN BVG FDE FRO HAA HFT HOV HVG KKN LKL LKN MEH MJF MQN OSY RET RRS RVK SDN SKN SOG SOJ SSJ SVJ VAW VDS VRY LYR ANX TRF".split(" ");
 const getText = async (url, opt = {}) => { const r = await fetch(url, { ...opt, headers: { "user-agent": UA, ...(opt.headers || {}) }, signal: AbortSignal.timeout(opt.timeout || 14000) }); if (!r.ok) { const e = new Error(`${r.status} ${url.split("?")[0]}`); e.status = r.status; throw e; } return r.text(); };
 const DE_ST = { "Geplant": "Scheduled", "Gestartet": "Departed", "Check-In": "Check-in open", "Beendet": "Boarding closed", "Gepäck": "Baggage on belt", "Gelandet": "Landed", "Annulliert": "Cancelled", "Verspätet": "Delayed", "Erwartet": "Expected", "Annulliert/Cancelled": "Cancelled", "BOR": "Boarding" };
+// Diversions / alternate-airport operations, read ONLY from the official feed's own remark text (EN + PL + DE wording).
+// e.g. KRK "DIVERTED TO KATOWICE" / "PRZEKIEROWANY DO KATOWIC", "DEPARTURE FROM KATOWICE" / "ODLOT Z KATOWIC". Never inferred.
+const DIV_CITY = { KATOWICE: "KTW", KATOWIC: "KTW", PYRZOWICE: "KTW", OSTRAVA: "OSR", OSTRAWA: "OSR", OSTRAWY: "OSR", OSTRAWIE: "OSR", RZESZOW: "RZE", RZESZOWA: "RZE", JASIONKA: "RZE", WARSAW: "WAW", WARSZAWA: "WAW", WARSZAWY: "WAW", MODLIN: "WMI", WROCLAW: "WRO", WROCLAWIA: "WRO", POZNAN: "POZ", POZNANIA: "POZ", GDANSK: "GDN", GDANSKA: "GDN", LUBLIN: "LUB", LUBLINA: "LUB", LODZ: "LCJ", LODZI: "LCJ", BRATISLAVA: "BTS", BRATYSLAWA: "BTS", BRATYSLAWY: "BTS", VIENNA: "VIE", WIEN: "VIE", WIEDEN: "VIE", WIEDNIA: "VIE", BUDAPEST: "BUD", BUDAPESZT: "BUD", BUDAPESZTU: "BUD", PRAGUE: "PRG", PRAGA: "PRG", PRAGI: "PRG", PRAHA: "PRG", KOSICE: "KSC", KOSZYCE: "KSC", KOSZYC: "KSC", BRNO: "BRQ", KRAKOW: "KRK", KRAKOWA: "KRK", CRACOW: "KRK", BERLIN: "BER", BERLINA: "BER", MUNICH: "MUC", MUENCHEN: "MUC", MONACHIUM: "MUC", FRANKFURT: "FRA", LEIPZIG: "LEJ", DRESDEN: "DRS", NUREMBERG: "NUE", NUERNBERG: "NUE", STUTTGART: "STR", HAMBURG: "HAM", HANNOVER: "HAJ", COLOGNE: "CGN", KOELN: "CGN", DUSSELDORF: "DUS", DUESSELDORF: "DUS", MANCHESTER: "MAN", LIVERPOOL: "LPL", BIRMINGHAM: "BHX", "EAST MIDLANDS": "EMA", STANSTED: "STN", GATWICK: "LGW", HEATHROW: "LHR", LUTON: "LTN", LEEDS: "LBA", NEWCASTLE: "NCL", GLASGOW: "GLA", EDINBURGH: "EDI", BRISTOL: "BRS", DUBLIN: "DUB", SHANNON: "SNN", CORK: "ORK" };
+const dvNorm = x => (x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ł/g, "l").replace(/Ł/g, "L").toUpperCase().replace(/[^A-Z ]/g, " ").replace(/\s+/g, " ").trim();
+function parseDivert(dir, ...texts) {
+  for (const raw of texts) { const t = dvNorm(raw); if (!t) continue; let m, kind = null;
+    if ((m = t.match(/\b(?:DIVERTED|DIVERTING|DIVERSION)\s+(?:TO\s+)?(.+)$/)) || (m = t.match(/\bPRZEKIEROWANY\s+(?:DO|NA)\s+(.+)$/)) || (m = t.match(/\bUMGELEITET\s+NACH\s+(.+)$/))) kind = "diverted";
+    else if (dir === "dep" && ((m = t.match(/\bDEPART(?:URE|S|ING)?\s+FROM\s+(.+)$/)) || (m = t.match(/\bODLOT\s+Z\s+(.+)$/)) || (m = t.match(/\bABFLUG\s+(?:AB|VON)\s+(.+)$/)))) kind = "alt_departure";
+    else if (dir === "arr" && ((m = t.match(/\bARRIV(?:AL|ES|ING)\s+(?:AT|TO|IN)\s+(.+)$/)) || (m = t.match(/\bPRZYLOT\s+(?:DO|NA)\s+(.+)$/)))) kind = "alt_arrival";
+    if (!kind) continue; const place = m[1].trim(); if (!place) continue;
+    const iata = /^[A-Z]{3}$/.test(place) && AP[place] ? place : DIV_CITY[place] || DIV_CITY[place.split(" ")[0]] || (typeof PLACE !== "undefined" && PLACE[place.toLowerCase()]) || null;
+    const ap = iata && AP[iata]; const city = ap?.city || place[0] + place.slice(1).toLowerCase();
+    return { kind, city, iata: iata || undefined, text: raw }; }
+  return null; }
 const mkFlight = (apt, dir, otherIata, otherName, num, alCode, alName, t, statusText, status, source, extra = {}) => {
   statusText = DE_ST[statusText] || statusText;
+  { const dv = parseDivert(dir, statusText, extra.remarksLocal); if (dv) { extra = { ...extra, divert: dv };
+      if (dv.kind === "diverted") { status = "diverted"; if (dv.iata) extra.diverted = airportOut(AP[dv.iata]) || { iata: dv.iata, city: dv.city }; }
+      else if (status !== "cancelled" && status === "departed" && !t.act) status = "scheduled"; } } // "DEPARTURE FROM X" is not "departed"
   const here = AP[apt], there = AP[otherIata] || { iata: otherIata, name: otherName, city: otherName };
   const side = { scheduled: t.sched, estimated: t.est, actual: t.act, gate: t.gate || undefined, terminal: t.term || undefined, ...(dir === "arr" ? { baggage: t.belt || undefined } : {}) };
   const id = `${num}-${(t.sched || "").slice(0, 10)}`;
