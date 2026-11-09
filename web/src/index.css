@@ -663,3 +663,5 @@ h1,.h1s{letter-spacing:-.6px}h3{letter-spacing:-.2px}.sect{font-size:12px;letter
 .b2chip.div{background:rgba(255,176,0,.18);color:#ffb000;font-weight:700}
 .banner.amber{background:rgba(255,176,0,.12);border-color:rgba(255,176,0,.5);color:#ffb000}
 .tb-foot{font-size:11px}
+/* header cells never bleed into the next column (OCZEKIWANY|LINIA collision) */
+.tboard .tb-head>span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:clip;padding-right:6px}

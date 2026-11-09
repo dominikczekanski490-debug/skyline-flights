@@ -45,6 +45,7 @@ Object.assign(AL, { LS: { name: "Jet2.com", iata: "LS", icao: "EXS", callsign: "
   U2: { name: "easyJet", iata: "U2", icao: "EZY", callsign: "EASY", country: "United Kingdom", active: true },
   BA: { name: "British Airways", iata: "BA", icao: "BAW", callsign: "SPEEDBIRD", country: "United Kingdom", active: true },
   BY: { name: "TUI Airways", iata: "BY", icao: "TOM", callsign: "TOMJET", country: "United Kingdom", active: true } });
+for (const c of ["LS", "FR", "U2", "BA", "BY"]) AL_ICAO[AL[c].icao] = AL[c];
 const AIRLINE_LINKS = {
   LS: { web: "https://www.jet2.com", phone: "+443339000500", x: "https://x.com/jet2tweets", fb: "https://facebook.com/Jet2" },
   FR: { web: "https://www.ryanair.com", phone: "+443308100300", x: "https://x.com/Ryanair", fb: "https://facebook.com/ryanair" },
@@ -149,6 +150,9 @@ function parseDivert(dir, ...texts) {
     return { kind, city, iata: iata || undefined, text: raw }; }
   return null; }
 const mkFlight = (apt, dir, otherIata, otherName, num, alCode, alName, t, statusText, status, source, extra = {}) => {
+  // Feeds such as Kraków print ICAO-prefixed numbers (EZS1284, EZY2938, EJU4670). Taking the first two letters ("EZ", "EJ") picked
+  // unrelated carriers (Sun-Air / Evergreen, New England Airlines) and their logos, so resolve a 3-letter ICAO prefix first.
+  if (/^[A-Z]{3}\d/.test(num || "") && AL_ICAO[num.slice(0, 3)]?.iata && (!alCode || alCode === num.slice(0, 2))) alCode = AL_ICAO[num.slice(0, 3)].iata;
   statusText = DE_ST[statusText] || statusText;
   { const dv = parseDivert(dir, extra.remarksRaw, statusText, extra.remarksLocal); if (dv) { const where = dv.city + (dv.iata ? ` (${dv.iata})` : "");
       dv.label = dv.kind === "diverted" ? "Diverted to " + where : dv.kind === "alt_departure" ? "Departing from " + where : "Arriving at " + where; statusText = dv.label; extra = { ...extra, divert: dv };
