@@ -1,6 +1,6 @@
 # Tail-fin images — attribution
 
-Each file in this folder is a tight crop (resized to 222×168 WebP) of a real photograph on Wikimedia Commons. Nothing was redrawn or recoloured. Crops are derivative works shared under the same licence as the source photo. Airline logos and liveries are trademarks of their owners; they are shown only to identify the operating carrier.
+Each file in this folder is a cut-out of just the tail fin from a real photograph on Wikimedia Commons, exported as a transparent WebP (max 222×168). The background, fuselage and stabiliser were removed with a hand-traced fin outline, refined with the rembg IS-Net segmentation model where it gave cleaner edges; the fin root is cut straight. The fin pixels themselves were not redrawn or recoloured. Crops are derivative works shared under the same licence as the source photo. Airline logos and liveries are trademarks of their owners; they are shown only to identify the operating carrier.
 
 | File | Airline | Source (Wikimedia Commons) | Author | Licence |
 |---|---|---|---|---|

@@ -27,6 +27,18 @@ for (const l of fs.readFileSync(path.join(__dir, "data/airports.dat"), "utf8").s
   const a = { name: c[1], city: c[2], country: c[3], iata: c[4], icao: c[5], lat: +c[6], lon: +c[7], elev: +c[8] || 0, tz: c[11] };
   if (a.iata) AP[a.iata] = a; if (a.icao) AP_ICAO[a.icao] = a;
 }
+// Airports newer than the OpenFlights snapshot (or renamed codes): proper city names instead of raw feed text such as "MANOHAR GOA"
+for (const a of [
+  { iata: "GOX", icao: "VOGA", name: "Manohar International Airport", city: "Goa", country: "India", lat: 15.7442, lon: 73.8606, tz: "Asia/Kolkata" },
+  { iata: "TFU", icao: "ZUTF", name: "Chengdu Tianfu International Airport", city: "Chengdu", country: "China", lat: 30.3125, lon: 104.4444, tz: "Asia/Shanghai" },
+  { iata: "SPX", icao: "HESX", name: "Sphinx International Airport", city: "Cairo", country: "Egypt", lat: 30.1097, lon: 30.8947, tz: "Africa/Cairo" },
+  { iata: "NMI", icao: "", name: "Navi Mumbai International Airport", city: "Mumbai", country: "India", lat: 18.99, lon: 73.072, tz: "Asia/Kolkata" },
+  { iata: "RMO", icao: "LUKK", name: "Chișinău International Airport", city: "Chișinău", country: "Moldova", lat: 46.9277, lon: 28.931, tz: "Europe/Chisinau" },
+  { iata: "NQZ", icao: "UACC", name: "Nursultan Nazarbayev International Airport", city: "Astana", country: "Kazakhstan", lat: 51.0222, lon: 71.4669, tz: "Asia/Almaty" },
+  { iata: "RZV", icao: "LTFO", name: "Rize–Artvin Airport", city: "Rize", country: "Turkey", lat: 41.179, lon: 40.8508, tz: "Europe/Istanbul" },
+]) if (!AP[a.iata]) { AP[a.iata] = { elev: 0, ...a }; if (a.icao) AP_ICAO[a.icao] = AP[a.iata]; }
+// Unknown airport: never show raw upper-case feed text; strip "airport" words and title-case it
+const feedPlace = s => { const t = String(s || "").replace(/\b(international|intl\.?|airport|aeroporto|aeropuerto|aéroport|flughafen|lotnisko)\b/gi, " ").replace(/\s+/g, " ").trim(); return t ? t.toLowerCase().replace(/(^|[\s\-\/(])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()) : undefined; };
 // v23: fill missing/\N time zones for the countries we cover (OpenFlights has gaps, e.g. IST)
 { const CTZ = { Turkey: "Europe/Istanbul", Greece: "Europe/Athens", Cyprus: "Asia/Nicosia", Malta: "Europe/Malta", Romania: "Europe/Bucharest", Bulgaria: "Europe/Sofia", Serbia: "Europe/Belgrade", Croatia: "Europe/Zagreb", Albania: "Europe/Tirane", Montenegro: "Europe/Podgorica", "Bosnia and Herzegovina": "Europe/Sarajevo", Macedonia: "Europe/Skopje", "North Macedonia": "Europe/Skopje", Hungary: "Europe/Budapest", Poland: "Europe/Warsaw", Lithuania: "Europe/Vilnius", Latvia: "Europe/Riga", Estonia: "Europe/Tallinn", Moldova: "Europe/Chisinau", Slovenia: "Europe/Ljubljana", Kosovo: "Europe/Belgrade" };
   for (const a of Object.values(AP)) if ((!a.tz || a.tz === "\\N") && CTZ[a.country]) a.tz = CTZ[a.country]; }
@@ -91,7 +103,7 @@ const statusFromMag = s => { s = (s || "").toLowerCase();
   if (s.includes("departed") || s.includes("airborne")) return "departed"; if (s.includes("board")) return "boarding"; if (s.includes("gate")) return "gate"; if (s.includes("delay")) return "delayed"; return "scheduled"; };
 function normMag(f, apt, dir) {
   const other = dir === "dep" ? f.arrivalAirport : f.departureAirport;
-  const here = AP[apt], there = AP[other?.code] || { iata: other?.code, name: other?.name, city: other?.cityName };
+  const here = AP[apt], there = AP[other?.code] || { iata: other?.code, name: feedPlace(other?.name), city: feedPlace(other?.cityName || other?.name) };
   const num = (f.flightNumber || "").replace(/\s+/g, "");
   const al = f.airline?.code || num.slice(0, 2);
   const _id = `${num}-${(f.scheduledDepartureDateTime || f.scheduledArrivalDateTime || "").slice(0, 10)}`; return { id: _id, date: _id.slice(-10),
@@ -158,7 +170,7 @@ const mkFlight = (apt, dir, otherIata, otherName, num, alCode, alName, t, status
       dv.label = dv.kind === "diverted" ? "Diverted to " + where : dv.kind === "alt_departure" ? "Departing from " + where : "Arriving at " + where; statusText = dv.label; extra = { ...extra, divert: dv };
       if (dv.kind === "diverted") { status = "diverted"; if (dv.iata) extra.diverted = airportOut(AP[dv.iata]) || { iata: dv.iata, city: dv.city }; }
       else if (status !== "cancelled" && status === "departed" && !t.act) status = "scheduled"; } } // "DEPARTURE FROM X" is not "departed"
-  const here = AP[apt], there = AP[otherIata] || { iata: otherIata, name: otherName, city: otherName };
+  const here = AP[apt], there = AP[otherIata] || { iata: otherIata, name: feedPlace(otherName), city: feedPlace(otherName) };
   const side = { scheduled: t.sched, estimated: t.est, actual: t.act, gate: t.gate || undefined, terminal: t.term || undefined, ...(dir === "arr" ? { baggage: t.belt || undefined } : {}) };
   const id = `${num}-${(t.sched || "").slice(0, 10)}`;
   return { id, date: id.slice(-10), number: num, airline: { ...airlineOut(alCode), name: alName || airlineOut(alCode).name }, origin: airportOut(dir === "dep" ? here : there) || there, destination: airportOut(dir === "dep" ? there : here) || there,

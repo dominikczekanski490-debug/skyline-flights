@@ -32,6 +32,7 @@ Each place was accepted only if the Wikipedia article's coordinates lie within 8
 | AYT | Antalya | [Falezlerden_Antalya_Konyaaltı_Plajına_doğru_bir_görünüm.jpg](https://commons.wikimedia.org/wiki/File:Falezlerden_Antalya_Konyaalt%C4%B1_Plaj%C4%B1na_do%C4%9Fru_bir_g%C3%B6r%C3%BCn%C3%BCm.jpg) | Esginmurat | CC BY-SA 4.0 |
 | BAH | Bahrain | [Bahrain_Fort_overview.jpg](https://commons.wikimedia.org/wiki/File:Bahrain_Fort_overview.jpg) | Jayson De Leon | CC BY 2.0 |
 | BCN | Barcelona | [Evening_light_over_Barcelona.jpg](https://commons.wikimedia.org/wiki/File:Evening_light_over_Barcelona.jpg) | M McBey | CC BY 2.0 |
+| BDA | Bermuda | [Crossing_Hamilton_Harbour,_Bermuda_-_panoramio.jpg](https://commons.wikimedia.org/wiki/File:Crossing_Hamilton_Harbour,_Bermuda_-_panoramio.jpg) | David Broad | CC BY 3.0 |
 | BDL | Windsor Locks | [Windsor_Locks_Canal_Company_by_Elias_Friedman.JPG](https://commons.wikimedia.org/wiki/File:Windsor_Locks_Canal_Company_by_Elias_Friedman.JPG) | Elipongo | Public domain |
 | BEG | Belgrade | [Belgrade_from_the_Belgrade_Tower_(October_2026,_1).jpg](https://commons.wikimedia.org/wiki/File:Belgrade_from_the_Belgrade_Tower_(October_2026,_1).jpg) | DKjellby | CC0 |
 | BER | Berlin | [Museumsinsel_Berlin_Juli_2021_1_(cropped)_b.jpg](https://commons.wikimedia.org/wiki/File:Museumsinsel_Berlin_Juli_2021_1_(cropped)_b.jpg) | File:Museumsinsel Berlin Juli 2021 1 (cropped).jpg: Kasa Fue derivative work: Georgfotoart | CC BY-SA 4.0 |
@@ -54,6 +55,7 @@ Each place was accepted only if the Wikipedia article's coordinates lie within 8
 | BOS | Boston | [ISH_WC_Boston4.jpg](https://commons.wikimedia.org/wiki/File:ISH_WC_Boston4.jpg) | Ian Howard | CC BY 2.5 |
 | BRE | Bremen | [Bremen_Rathaus,_Roland_und_Dom-blaue-Stunde-2024-msu-8259-.jpg](https://commons.wikimedia.org/wiki/File:Bremen_Rathaus,_Roland_und_Dom-blaue-Stunde-2024-msu-8259-.jpg) | Matthias Süßen | CC BY-SA 4.0 |
 | BRI | Bari | [Bari_-_Lungomare_Imperatore_Augusto_&_Mare.jpg](https://commons.wikimedia.org/wiki/File:Bari_-_Lungomare_Imperatore_Augusto_%26_Mare.jpg) | Benjamin Smith | CC BY-SA 4.0 |
+| BRR | Barra | [Castlebay_harbour_on_Barra_-_geograph.org.uk_-_5257330.jpg](https://commons.wikimedia.org/wiki/File:Castlebay_harbour_on_Barra_-_geograph.org.uk_-_5257330.jpg) | Peter Mackenzie | CC BY-SA 2.0 |
 | BRS | Bristol | [Clifton_Suspension_Bridge_and_the_Observatory_in_Bristol,_England.jpg](https://commons.wikimedia.org/wiki/File:Clifton_Suspension_Bridge_and_the_Observatory_in_Bristol,_England.jpg) | Chris Lathom-Sharp | CC BY-SA 4.0 |
 | BRU | Brussels | [Grand_Place_Bruselas_2.jpg](https://commons.wikimedia.org/wiki/File:Grand_Place_Bruselas_2.jpg) | Francisco Conde Sánchez | CC BY-SA 3.0 |
 | BSL | Mulhouse | [Mulhouse,_Alsace,_Rue_du_Sauvage_(32701038458).jpg](https://commons.wikimedia.org/wiki/File:Mulhouse,_Alsace,_Rue_du_Sauvage_(32701038458).jpg) | Jorge Franganillo from Barcelona, Spain | CC BY 2.0 |
@@ -69,6 +71,7 @@ Each place was accepted only if the Wikipedia article's coordinates lie within 8
 | CAL | Campbeltown | [Campbeltown_seafront.jpg](https://commons.wikimedia.org/wiki/File:Campbeltown_seafront.jpg) | J M Briscoe | CC BY-SA 2.0 |
 | CAN | Guangzhou | [Canton_Tower_20241027.jpg](https://commons.wikimedia.org/wiki/File:Canton_Tower_20241027.jpg) | Tim Wu | CC BY-SA 4.0 |
 | CDG | Paris | [La_Tour_Eiffel_vue_de_la_Tour_Saint-Jacques,_Paris_août_2014_(2).jpg](https://commons.wikimedia.org/wiki/File:La_Tour_Eiffel_vue_de_la_Tour_Saint-Jacques,_Paris_ao%C3%BBt_2014_(2).jpg) | Yann Caradec from Paris, France | CC BY-SA 2.0 |
+| CFN | Gweedore | [Hotel,_beach,_and_shipwreck_south_of_R257_at_Bunbeg_-_geograph.org.uk_-_1159653.jpg](https://commons.wikimedia.org/wiki/File:Hotel,_beach,_and_shipwreck_south_of_R257_at_Bunbeg_-_geograph.org.uk_-_1159653.jpg) | Sue Mischyshyn | CC BY-SA 2.0 |
 | CGN | Cologne | [Kranhäuser_Cologne,_April_2018_-01.jpg](https://commons.wikimedia.org/wiki/File:Kranh%C3%A4user_Cologne,_April_2018_-01.jpg) | Martin Falbisoner | CC BY-SA 4.0 |
 | CGO | Zhengzhou | [Zhengzhou_CBDcity.jpg](https://commons.wikimedia.org/wiki/File:Zhengzhou_CBDcity.jpg) | 白诗棋 | CC0 |
 | CIA | Rome | [Trevi_Fountain,_Rome,_Italy_2_-_May_2007.jpg](https://commons.wikimedia.org/wiki/File:Trevi_Fountain,_Rome,_Italy_2_-_May_2007.jpg) | Diliff | CC BY 3.0 |
@@ -97,6 +100,7 @@ Each place was accepted only if the Wikipedia article's coordinates lie within 8
 | DTW | Detroit | [Detroit_Skyline_from_Windsor_2025-09-01.jpg](https://commons.wikimedia.org/wiki/File:Detroit_Skyline_from_Windsor_2025-09-01.jpg) | TheWxResearcher | CC0 |
 | DUB | Dublin | [Dublin_-_aerial_-_2025-07-07_01.jpg](https://commons.wikimedia.org/wiki/File:Dublin_-_aerial_-_2025-07-07_01.jpg) | 瑞丽江的河水 | CC BY-SA 4.0 |
 | DUS | Düsseldorf | [Rheinkniebrücke_at_night.jpg](https://commons.wikimedia.org/wiki/File:Rheinkniebr%C3%BCcke_at_night.jpg) | Dirk Eubel from Berlin | CC BY-SA 2.0 |
+| DXB | Dubai | [Burj_Khalifa_from_the_sea,_Dubai.jpg](https://commons.wikimedia.org/wiki/File:Burj_Khalifa_from_the_sea,_Dubai.jpg) | Jpbowen | CC BY-SA 4.0 |
 | EBB | Entebbe | [Entebbe_vue_du_ciel.jpg](https://commons.wikimedia.org/wiki/File:Entebbe_vue_du_ciel.jpg) | Mateo.Mfalme | CC BY-SA 4.0 |
 | EDI | Edinburgh | [Skyline_of_Edinburgh.jpg](https://commons.wikimedia.org/wiki/File:Skyline_of_Edinburgh.jpg) | Andrew Colin | CC BY 2.0 |
 | EIN | Eindhoven | [Lichttoren_Eindhoven_1_-_Cropped.jpg](https://commons.wikimedia.org/wiki/File:Lichttoren_Eindhoven_1_-_Cropped.jpg) | Rosemoon | CC BY-SA 3.0 |
@@ -122,6 +126,7 @@ Each place was accepted only if the Wikipedia article's coordinates lie within 8
 | GND | Grenada | [Grand_Anse_Beach_Grenada.jpg](https://commons.wikimedia.org/wiki/File:Grand_Anse_Beach_Grenada.jpg) | Varun Kapoor / Vkap | CC BY 3.0 |
 | GOA | Genoa | [Genoa,_Italy_skyline_5x3.jpg](https://commons.wikimedia.org/wiki/File:Genoa,_Italy_skyline_5x3.jpg) | Quintin Soloviev | CC BY 4.0 |
 | GOT | Gothenburg | [Göteborg_2503_stitch_(28573994096).jpg](https://commons.wikimedia.org/wiki/File:G%C3%B6teborg_2503_stitch_(28573994096).jpg) | Bengt Nyman from Vaxholm, Sweden | CC BY 2.0 |
+| GOX | Goa | [BeachFun.jpg](https://commons.wikimedia.org/wiki/File:BeachFun.jpg) | Sam 8393 | CC BY-SA 4.0 |
 | GRO | Girona | [Girona_des_de_l_aire_edited.jpg](https://commons.wikimedia.org/wiki/File:Girona_des_de_l_aire_edited.jpg) | Patronat de Turisme Costa Brava Pirineu de Girona | CC BY-SA 3.0 |
 | GRU | São Paulo | [Marginal_Pinheiros_e_Jockey_Club.jpg](https://commons.wikimedia.org/wiki/File:Marginal_Pinheiros_e_Jockey_Club.jpg) | Agent010 | CC BY-SA 4.0 |
 | GVA | Geneva | [Geneve_2005_001_Ork.ch.jpg](https://commons.wikimedia.org/wiki/File:Geneve_2005_001_Ork.ch.jpg) | fr:Utilisateur:Stéphane_Pecorini | CC BY-SA 2.0 fr |
@@ -162,6 +167,7 @@ Each place was accepted only if the Wikipedia article's coordinates lie within 8
 | KTW | Katowice | [Katowice_(50021).jpg](https://commons.wikimedia.org/wiki/File:Katowice_(50021).jpg) | Rhododendrites | CC BY-SA 4.0 |
 | KUL | Kuala Lumpur | [Bukit_Bintang_junction_in_2024_2.jpg](https://commons.wikimedia.org/wiki/File:Bukit_Bintang_junction_in_2024_2.jpg) | Renek78 | CC0 |
 | KUT | Kutaisi | [Downtown_Kutaisi_&_White_Bridge_as_seen_from_Mt_Gora_(August_2011)-cropped.jpg](https://commons.wikimedia.org/wiki/File:Downtown_Kutaisi_%26_White_Bridge_as_seen_from_Mt_Gora_(August_2011)-cropped.jpg) | Kober | CC BY-SA 3.0 |
+| KWI | Kuwait City | [Kuwait_City_Skyline_1.jpg](https://commons.wikimedia.org/wiki/File:Kuwait_City_Skyline_1.jpg) | Zairon | CC BY 4.0 |
 | LAS | Las Vegas | [Center_Strip_Before_Sunrise.jpg](https://commons.wikimedia.org/wiki/File:Center_Strip_Before_Sunrise.jpg) | Eric Kilby | CC BY-SA 2.0 |
 | LAX | Los Angeles | [Hollywood_sign_(8485145044).jpg](https://commons.wikimedia.org/wiki/File:Hollywood_sign_(8485145044).jpg) | Gnaphron | CC BY-SA 2.0 |
 | LBA | Leeds | [Leeds_CBD_at_night.jpg](https://commons.wikimedia.org/wiki/File:Leeds_CBD_at_night.jpg) | Lad 2011 | CC BY-SA 4.0 |
@@ -199,14 +205,17 @@ Each place was accepted only if the Wikipedia article's coordinates lie within 8
 | MLB | Melbourne | [MelbourneFLCLM.png](https://commons.wikimedia.org/wiki/File:MelbourneFLCLM.png) | Excel23, Michael Seeley from Melbourne, FL, United States | CC BY 2.0 |
 | MLE | Malé | [Malé.jpg](https://commons.wikimedia.org/wiki/File:Mal%C3%A9.jpg) | Shahee Ilyas | CC BY-SA 3.0 |
 | MRS | Marseille | [Notre-Dame_de_la_Garde_aerial_view_2020.jpeg](https://commons.wikimedia.org/wiki/File:Notre-Dame_de_la_Garde_aerial_view_2020.jpeg) | Earth777 | CC BY-SA 4.0 |
+| MRU | Mauritius | [Black_River_Gorges_National_Park,_Mauritius.jpg](https://commons.wikimedia.org/wiki/File:Black_River_Gorges_National_Park,_Mauritius.jpg) | Adamina | CC BY 2.0 |
 | MSP | Minneapolis | [Minneapolis_Skyline_looking_south.jpg](https://commons.wikimedia.org/wiki/File:Minneapolis_Skyline_looking_south.jpg) | BpA9543 | CC BY-SA 4.0 |
 | MSY | New Orleans | [New_Orleans_from_the_Air_September_2019_-_Central_Business_District_Skyline_(cropped).jpg](https://commons.wikimedia.org/wiki/File:New_Orleans_from_the_Air_September_2019_-_Central_Business_District_Skyline_(cropped).jpg) | George Bannister | CC BY 2.0 |
 | MUC | Munich | [Frauenkirche_and_Neues_Rathaus_Munich_March_2013.JPG](https://commons.wikimedia.org/wiki/File:Frauenkirche_and_Neues_Rathaus_Munich_March_2013.JPG) | Martin Falbisoner | CC BY-SA 3.0 |
 | MXP | Milan | [Milan_Cathedral_from_Piazza_del_Duomo.jpg](https://commons.wikimedia.org/wiki/File:Milan_Cathedral_from_Piazza_del_Duomo.jpg) | Jiuguang Wang | CC BY-SA 3.0 |
+| NBE | Hammamet | [Hammamet_medina(js)10.jpg](https://commons.wikimedia.org/wiki/File:Hammamet_medina(js)10.jpg) | Jerzystrzelecki | CC BY 3.0 |
 | NBO | Nairobi | [Nairobi_skyline_from_Gem_Hotel.jpg](https://commons.wikimedia.org/wiki/File:Nairobi_skyline_from_Gem_Hotel.jpg) | Daniel Case | CC BY-SA 4.0 |
 | NCE | Nice | [Promenade_des_Anglais_Nice_IMG_1255.jpg](https://commons.wikimedia.org/wiki/File:Promenade_des_Anglais_Nice_IMG_1255.jpg) | Alexander Migl | CC BY-SA 4.0 |
 | NCL | Newcastle upon Tyne | [Newcastle-upon-Tyne-bridges-and-skyline_cropped.jpg](https://commons.wikimedia.org/wiki/File:Newcastle-upon-Tyne-bridges-and-skyline_cropped.jpg) | JimmyGuano | CC BY-SA 4.0 |
 | NQY | Newquay | [Headland_near_Newquay_harbour_(5946).jpg](https://commons.wikimedia.org/wiki/File:Headland_near_Newquay_harbour_(5946).jpg) | Nilfanion | CC BY-SA 4.0 |
+| NQZ | Astana | [Astana_Esil_view.jpg](https://commons.wikimedia.org/wiki/File:Astana_Esil_view.jpg) | Dauren Nabijan | CC0 |
 | NRT | Tokyo | [Skyscrapers_of_Shinjuku_2009_January.jpg](https://commons.wikimedia.org/wiki/File:Skyscrapers_of_Shinjuku_2009_January.jpg) | Morio | CC BY-SA 3.0 |
 | NTE | Nantes | [Panorama_depuis_Butte_Sainte-Anne.jpg](https://commons.wikimedia.org/wiki/File:Panorama_depuis_Butte_Sainte-Anne.jpg) | Eric Brosselin | CC BY-SA 3.0 |
 | NUE | Nuremberg | [Nuremberg_Aerial_Tullnau_Moegeldorf.JPG](https://commons.wikimedia.org/wiki/File:Nuremberg_Aerial_Tullnau_Moegeldorf.JPG) | Nicohofmann | CC BY-SA 3.0 |
@@ -228,6 +237,7 @@ Each place was accepted only if the Wikipedia article's coordinates lie within 8
 | PMI | Mallorca | [Platja_de_Muro_Beach,_Mallorca.jpg](https://commons.wikimedia.org/wiki/File:Platja_de_Muro_Beach,_Mallorca.jpg) | YarosSyubayev | CC BY-SA 4.0 |
 | PMO | Palermo | [Sicilia_Palermo5_tango7174.jpg](https://commons.wikimedia.org/wiki/File:Sicilia_Palermo5_tango7174.jpg) | Tango7174 | CC BY-SA 4.0 |
 | POZ | Poznań | [Stary_Rynek_w_Poznaniu,_widok_z_drona_(cropped).jpg](https://commons.wikimedia.org/wiki/File:Stary_Rynek_w_Poznaniu,_widok_z_drona_(cropped).jpg) | Aneta Pawska | CC BY-SA 4.0 |
+| PQC | Phú Quốc | [Bai-sao-phu-quoc-tuonglamphotos.jpg](https://commons.wikimedia.org/wiki/File:Bai-sao-phu-quoc-tuonglamphotos.jpg) | [//commons.wikimedia.org/wiki/User:Trantuonglam Trantuonglam] | CC BY-SA 4.0 |
 | PRG | Prague | [Prague_(6365119737).jpg](https://commons.wikimedia.org/wiki/File:Prague_(6365119737).jpg) | Moyan Brenn from Italy | CC BY 2.0 |
 | PRN | Pristina | [View_of_Prishtina.jpg](https://commons.wikimedia.org/wiki/File:View_of_Prishtina.jpg) | IEstiv03 | CC0 |
 | PSA | Pisa | [Italy_-_Pisa.jpg](https://commons.wikimedia.org/wiki/File:Italy_-_Pisa.jpg) | Arne Müseler | CC BY-SA 3.0 de |
@@ -239,11 +249,13 @@ Each place was accepted only if the Wikipedia article's coordinates lie within 8
 | RIX | Riga | [Riga_(33844464828).jpg](https://commons.wikimedia.org/wiki/File:Riga_(33844464828).jpg) | Jorge Franganillo from Barcelona, Spain | CC BY 2.0 |
 | RKV | Reykjavík | [Reykjavík,_view_from_Hallgrímskirkja_(2).jpg](https://commons.wikimedia.org/wiki/File:Reykjav%C3%ADk,_view_from_Hallgr%C3%ADmskirkja_(2).jpg) | Olga Ernst | CC BY-SA 4.0 |
 | RMF | Marsa Alam | [Carnelia_Beach,_Marsa_Alam_(2232052889).jpg](https://commons.wikimedia.org/wiki/File:Carnelia_Beach,_Marsa_Alam_(2232052889).jpg) | Andrew A. Shenouda from Riyadh, Saudi Arabia | CC BY 2.0 |
+| RMO | Chișinău | [Consiliul_Municipal_Chișinău_(cropped).jpg](https://commons.wikimedia.org/wiki/File:Consiliul_Municipal_Chi%C8%99in%C4%83u_(cropped).jpg) | Rodion Gavriloi | CC BY-SA 4.0 |
 | RMU | Murcia | [Sábado_Santo_en_Murcia_19-04-2014_edited.jpg](https://commons.wikimedia.org/wiki/File:S%C3%A1bado_Santo_en_Murcia_19-04-2014_edited.jpg) | nesimo | CC BY-SA 2.0 |
 | RTM | Rotterdam | [A_view_of_Rotterdam,_taken_from_the_roof_of_the_Maassilo,_Rotterdam,_The_Netherlands.jpg](https://commons.wikimedia.org/wiki/File:A_view_of_Rotterdam,_taken_from_the_roof_of_the_Maassilo,_Rotterdam,_The_Netherlands.jpg) | Rob Oo | CC BY 2.0 |
 | RUH | Riyadh | [Riyadh_Skyline.jpg](https://commons.wikimedia.org/wiki/File:Riyadh_Skyline.jpg) | B.alotaby | CC BY-SA 4.0 |
 | RVN | Rovaniemi | [Rovaniemi_Montage.jpg](https://commons.wikimedia.org/wiki/File:Rovaniemi_Montage.jpg) | Jari Kolehmainen, Flickr user lindstormORG, Idobi, Andriychenko, Biergerry, Arktikum, and Vincent Guth vingtcent | CC BY-SA 3.0 |
 | RZE | Rzeszów | [PL_Rzeszów,_ratusz_2021-05-04--11-00-20_(cropped).jpg](https://commons.wikimedia.org/wiki/File:PL_Rzesz%C3%B3w,_ratusz_2021-05-04--11-00-20_(cropped).jpg) | Kroton | CC BY-SA 4.0 |
+| RZV | Rize | [Georgian_Laz_people_monument_in_Rize_(Modern_Day_Turkey).jpg](https://commons.wikimedia.org/wiki/File:Georgian_Laz_people_monument_in_Rize_(Modern_Day_Turkey).jpg) | Gaga.vaa | CC BY-SA 4.0 |
 | SAN | San Diego | [La_Jolla_Shores_view_(cropped).jpg](https://commons.wikimedia.org/wiki/File:La_Jolla_Shores_view_(cropped).jpg) | Dirk Hansen | CC BY-SA 3.0 |
 | SAW | Istanbul | [Historical_peninsula_and_modern_skyline_of_Istanbul.jpg](https://commons.wikimedia.org/wiki/File:Historical_peninsula_and_modern_skyline_of_Istanbul.jpg) | Hunanuk | CC0 |
 | SCN | Saarbrücken | [Saarland_Rathaus_Saarbrücken_01.jpg](https://commons.wikimedia.org/wiki/File:Saarland_Rathaus_Saarbr%C3%BCcken_01.jpg) | Calips | CC BY-SA 3.0 |
@@ -252,6 +264,7 @@ Each place was accepted only if the Wikipedia article's coordinates lie within 8
 | SFO | San Francisco | [Zeppelin-ride-020100925-195_(5029394846).jpg](https://commons.wikimedia.org/wiki/File:Zeppelin-ride-020100925-195_(5029394846).jpg) | Craig Howell from San Carlos, CA, USA | CC BY 2.0 |
 | SGN | Ho Chi Minh City | [Ho_Chi_Minh_City,_City_Hall,_2020-01_CN-03.jpg](https://commons.wikimedia.org/wiki/File:Ho_Chi_Minh_City,_City_Hall,_2020-01_CN-03.jpg) | Steffen Schmitz (more photos) | CC BY-SA 4.0 |
 | SHJ | Sharjah | [Al_Qasba.jpg](https://commons.wikimedia.org/wiki/File:Al_Qasba.jpg) | Firoze Edassery | CC BY-SA 3.0 |
+| SID | Sal | [SantaMariaSal.jpg](https://commons.wikimedia.org/wiki/File:SantaMariaSal.jpg) | Montek | CC BY-SA 4.0 |
 | SIN | Singapore | [Marina_Bay,_Financial_District_and_Singapore_River_(35622190292).jpg](https://commons.wikimedia.org/wiki/File:Marina_Bay,_Financial_District_and_Singapore_River_(35622190292).jpg) | Ray in Manila | CC BY 2.0 |
 | SJJ | Sarajevo | [Sarajevo_City_Panorama.JPG](https://commons.wikimedia.org/wiki/File:Sarajevo_City_Panorama.JPG) | Julian Nyča | CC BY-SA 4.0 |
 | SJO | San José | [Ciudad_de_San_José.png](https://commons.wikimedia.org/wiki/File:Ciudad_de_San_Jos%C3%A9.png) | Alejandro Álvarez Taborda (Aleat88) | CC BY-SA 4.0 |
@@ -261,6 +274,7 @@ Each place was accepted only if the Wikipedia article's coordinates lie within 8
 | SNN | Shannon | [Rth_Shannon_Town_02.10.12R_edited-2.jpg](https://commons.wikimedia.org/wiki/File:Rth_Shannon_Town_02.10.12R_edited-2.jpg) | RuthAS | CC BY 3.0 |
 | SOF | Sofia | [Panoramic_view_over_central_Sofia_and_the_Vitosha_Mountain_2017-10-08.jpg](https://commons.wikimedia.org/wiki/File:Panoramic_view_over_central_Sofia_and_the_Vitosha_Mountain_2017-10-08.jpg) | Deensel | CC BY 2.0 |
 | SOU | Southampton | [View_across_Ocean_Village_Marina_(geograph_5432669).jpg](https://commons.wikimedia.org/wiki/File:View_across_Ocean_Village_Marina_(geograph_5432669).jpg) | David Martin | CC BY-SA 2.0 |
+| SPX | Cairo | [Cairo_From_Tower_(cropped).jpg](https://commons.wikimedia.org/wiki/File:Cairo_From_Tower_(cropped).jpg) | Wael El Sisi | CC BY-SA 3.0 |
 | SSH | Sharm El Sheikh | [Sharm_El_Sheikh_-_panoramio_(15).jpg](https://commons.wikimedia.org/wiki/File:Sharm_El_Sheikh_-_panoramio_(15).jpg) | Tanya Dedyukhina | CC BY 3.0 |
 | STN | London | [London_Skyline_(125508655).jpeg](https://commons.wikimedia.org/wiki/File:London_Skyline_(125508655).jpeg) | Ilya Grigorik | CC BY-SA 3.0 |
 | STR | Stuttgart | [Neues_Schloss_Schlossplatzspringbrunnen_Schlossplatz_Stuttgart_2015_01.jpg](https://commons.wikimedia.org/wiki/File:Neues_Schloss_Schlossplatzspringbrunnen_Schlossplatz_Stuttgart_2015_01.jpg) | Julian Herzog (Website) | CC BY 4.0 |
@@ -268,7 +282,9 @@ Each place was accepted only if the Wikipedia article's coordinates lie within 8
 | SYD | Sydney | [Sydney_Opera_House_and_Harbour_Bridge_Dusk_(2)_2019-06-21.jpg](https://commons.wikimedia.org/wiki/File:Sydney_Opera_House_and_Harbour_Bridge_Dusk_(2)_2019-06-21.jpg) | Benh LIEU SONG (Flickr) | CC BY-SA 4.0 |
 | SYY | Stornoway | [Stornoway_Harbour_-_geograph.org.uk_-_1246267.jpg](https://commons.wikimedia.org/wiki/File:Stornoway_Harbour_-_geograph.org.uk_-_1246267.jpg) | Stephen Branley | CC BY-SA 2.0 |
 | SZZ | Szczecin | [Town_hall_in_Szczecin,_September_2022_01.jpg](https://commons.wikimedia.org/wiki/File:Town_hall_in_Szczecin,_September_2022_01.jpg) | Szczecinolog | CC BY-SA 4.0 |
+| TAS | Tashkent | [TashkentCity.jpg](https://commons.wikimedia.org/wiki/File:TashkentCity.jpg) | Solijonovm1996 | CC BY-SA 4.0 |
 | TFS | Tenerife | [Tenerife,_Canary_Islands_ESA23970088.jpeg](https://commons.wikimedia.org/wiki/File:Tenerife,_Canary_Islands_ESA23970088.jpeg) | European Space Agency | CC BY-SA 3.0 igo |
+| TFU | Chengdu | [雪山下的成都市天际线_Chengdu_skyline_with_snow_capped_mountains.jpg](https://commons.wikimedia.org/wiki/File:%E9%9B%AA%E5%B1%B1%E4%B8%8B%E7%9A%84%E6%88%90%E9%83%BD%E5%B8%82%E5%A4%A9%E9%99%85%E7%BA%BF_Chengdu_skyline_with_snow_capped_mountains.jpg) | FISU | CC BY 3.0 |
 | TGD | Podgorica | [P064720-426794_-_Panoramic_view_of_Podgorica.jpg](https://commons.wikimedia.org/wiki/File:P064720-426794_-_Panoramic_view_of_Podgorica.jpg) | Savo Prelevic | CC BY 4.0 |
 | TIA | Tirana | [Skanderbeg_square_tirana_2016.jpg](https://commons.wikimedia.org/wiki/File:Skanderbeg_square_tirana_2016.jpg) | Photo: Chris Walts | CC BY-SA 2.0 |
 | TLL | Tallinn | [Raekoja_plats_at_night.jpg](https://commons.wikimedia.org/wiki/File:Raekoja_plats_at_night.jpg) | Jorge Franganillo | CC BY 2.0 |

@@ -96,7 +96,7 @@ export function BoardList({ list, dir, date, tz, open, extra }: { list: any[]; d
   return <div className="cw-list"><h1 className="cw-title">{dir === "dep" ? "Departures" : "Arrivals"}</h1><div className="cw-date">{capsDate(date)}</div>{extra}
     {list.map((f, i) => { const t = dir === "dep" ? f.dep : f.arr; const o = dir === "dep" ? f.destination : f.origin; const p = pill(f, dir); const cx = p.k === "cx"; const d = delay(t);
       return <button key={f.id + i} className={"cw-item" + (cx ? " cx" : "")} onPointerDown={() => preloadHero(o?.iata)} onClick={() => { preloadHero(o?.iata); open(f); }}><div className="cw-time"><b>{f.liveOnly ? "Live" : fmtT(t.scheduled, tz)}</b>{!cx && d != null && d >= 5 && t.estimated && <small>{fmtT(t.estimated, tz)}</small>}</div>
-        <div className="cw-mid"><b className="cw-dest">{o?.city || o?.name || o?.iata}{o?.iata ? ` (${o.iata})` : ""}</b><div className="cw-line">{f.number} | {airlineName(f.airline) || f.airline?.iata}</div>{!cx && t.terminal && <div className="cw-line">T{String(t.terminal).replace(/^T/i, "")}</div>}<Pill p={p} /></div>
+        <div className="cw-mid"><b className="cw-dest">{nicePlace(o?.city || o?.name) || o?.iata}{o?.iata ? ` (${o.iata})` : ""}</b><div className="cw-line">{f.number} | {airlineName(f.airline) || f.airline?.iata}</div>{!cx && t.terminal && <div className="cw-line">T{String(t.terminal).replace(/^T/i, "")}</div>}<Pill p={p} /></div>
         <span className="cw-more">Details ›</span></button>; })}
     {!list.length && <div className="cw-empty">No flights to show.</div>}</div>;
 }
@@ -112,6 +112,9 @@ const TAIL_ALIAS: Record<string, string> = { EC: "U2", DS: "U2", W4: "W6", W9: "
 export const tailFile = (code: string) => { const k = TAIL_ALIAS[code] || code; return TAILS.has(k) ? `/liveries/tails/${k}.webp` : ""; };
 export const tailCode = (a: any) => { const c = String(a?.iata || a?.icao || "").toUpperCase(); return ICAO2[c] || ICAO2[String(a?.icao || "").toUpperCase()] || c; };
 // Fallback chain: real tail (Ryanair harp) → the airline's real logo → a badge with the airline code in its brand colour. Never an empty box.
+// Feed text sometimes arrives raw and upper-case ("MANOHAR GOA"): title-case it, drop airport words
+export const nicePlace = (s?: string) => { const t = String(s || "").trim(); if (!t || t !== t.toUpperCase() || !/\p{L}{2}/u.test(t)) return t; return t.replace(/\b(INTERNATIONAL|INTL|AIRPORT)\b/g, " ").replace(/\s+/g, " ").trim().toLowerCase().replace(/(^|[\s\-\/(])(\p{L})/gu, (_m, a, b) => a + b.toUpperCase()); };
+
 export function Tail({ a }: { a: any }) {
   const i = tailCode(a); const [bad, setBad] = useState(false); const [tbad, setTbad] = useState(false); useEffect(() => { setBad(false); setTbad(false); }, [i]);
   const tf = tailFile(i);
@@ -128,12 +131,12 @@ export function FlightTop({ f, nav, discover, crumbs }: { f: Flight; nav: CwNav;
   const term = f.dep.terminal ? String(f.dep.terminal).replace(/^T/i, "") : ""; const gate = f.dep.gate || "";
   return <div className="cw-fd"><Hero iata={a?.iata} big><TopBar nav={nav} over /></Hero>
     <div className="cw-card"><div className="cw-card-h"><Tail a={f.airline} />
-      <div className="cw-hd"><h2 className="cw-city">{dd?.name || a?.city || a?.iata}</h2><div className="cw-line">{f.number}<i className="cw-sep" />{airlineName(f.airline) || f.airline?.iata}</div></div><Pill p={p} /></div>
+      <div className="cw-hd"><h2 className="cw-city">{dd?.name || nicePlace(a?.city || a?.name) || a?.iata}</h2><div className="cw-line">{f.number}<i className="cw-sep" />{airlineName(f.airline) || f.airline?.iata}</div></div><Pill p={p} /></div>
       <hr className="cw-hr" />
       <div className="cw-dur">{mins ? dur(mins) + (real > 0 ? "" : " est.") : "\u00a0"}</div>
       <div className="cw-route"><b>{o?.iata}</b><span className="cw-path"><i />{ic.planeO}<i /></span><b className="r">{a?.iata}</b>
 </div>
-      <div className="cw-rc"><small>{o?.city}{o?.country ? ", " + o.country : ""}</small><small className="r">{a?.city}{a?.country ? ", " + a.country : ""}</small></div>
+      <div className="cw-rc"><small>{nicePlace(o?.city)}{o?.country ? ", " + o.country : ""}</small><small className="r">{dd?.name || nicePlace(a?.city)}{a?.country ? ", " + a.country : ""}</small></div>
       {(dep || term || gate) && <div className="cw-tiles">{dep && <div className="cw-tile c"><small>Departure</small><b>{fmtT(dep, o?.tz)}</b><em>{dep ? new Date(dep).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: o?.tz || "Europe/London" }).replace(/ (\d{4})$/, ", $1") : ""}</em></div>}
         {term && <div className="cw-tile c"><small>Terminal</small><b>{term}</b></div>}{gate && <div className="cw-tile c"><small>Gate</small><b>{gate}</b></div>}</div>}
       {dd && <><div className="cw-perf" aria-hidden /><button className="cw-disc" onClick={() => discover(a!.iata)}>Discover {dd.name}<span>{ic.chev}</span></button></>}</div>

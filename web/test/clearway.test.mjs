@@ -38,4 +38,8 @@ for (const f of fs.readdirSync(path.join(here, "../public/liveries/tails")).filt
 for (const c of ["BA", "BAW", "VS", "VIR", "U2", "EZY", "EJU", "EZS", "LS", "EXS", "BY", "TOM", "W6", "WZZ", "WUK", "EI", "LH", "DLH", "AF", "KL", "EK", "QR", "TK", "LO", "LOT", "AA", "DL", "UA", "SK", "SAS", "AY", "IB", "VY", "TP", "LX", "SWR", "OS", "SN"]) {
   const a = c.length === 3 ? { icao: c } : { iata: c }; assert.ok(/liveries\/tails\/[A-Z0-9]+\.webp/.test(renderToStaticMarkup(h(m.Tail, { a }))), c + " has a tail photo");
 }
+// raw upper-case feed names are tidied; destinations on today's MAN/LHR/KRK boards have a real photo
+assert.strictEqual(m.nicePlace("MANOHAR GOA"), "Manohar Goa"); assert.strictEqual(m.nicePlace("CAIRO SPHINX AIRPORT"), "Cairo Sphinx"); assert.strictEqual(m.nicePlace("Kraków"), "Kraków");
+for (const k of ["GOX", "TFU", "SPX", "DXB", "BDA", "KWI", "TAS", "NBE", "SID"]) assert.ok(D[k] && D[k].img && lq.includes(`"${k}":"`), k + " destination photo");
+assert.strictEqual(D.GOX.name, "Goa");
 console.log("clearway tests ok");
