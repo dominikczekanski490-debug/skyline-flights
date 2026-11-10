@@ -155,3 +155,12 @@ export function DestPage({ iata, from, nav }: { iata: string; from?: any; nav: C
     <h3>Map</h3><iframe className="cw-map" title={`Map of ${d.name}`} loading="lazy" src={`https://www.openstreetmap.org/export/embed.html?bbox=${d.lon - .25},${d.lat - .15},${d.lon + .25},${d.lat + .15}&layer=mapnik&marker=${d.lat},${d.lon}`} />
     <p className="cw-src">Text: Wikipedia (CC BY-SA 4.0) · Facts: Wikidata (CC0) · Map © OpenStreetMap contributors</p></div></div>;
 }
+
+// Settings → top "Theme" row: Clearway featured with a live preview swatch (all skins stay in Appearance below).
+export function ThemeFeature({ theme, setTheme, name }: { theme: string; setTheme: (s: string) => void; name: string }) {
+  const on = theme === CW;
+  return <div className="card m0 cw-feat"><div className="row between"><b className="set-h sm">Theme</b><span className="faint sm">Now: {name}</span></div>
+    <button className={"cw-feat-b press" + (on ? " on" : "")} onClick={() => setTheme(on ? "dark" : CW)} aria-pressed={on}>
+      <span className="cw-sw" aria-hidden><i className="h" /><i className="t" /><i className="r"><em className="p" /></i><i className="r"><em className="p a" /></i><i className="r"><em className="p g" /></i></span>
+      <span className="cw-feat-t"><b>Clearway</b><small>Clean white &amp; navy, photo-led flight pages and destination guides. Applies to the whole app, every airport.</small><em>{on ? "On ✓ · tap to switch back to Skyline Gold" : "Tap to use Clearway"}</em></span></button></div>;
+}

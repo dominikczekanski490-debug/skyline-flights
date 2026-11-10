@@ -26,7 +26,7 @@ import { usePoll, Refreshed, TRACK_MS, markTracked, LiveLine } from "./refresh";
 import { Ic, SecHead, ActBtn } from "./v25";
 const Labs = lazy(() => import("./labs"));
 let labCount = 0; setTimeout(() => import("./labs").then(m => { labCount = m.LAB_COUNT; }), 4000);
-import { applySkin, SkinPicker } from "./themes";
+import { applySkin, SkinPicker, skinOf } from "./themes";
 import { NotifInbox, NotifPreviews, changeMsgs, flightTitle, contextLine, addInbox } from "./v34";
 import "./v34.css";
 import { SunRoute } from "./v30";
@@ -618,6 +618,7 @@ function Settings({ x, theme, setTheme, push }: any) {
   const load = () => api("/settings").then(r => { setS(r); setLb(r.llmBase); setLm(r.llmModel); }); useEffect(() => { load(); }, []);
   const saveK = (body: any) => api("/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, adminToken: tok, newAdminToken: tok }) }).then(() => { setMsg("Saved ✓"); load(); }).catch(e => setMsg(e.message));
   return <><Head title="Settings" sub="Preferences, data and sources" right={x} /><div className="px col g8 set">
+    <ThemeFeature theme={theme} setTheme={setTheme} name={skinOf(theme)?.n || (theme === "light" ? "Light" : theme === "dark" ? "Dark" : theme)} />
     <div className="card m0"><b className="set-h sm"><span>{Ic.image}</span>Photo credits</b><div className="faint sm mt4">{PLANE_CREDITS}</div><div className="faint sm mt4"><a href="https://www.planespotters.net" target="_blank" rel="noopener">Planespotters.net</a> · <a href="https://commons.wikimedia.org" target="_blank" rel="noopener">Wikimedia Commons</a></div></div><div className="card m0 row between"><span className="set-l"><span>{Ic.info}</span>App version</span><b className="sm">{BUILD}</b></div><button className="card m0 row between press" style={{ width: "100%" }} onClick={() => push({ t: "features" })}><span className="set-l"><span>{Ic.flask}</span>All features</span><b className="sm set-n">{TOOLS.length + BOARD_FEATURES.length}</b></button><UnitsCard /><AlertPrefsCard onChange={() => syncPush(JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend)).catch(() => {})} />
     <div className="card m0"><h3 className="set-h"><span>{Ic.palette}</span>Appearance</h3><SkinPicker v={theme} set={setTheme} /></div><button className="card m0 mt12" style={{ width: "100%", textAlign: "left" }} onClick={() => dispatchEvent(new Event("sk:welcome"))}><b>Replay welcome tour</b><div className="faint sm">Home airport, favourite airline, alerts, theme and Home Screen tips</div></button>
     <div className="card m0"><h3 className="set-h"><span>{Ic.bell}</span>Notifications</h3><div className="muted sm">Gate & terminal changes, boarding, delays (15+ min, or improving), cancellations, departure, landing and baggage belt for your tracked flights. Tap <b>Turn on alerts</b> — iPhone only asks for permission after a tap, and only inside the Home Screen app (Safari → Share → Add to Home Screen, iOS 16.4+).</div>
@@ -638,7 +639,7 @@ function Settings({ x, theme, setTheme, push }: any) {
 
 const Man3D = lazy(() => import("./v35"));
 import { Apt3DBtn, WhatMatters } from "./v63b";
-import { useCw, TopBar, BoardList, FlightTop, DestPage, warmDest, loadLqip, loadDest, type CwNav } from "./clearway";
+import { useCw, TopBar, BoardList, FlightTop, DestPage, warmDest, loadLqip, loadDest, ThemeFeature, type CwNav } from "./clearway";
 const Welcome = lazy(() => import("./v53"));
 const HomeDash = lazy(() => import("./v52"));
 export function Man3DBtn() { const [o, setO] = useState(() => /man3d=1/.test(location.hash));

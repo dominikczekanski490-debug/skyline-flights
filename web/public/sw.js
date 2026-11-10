@@ -1,4 +1,4 @@
-const C = "skyline-v26"; const IMG = "skyline-img-v17"; const IMG_MAX = 200; const API = "skyline-api-v1"; const DEST = "skyline-dest-v1"; const API_MAX = 150;
+const C = "skyline-v27"; const IMG = "skyline-img-v17"; const IMG_MAX = 200; const API = "skyline-api-v1"; const DEST = "skyline-dest-v1"; const API_MAX = 150;
 self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(C).then(c => c.addAll(["/", "/manifest.webmanifest", "/icon-192.png"]))); });
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C && k !== IMG && k !== API && k !== DEST).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 // Navigations are network-first (15 s budget for a sleeping free server) so the phone never stays on an old build;
@@ -29,6 +29,7 @@ self.addEventListener("push", e => { let d = {}; try { d = e.data ? e.data.json(
   // iOS revokes push permission if a push arrives without showing a notification, so always show one.
   e.waitUntil(Promise.all([self.registration.showNotification(d.title || "Skyline", opts(d)), toInbox(d)])); });
 // Page asks the worker to show a local notification (iOS has no `new Notification()` in pages).
+self.addEventListener("message", e => { if (e.data?.type === "skipWaiting") self.skipWaiting(); });
 self.addEventListener("message", e => { if (e.data?.type === "notify") e.waitUntil(self.registration.showNotification(e.data.title, opts(e.data))); });
 self.addEventListener("notificationclick", e => { e.notification.close(); const url = new URL(e.notification.data?.url || "/", self.location.origin).href;
   e.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(l => { for (const c of l) if (c.url.startsWith(self.location.origin) && "focus" in c) { if (c.url !== url && "navigate" in c) c.navigate(url).catch(() => {}); return c.focus(); } return clients.openWindow(url); })); });

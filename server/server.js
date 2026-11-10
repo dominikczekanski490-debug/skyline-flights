@@ -1821,7 +1821,7 @@ app.use("/api", api);
 const dist = path.join(__dir, "../web/dist");
 app.use(express.static(dist, { setHeaders: (r, p) => { if (p.endsWith("sw.js") || p.endsWith(".html") || p.endsWith("version.json")) r.setHeader("cache-control", "no-cache");
   else if (/[\\/]dest[\\/][A-Z0-9]{3}\.webp$/.test(p)) r.setHeader("cache-control", "public, max-age=2592000"); } })); // destination hero photos: cache 30 days (file name = airport code)
-app.get(/^\/(?!api).*/, (q, r) => r.sendFile(path.join(dist, "index.html")));
+app.get(/^\/(?!api).*/, (q, r) => r.set("cache-control", "no-cache").sendFile(path.join(dist, "index.html")));
 reg36(api, { getJSON, cached, wrap, STATE, saveState, board, todayLondon, adsb });
 reg63(api, { AP, cached, wrap, HIST, warmAds: (lat, lon) => { if (lat && lon) adsb(`point/${(+lat).toFixed(3)}/${(+lon).toFixed(3)}/12`).catch(() => {}); } });
 reg62(api, { HIST, AP, cached });
