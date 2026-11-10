@@ -1,9 +1,12 @@
-const C = "skyline-v26"; const IMG = "skyline-img-v17"; const IMG_MAX = 200; const API = "skyline-api-v1"; const API_MAX = 150;
+const C = "skyline-v26"; const IMG = "skyline-img-v17"; const IMG_MAX = 200; const API = "skyline-api-v1"; const DEST = "skyline-dest-v1"; const API_MAX = 150;
 self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(C).then(c => c.addAll(["/", "/manifest.webmanifest", "/icon-192.png"]))); });
-self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C && k !== IMG && k !== API).map(k => caches.delete(k)))).then(() => self.clients.claim())));
+self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C && k !== IMG && k !== API && k !== DEST).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 // Navigations are network-first (15 s budget for a sleeping free server) so the phone never stays on an old build;
 // the cached shell is only a fallback when offline. Hashed assets are immutable, so cache-first is safe for them.
 self.addEventListener("fetch", e => { const u = new URL(e.request.url);
+  // Bundled destination hero photos (/dest/*.webp, index.json): cache-first so they show instantly; the Clearway skin pre-fills this cache.
+  if (e.request.method === "GET" && u.origin === location.origin && u.pathname.startsWith("/dest/")) { e.respondWith(caches.open(DEST).then(async c => { const hit = await c.match(u.pathname); if (hit) { if (u.pathname.endsWith(".json")) fetch(u.pathname).then(r => r.ok && c.put(u.pathname, r)).catch(() => {}); return hit; }
+    const r = await fetch(e.request); if (r.ok) c.put(u.pathname, r.clone()); return r; })); return; }
   // Third-party aircraft photos (Planespotters / Wikimedia): stale-while-revalidate, capped at IMG_MAX entries, never pinned forever.
   if (e.request.method === "GET" && (u.pathname === "/api/photo" && u.origin === location.origin || /(^|\.)plnspttrs\.net$|(^|\.)wikimedia\.org$/.test(u.hostname))) { e.respondWith(caches.open(IMG).then(async c => { const hit = await c.match(e.request);
     const net = fetch(e.request).then(async r => { if (r.ok || r.type === "opaque") { await c.put(e.request, r.clone()); const k = await c.keys(); for (const x of k.slice(0, Math.max(0, k.length - IMG_MAX))) await c.delete(x); } return r; }).catch(() => hit);
