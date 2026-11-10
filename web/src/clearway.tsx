@@ -1,5 +1,6 @@
 // "Clearway" skin: a clean white/navy mobile-airport-website style that restyles the whole app, plus the
 // list/detail/itinerary/destination-guide layouts it needs. Original name and no third-party airport branding or logos.
+import { TAIL_FILES, DEST_INDEX } from "./assets.gen";
 import { useEffect, useState, type ReactNode } from "react";
 import "@fontsource-variable/inter";
 import "./clearway.css";
@@ -19,7 +20,7 @@ export function useCw() {
 export type Dest = { iata: string; name: string; title: string; url: string; desc?: string; lat: number; lon: number; tz?: string; country?: string; countryUrl?: string; lang?: string[]; cur?: string[]; tags?: string[];
   img?: { file: string; page?: string; lic: string; by?: string; col: string }; climate?: { hi: number[]; lo: number[]; loc?: string; page: string } | null };
 let DEST: Record<string, Dest> | null = null; let destP: Promise<Record<string, Dest>> | null = null;
-export const loadDest = () => destP ||= fetch("/dest/index.json").then(r => r.json()).then(j => (DEST = j)).catch(() => (DEST = {}));
+export const loadDest = () => destP ||= fetch(DEST_INDEX).then(r => r.json()).then(j => (DEST = j)).catch(() => (DEST = {}));
 export function useDest(iata?: string) {
   const [d, sd] = useState<Dest | null | undefined>(() => (DEST && iata ? DEST[iata] || null : undefined));
   useEffect(() => { if (!iata) return; loadDest().then(j => sd(j[iata] || null)); }, [iata]);
@@ -106,10 +107,9 @@ export function BoardList({ list, dir, date, tz, open, extra }: { list: any[]; d
 // Other airlines: their bundled logo in a tile (no invented tail art).
 const HARP = new Set(["FR", "RK", "AL"]); // Ryanair group (FR mainline, RK Ryanair UK, AL Malta Air)
 const ICAO2: Record<string, string> = { EZY: "U2", EJU: "EC", EZS: "DS", TOM: "BY", RYR: "FR", RUK: "RK", BAW: "BA", VIR: "VS", EXS: "LS", WZZ: "W6", WUK: "W9", DLH: "LH", AFR: "AF", KLM: "KL", UAE: "EK", QTR: "QR", THY: "TK", AAL: "AA", DAL: "DL", UAL: "UA", EIN: "EI", LOT: "LO", SAS: "SK", FIN: "AY", IBE: "IB", VLG: "VY", TAP: "TP", SWR: "LX", AUA: "OS", BEL: "SN", WMT: "W4" };
-// Real tail-fin photo crops from Wikimedia Commons (web/public/liveries/tails/ATTRIBUTION.md). Subsidiaries flying the same livery share a file.
-const TAILS = new Set(["BA", "VS", "U2", "LS", "BY", "W6", "EI", "LH", "AF", "KL", "EK", "QR", "TK", "LO", "AA", "DL", "UA", "SK", "AY", "IB", "VY", "TP", "LX", "OS", "SN"]);
+// Transparent tail-fin cut-outs from real Wikimedia Commons photos (web/public/liveries/fins/ATTRIBUTION.md), content-hashed names (assets.gen.ts). Subsidiaries flying the same livery share a file.
 const TAIL_ALIAS: Record<string, string> = { EC: "U2", DS: "U2", W4: "W6", W9: "W6" };
-export const tailFile = (code: string) => { const k = TAIL_ALIAS[code] || code; return TAILS.has(k) ? `/liveries/tails/${k}.webp` : ""; };
+export const tailFile = (code: string) => { const k = TAIL_ALIAS[code] || code; return TAIL_FILES[k] || ""; };
 export const tailCode = (a: any) => { const c = String(a?.iata || a?.icao || "").toUpperCase(); return ICAO2[c] || ICAO2[String(a?.icao || "").toUpperCase()] || c; };
 // Fallback chain: real tail (Ryanair harp) → the airline's real logo → a badge with the airline code in its brand colour. Never an empty box.
 // Feed text sometimes arrives raw and upper-case ("MANOHAR GOA"): title-case it, drop airport words
@@ -139,7 +139,7 @@ export function FlightTop({ f, nav, discover, crumbs }: { f: Flight; nav: CwNav;
       <div className="cw-rc"><small>{nicePlace(o?.city)}{o?.country ? ", " + o.country : ""}</small><small className="r">{dd?.name || nicePlace(a?.city)}{a?.country ? ", " + a.country : ""}</small></div>
       {(dep || term || gate) && <div className="cw-tiles">{dep && <div className="cw-tile c"><small>Departure</small><b>{fmtT(dep, o?.tz)}</b><em>{dep ? new Date(dep).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: o?.tz || "Europe/London" }).replace(/ (\d{4})$/, ", $1") : ""}</em></div>}
         {term && <div className="cw-tile c"><small>Terminal</small><b>{term}</b></div>}{gate && <div className="cw-tile c"><small>Gate</small><b>{gate}</b></div>}</div>}
-      {dd && <><div className="cw-perf" aria-hidden /><button className="cw-disc" onClick={() => discover(a!.iata)}>Discover {dd.name}<span>{ic.chev}</span></button></>}</div>
+      {(dd || hasPhoto(a?.iata)) && <><div className="cw-perf" aria-hidden /><button className="cw-disc" onClick={() => discover(a!.iata)}>Discover {dd?.name || nicePlace(a?.city || a?.name) || a?.iata}<span>{ic.chev}</span></button></>}</div>
     <div className="cw-crumbs">Home › {crumbs || "Departures"} › {f.number}</div>
     <Itinerary f={f} g={g} /></div>;
 }

@@ -25,21 +25,25 @@ const { createElement: h } = await import("react"); const { renderToStaticMarkup
 for (const c of ["BA", "VS", "EZY", "U2", "LS", "EI", "LH", "AF", "KL", "EK", "QR", "TK", "AA", "DL", "UA", "W6", "FR", "TOM", "RK", "ZZ"]) {
   const a = c.length === 3 ? { icao: c } : { iata: c }; const html = renderToStaticMarkup(h(m.Tail, { a })); const code = m.tailCode(a);
   if (/harp/.test(html)) continue;
-  const tl = html.match(/src="\/liveries\/tails\/([A-Z0-9]+)\.webp"/);
-  if (tl) { const f = path.join(here, "../public/liveries/tails", tl[1] + ".webp"); assert.ok(fs.existsSync(f) && fs.statSync(f).size > 1000 && fs.statSync(f).size < 40000, c + " tail file"); continue; }
+  const tl = html.match(/src="\/liveries\/fins\/([A-Z0-9]+-[0-9a-f]{8})\.webp"/);
+  if (tl) { const f = path.join(here, "../public/liveries/fins", tl[1] + ".webp"); assert.ok(fs.existsSync(f) && fs.statSync(f).size > 1000 && fs.statSync(f).size < 40000, c + " tail file"); continue; }
   const img = html.match(/src="\/logos\/([A-Z0-9]+)\.png"/);
   if (img) { const f = path.join(here, "../public/logos", img[1] + ".png"); assert.ok(fs.existsSync(f) && fs.statSync(f).size > 500, c + " logo file"); continue; }
   assert.ok(/cw-badge/.test(html) && html.includes(">" + code + "<"), c + " badge: " + html);
   assert.ok(c === "ZZ", c + " should have a real logo, got badge");
 }
 // every real tail photo is credited, and every priority carrier (2- and 3-letter codes) resolves to one
-const tatt = fs.readFileSync(path.join(here, "../public/liveries/tails/ATTRIBUTION.md"), "utf8");
-for (const f of fs.readdirSync(path.join(here, "../public/liveries/tails")).filter(f => f.endsWith(".webp"))) assert.ok(tatt.includes("| " + f + " |") && /\| CC BY|\| Public domain|\| PD/.test(tatt.split("| " + f + " |")[1].split("\n")[0]), f + " credited with a free licence");
+const tatt = fs.readFileSync(path.join(here, "../public/liveries/fins/ATTRIBUTION.md"), "utf8");
+for (const f of fs.readdirSync(path.join(here, "../public/liveries/fins")).filter(f => f.endsWith(".webp"))) assert.ok(tatt.includes("| " + f + " |") && /\| CC BY|\| Public domain|\| PD/.test(tatt.split("| " + f + " |")[1].split("\n")[0]), f + " credited with a free licence");
 for (const c of ["BA", "BAW", "VS", "VIR", "U2", "EZY", "EJU", "EZS", "LS", "EXS", "BY", "TOM", "W6", "WZZ", "WUK", "EI", "LH", "DLH", "AF", "KL", "EK", "QR", "TK", "LO", "LOT", "AA", "DL", "UA", "SK", "SAS", "AY", "IB", "VY", "TP", "LX", "SWR", "OS", "SN"]) {
-  const a = c.length === 3 ? { icao: c } : { iata: c }; assert.ok(/liveries\/tails\/[A-Z0-9]+\.webp/.test(renderToStaticMarkup(h(m.Tail, { a }))), c + " has a tail photo");
+  const a = c.length === 3 ? { icao: c } : { iata: c }; assert.ok(/liveries\/fins\/[A-Z0-9]+-[0-9a-f]{8}\.webp/.test(renderToStaticMarkup(h(m.Tail, { a }))), c + " has a tail photo");
 }
 // raw upper-case feed names are tidied; destinations on today's MAN/LHR/KRK boards have a real photo
 assert.strictEqual(m.nicePlace("MANOHAR GOA"), "Manohar Goa"); assert.strictEqual(m.nicePlace("CAIRO SPHINX AIRPORT"), "Cairo Sphinx"); assert.strictEqual(m.nicePlace("Kraków"), "Kraków");
 for (const k of ["GOX", "TFU", "SPX", "DXB", "BDA", "KWI", "TAS", "NBE", "SID"]) assert.ok(D[k] && D[k].img && lq.includes(`"${k}":"`), k + " destination photo");
 assert.strictEqual(D.GOX.name, "Goa");
+// hashed asset names are current (re-run tools/hashassets.py), and fins are truly transparent cut-outs
+const gen = fs.readFileSync(path.join(here, "../src/assets.gen.ts"), "utf8"); const crypto = await import("node:crypto"); const h8 = p => crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex").slice(0, 8);
+assert.ok(gen.includes(`/dest/index-${h8(path.join(here, "../public/dest/index.json"))}.json`), "DEST_INDEX hash stale: run tools/hashassets.py");
+for (const f of fs.readdirSync(path.join(here, "../public/liveries/fins")).filter(f => f.endsWith(".webp"))) { const p = path.join(here, "../public/liveries/fins", f); assert.ok(f.includes("-" + h8(p) + "."), f + " hash stale"); assert.ok(gen.includes("/liveries/fins/" + f), f + " not mapped"); const b = fs.readFileSync(p); assert.ok(b.includes(Buffer.from("ALPH")) || (b.includes(Buffer.from("VP8X")) && (b[20] & 0x10)), f + " has no alpha"); }
 console.log("clearway tests ok");

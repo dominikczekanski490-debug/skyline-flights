@@ -170,4 +170,7 @@ html[data-skin="clearway"] .sheet:has(.cw-fd) .sheet-body{background:#f4f6fa}
 .cw-fd .cw-tiles{align-items:stretch}
 .cw-fd .cw-tile,.cw-fd .cw-tile.c{justify-content:flex-start!important;padding-top:14px}
 
-.cw-tail-img{grid-area:logo;display:flex;align-items:flex-end;justify-content:center;width:74px;height:56px;flex:none;background:none;border:0}.cw-tail-img img{display:block;width:74px!important;height:56px!important;max-width:none;object-fit:contain;object-position:center bottom;filter:drop-shadow(0 1px 1px rgba(11,31,63,.18))}
+.cw-fd .cw-tail-img,.cw-tail-img{grid-area:logo;display:flex;align-items:flex-end;justify-content:flex-start;width:84px;height:62px;flex:none;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;padding:0!important;overflow:visible}.cw-tail-img img{display:block;width:84px!important;height:62px!important;max-width:none;object-fit:contain;object-position:left bottom;background:transparent;border:0;border-radius:0}
+
+/* the Clearway card has its own "Discover <city>" guide; the classic collapsible guide would duplicate it */
+html[data-skin="clearway"] details.dg{display:none!important}
