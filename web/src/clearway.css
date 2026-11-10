@@ -123,3 +123,41 @@ html[data-skin="clearway"] .mapbtns{margin-top:calc(56px + env(safe-area-inset-t
 .cw-sw .p{position:absolute;left:0;bottom:2px;width:22px;height:4px;border-radius:2px;background:#e8eef7;border:1px solid #b9c7dc}.cw-sw .p.a{background:#ffc21a;border-color:#ffc21a}.cw-sw .p.g{background:#10b981;border-color:#10b981}
 .cw-feat-t{display:flex;flex-direction:column;gap:3px;min-width:0}.cw-feat-t b{font-size:17px}.cw-feat-t small{font-size:12.5px;opacity:.8;line-height:1.35}.cw-feat-t em{font-style:normal;font-weight:700;font-size:13px;color:#3d7be0}
 html[data-skin="clearway"] .cw-feat-t em{color:#0b4fb3}
+/* ===== v3 flight card — matches the reference ticket card ===== */
+html[data-skin="clearway"] .sheet:has(.cw-fd),html[data-skin="clearway"] .sheet:has(.cw-dest){border-radius:0!important}
+html[data-skin="clearway"] .sheet:has(.cw-fd)>.sheet-head,html[data-skin="clearway"] .sheet:has(.cw-dest)>.sheet-head{position:absolute;left:0;right:0;top:0;z-index:4;height:0;padding:0;overflow:visible}
+html[data-skin="clearway"] .sheet:has(.cw-fd)>.sheet-head .grabber,html[data-skin="clearway"] .sheet:has(.cw-dest)>.sheet-head .grabber{display:none}
+.cw-fd,.cw-dest{margin-top:0}
+.cw-hero.big{height:clamp(280px,50vh,520px)}
+.cw-fd .cw-credit{bottom:178px}
+.cw-fd .cw-card{margin:-170px 24px 0;border-radius:16px;padding:22px 20px 0;box-shadow:0 8px 28px rgba(11,31,63,.16);overflow:visible;font-family:"Inter Variable",Inter,-apple-system,sans-serif;color:#0b1f3f}
+.cw-fd .cw-card-h{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto!important;grid-template-areas:"logo hd pill"!important;gap:12px!important;align-items:center}
+.cw-fd .cw-card-h .cw-pill{align-self:start;justify-self:end;margin:2px 0 0;background:#e8eef7;border:1px solid #b9c7dc;color:#0b1f3f;font-weight:500;font-size:14px;padding:5px 10px;border-radius:6px}
+.cw-fd .cw-card-h .cw-pill.red{background:#d62828;color:#fff;border-color:#d62828;font-weight:700}.cw-fd .cw-card-h .cw-pill.green{background:#10b981;color:#fff;border-color:#10b981;font-weight:700}
+.cw-fd .cw-card-h .cw-pill.amber{background:#ffc21a;color:#0b1f3f;border-color:#ffc21a;font-weight:700}.cw-fd .cw-card-h .cw-pill.cx{background:#fdecec;color:#c62828;border-color:#c62828}
+.cw-tail-fin{grid-area:logo;position:relative;width:74px;height:56px;display:block}.cw-tail-fin svg{width:100%;height:100%;display:block}
+.cw-tail-fin .harp{position:absolute;left:38px;top:10px;width:26px;height:34px;background:#f1c933;-webkit-mask:url(/liveries/Ryanair_harp_from_CommonsB737.png) center/contain no-repeat;mask:url(/liveries/Ryanair_harp_from_CommonsB737.png) center/contain no-repeat}
+.cw-fd .cw-card h2.cw-city{font-size:30px!important;font-weight:800;line-height:1.1;margin:0!important;color:#0b1f3f}
+.cw-fd .cw-hd .cw-line{font-size:16px;color:#0b1f3f;margin-top:4px;display:flex;align-items:center;gap:0}
+.cw-sep{display:inline-block;width:1px;height:16px;background:#0b1f3f;margin:0 9px}
+.cw-hr{border:0;border-top:1px solid #d3d9e3;margin:20px 0 10px}
+.cw-dur{text-align:center;color:#5a6f93;font-size:15px;font-weight:500}
+.cw-fd .cw-route{display:grid!important;grid-template-columns:auto minmax(40px,1fr) auto!important;column-gap:10px;row-gap:6px;align-items:center;margin:2px 0 18px!important}
+.cw-fd .cw-route>b{font-size:44px;font-weight:800;line-height:1;letter-spacing:-.01em;color:#0b1f3f}.cw-fd .cw-route>b.r{text-align:right}
+.cw-fd .cw-route>small{font-size:15px;color:#0b1f3f;line-height:1.4;max-width:none;margin:0}.cw-fd .cw-route>small.r{text-align:right;grid-column:2 / 4}
+.cw-fd .cw-route>small:first-of-type{grid-column:1 / 3}.cw-fd .cw-route>span:not(.cw-path){display:none}
+.cw-fd .cw-path{display:flex!important;align-items:center;gap:8px;padding:0!important;margin:0!important}.cw-fd .cw-path i{flex:1;height:0;border-top:1.5px solid #c2cad8}
+.cw-fd .cw-path svg.po{width:28px;height:28px;fill:none;stroke:#0b1f3f;stroke-width:1.6;stroke-linejoin:round;flex:none}
+.cw-fd .cw-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:24px}
+.cw-fd .cw-tile{background:#e8eef7;border-radius:6px;padding:12px 12px 10px;min-height:96px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center}
+.cw-fd .cw-tile small{font-size:15px;font-weight:700;color:#0b1f3f}.cw-fd .cw-tile b{font-size:24px;font-weight:600;margin:6px 0 2px;color:#0b1f3f}.cw-fd .cw-tile em{font-style:normal;font-size:14px;color:#5a6f93}
+.cw-fd .cw-tile.c{align-items:center;text-align:center}
+.cw-perf{position:relative;height:28px;margin:18px -20px 0}
+.cw-perf::before{content:"";position:absolute;left:18px;right:18px;top:50%;border-top:1.5px dashed #c9d1dd}
+.cw-perf::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 0 50%,#f4f6fa 11px,transparent 12px),radial-gradient(circle at 100% 50%,#f4f6fa 11px,transparent 12px)}
+html[data-skin="clearway"] .sheet:has(.cw-fd) .sheet-body{background:#f4f6fa}
+.cw-fd .cw-disc{justify-content:center!important;gap:16px;border-top:0!important;margin:0!important;padding:16px 0 22px!important;font-size:18px!important;font-weight:700}
+.cw-fd .cw-disc span{display:inline-flex}.cw-fd .cw-disc svg{width:22px;height:22px;fill:none;stroke:#0b1f3f;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+@media (max-width:420px){.cw-fd .cw-card{margin:-170px 16px 0;padding:20px 16px 0}.cw-fd .cw-route>b{font-size:40px}.cw-fd .cw-tiles{gap:12px}.cw-fd .cw-card h2.cw-city{font-size:27px!important}.cw-perf{margin:18px -16px 0}}
+.cw-fd .cw-route{margin:2px 0 6px!important}
+.cw-rc{display:flex;justify-content:space-between;gap:16px;margin:0 0 18px}.cw-rc small{font-size:15px;line-height:1.45;color:#0b1f3f;max-width:48%}.cw-rc small.r{text-align:right}

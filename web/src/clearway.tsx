@@ -43,12 +43,12 @@ export function preloadHero(iata?: string) {
   const go = () => { if (LQ && !LQ[iata]) return; const l = document.createElement("link"); l.rel = "preload"; l.as = "image"; l.href = `/dest/${iata}.webp`; l.dataset.hero = iata; (l as any).fetchPriority = "high"; document.head.appendChild(l); };
   LQ ? go() : loadLqip().then(go);
 }
-export function Hero({ iata, children, tall }: { iata?: string; children?: ReactNode; tall?: boolean }) {
+export function Hero({ iata, children, tall, big }: { iata?: string; children?: ReactNode; tall?: boolean; big?: boolean }) {
   const d = useDest(iata); const [ok, setOk] = useState(false); const [lq, setLq] = useState(() => (iata && LQ ? LQ[iata] || "" : null));
   useEffect(() => { setOk(false); if (!iata) return setLq(""); if (LQ) setLq(LQ[iata] || ""); else loadLqip().then(m => setLq(m[iata] || "")); }, [iata]);
   // the photo is requested as soon as we know it exists (from the bundled preview list), without waiting for index.json
   const photo = !!iata && (lq ? true : !!d?.img);
-  return <div className={"cw-hero" + (tall ? " tall" : "")} style={d?.img?.col ? { backgroundColor: d.img.col } : undefined}>
+  return <div className={"cw-hero" + (tall ? " tall" : "") + (big ? " big" : "")} style={d?.img?.col ? { backgroundColor: d.img.col } : undefined}>
     {lq && <i className="cw-lq" style={{ backgroundImage: `url(data:image/webp;base64,${lq})` }} />}
     {photo && <img src={`/dest/${iata}.webp`} alt={d?.name || ""} decoding="async" loading="eager" fetchPriority="high" className={ok ? "on" : ""} onLoad={() => setOk(true)} ref={el => { if (el?.complete && el.naturalWidth) setOk(true); }} onError={e => ((e.target as HTMLImageElement).style.display = "none")} />}
     <i className="cw-hero-shade" />{children}
@@ -57,7 +57,9 @@ export function Hero({ iata, children, tall }: { iata?: string; children?: React
 
 const ic = { menu: <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18" /></svg>, search: <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>,
   cal: <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>, bell: <svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" /><path d="M10 20a2 2 0 0 0 4 0" /></svg>,
-  close: <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></svg>, plane: <svg viewBox="0 0 24 24"><path d="M2 13.5 22 12 2 10.5l3 1.5zM9 12l-3-7h2l6 7-6 7H6z" /></svg>, tick: <svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10" /></svg> };
+  close: <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></svg>, plane: <svg viewBox="0 0 24 24"><path d="M2 13.5 22 12 2 10.5l3 1.5zM9 12l-3-7h2l6 7-6 7H6z" /></svg>, tick: <svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10" /></svg>,
+  planeO: <svg viewBox="0 0 24 24" className="po"><path d="M21 12c0-.9-.7-1.4-1.6-1.4h-4.6L10 3.5H8l2.4 7.1H6.2L4.4 8.4H3l1 3.6-1 3.6h1.4l1.8-2.2h4.2L8 20.5h2l4.8-7.1h4.6c.9 0 1.6-.5 1.6-1.4z" /></svg>,
+  chev: <svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" /></svg> };
 export type CwNav = { menu: () => void; search: () => void; cal: () => void; bell: () => void; close?: () => void };
 export function TopBar({ nav, over, fixed }: { nav: CwNav; over?: boolean; fixed?: boolean }) {
   return <div className={"cw-bar" + (over ? " over" : "") + (fixed ? " fixed" : "")}><div className="cw-bar-l"><button aria-label="Menu" onClick={nav.menu}>{ic.menu}</button><button aria-label="Search" onClick={nav.search}>{ic.search}</button></div>
@@ -100,20 +102,30 @@ export function BoardList({ list, dir, date, tz, open, extra }: { list: any[]; d
 }
 
 // ---- flight detail ----
-const Tile = ({ l, v, s }: { l: string; v: ReactNode; s?: ReactNode }) => <div className="cw-tile"><small>{l}</small><b>{v}</b>{s && <small>{s}</small>}</div>;
+// Airline tail fin. Ryanair group: navy fin with the gold harp (harp shape extracted from a CC BY-SA Commons drawing, see liveries/ATTRIBUTION.md).
+// Other airlines: their bundled logo in a tile (no invented tail art).
+const HARP = new Set(["FR", "RK", "AL", "RYR", "RUK"]);
+export function Tail({ a }: { a: any }) {
+  const i = a?.iata;
+  if (HARP.has(i)) return <span className="cw-tail-fin" role="img" aria-label={airlineName(a) + " tail"}><svg viewBox="0 0 74 56"><path d="M0 56 L46 0 L74 0 L58 56 Z" fill="#073590" /></svg><i className="harp" /></span>;
+  return <div className="cw-logo">{i && hasLogo(i) ? <img src={`/logos/${i}.png`} alt={airlineName(a)} /> : <b>{airlineName(a) || i}</b>}</div>;
+}
 export function FlightTop({ f, nav, discover, crumbs }: { f: Flight; nav: CwNav; discover: (iata: string) => void; crumbs?: string }) {
   const g: any = withEstArr(f); const o = f.origin, a = f.destination; const dd = useDest(a?.iata); const dir = "dep";
   const ds = f.dep.scheduled, as_ = f.arr.scheduled; const real = ds && as_ ? (+new Date(as_) - +new Date(ds)) / 6e4 : 0; const mins = real > 0 ? real : estDurMin(o, a);
   const dep = best(f.dep); const p = pill(f, dir); preloadHero(a?.iata);
-  return <div className="cw-fd"><Hero iata={a?.iata}><TopBar nav={nav} over /></Hero>
-    <div className="cw-card"><div className="cw-card-h"><div className="cw-logo">{f.airline?.iata && hasLogo(f.airline.iata) ? <img src={`/logos/${f.airline.iata}.png`} alt={airlineName(f.airline)} /> : <b>{airlineName(f.airline) || f.airline?.iata}</b>}</div>
-      <div className="cw-hd"><h2 className="cw-city">{dd?.name || a?.city || a?.iata}</h2><div className="cw-line">{f.number} | {airlineName(f.airline) || f.airline?.iata}</div></div><Pill p={p} /></div>
-      <div className="cw-route"><div><b>{o?.iata}</b><small>{o?.city}{o?.country ? ", " + o.country : ""}</small></div>
-        <div className="cw-path"><small>{mins ? dur(mins) + (real > 0 ? "" : " est.") : ""}</small><span><i />{ic.plane}<i /></span></div>
-        <div className="r"><b>{a?.iata}</b><small>{a?.city}{a?.country ? ", " + a.country : ""}</small></div></div>
-      <div className="cw-tiles"><Tile l="Departure" v={fmtT(dep, o?.tz)} s={dep ? new Date(dep).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: o?.tz || "Europe/London" }).replace(/ (\d{4})$/, ", $1") : ""} />
-        {f.dep.terminal && <Tile l="Terminal" v={String(f.dep.terminal).replace(/^T/i, "")} />}{f.dep.gate && <Tile l="Gate" v={f.dep.gate} />}{!f.dep.gate && <Tile l="Gate" v="—" s="not announced yet" />}</div>
-      {dd && <button className="cw-disc" onClick={() => discover(a!.iata)}>Discover {dd.name}<span>›</span></button>}</div>
+  const term = f.dep.terminal ? String(f.dep.terminal).replace(/^T/i, "") : ""; const gate = f.dep.gate || "";
+  return <div className="cw-fd"><Hero iata={a?.iata} big><TopBar nav={nav} over /></Hero>
+    <div className="cw-card"><div className="cw-card-h"><Tail a={f.airline} />
+      <div className="cw-hd"><h2 className="cw-city">{dd?.name || a?.city || a?.iata}</h2><div className="cw-line">{f.number}<i className="cw-sep" />{airlineName(f.airline) || f.airline?.iata}</div></div><Pill p={p} /></div>
+      <hr className="cw-hr" />
+      <div className="cw-dur">{mins ? dur(mins) + (real > 0 ? "" : " est.") : "\u00a0"}</div>
+      <div className="cw-route"><b>{o?.iata}</b><span className="cw-path"><i />{ic.planeO}<i /></span><b className="r">{a?.iata}</b>
+</div>
+      <div className="cw-rc"><small>{o?.city}{o?.country ? ", " + o.country : ""}</small><small className="r">{a?.city}{a?.country ? ", " + a.country : ""}</small></div>
+      {(dep || term || gate) && <div className="cw-tiles">{dep && <div className="cw-tile l"><small>Departure</small><b>{fmtT(dep, o?.tz)}</b><em>{dep ? new Date(dep).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: o?.tz || "Europe/London" }).replace(/ (\d{4})$/, ", $1") : ""}</em></div>}
+        {term && <div className="cw-tile c"><small>Terminal</small><b>{term}</b></div>}{gate && <div className="cw-tile c"><small>Gate</small><b>{gate}</b></div>}</div>}
+      {dd && <><div className="cw-perf" aria-hidden /><button className="cw-disc" onClick={() => discover(a!.iata)}>Discover {dd.name}<span>{ic.chev}</span></button></>}</div>
     <div className="cw-crumbs">Home › {crumbs || "Departures"} › {f.number}</div>
     <Itinerary f={f} g={g} /></div>;
 }
