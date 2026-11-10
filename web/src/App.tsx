@@ -109,7 +109,7 @@ export default function App() {
     markTracked(); busy = false; };
     tick(); const t = setInterval(tick, TRACK_MS); const v = () => document.visibilityState === "visible" && tick(); document.addEventListener("visibilitychange", v); window.addEventListener("focus", v);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", v); window.removeEventListener("focus", v); }; }, [active.map(f => f.id).join()]);
-  const cw = useCw(); useEffect(() => { if (cw) { const t = setTimeout(warmDest, 2500); return () => clearTimeout(t); } }, [cw]);
+  const cw = useCw(); useEffect(() => { if (cw) { loadLqip(); loadDest(); const t = setTimeout(warmDest, 2500); return () => clearTimeout(t); } }, [cw]);
   const cwNav: CwNav = { menu: () => push({ t: "settings" } as Ov), search: () => push({ t: "search" }), cal: () => push({ t: "plan" } as Ov), bell: () => push({ t: "inbox" }) };
   const top = ov.at(-1); const focus = top?.t === "flight" ? top.f : null;
   const mapFlights = focus ? [focus] : tab === "passport" ? flights.filter(f => !f.friend) : tab === "friends" ? flights.filter(f => f.friend) : active.filter(f => !f.friend);
@@ -638,7 +638,7 @@ function Settings({ x, theme, setTheme, push }: any) {
 
 const Man3D = lazy(() => import("./v35"));
 import { Apt3DBtn, WhatMatters } from "./v63b";
-import { useCw, TopBar, BoardList, FlightTop, DestPage, warmDest, type CwNav } from "./clearway";
+import { useCw, TopBar, BoardList, FlightTop, DestPage, warmDest, loadLqip, loadDest, type CwNav } from "./clearway";
 const Welcome = lazy(() => import("./v53"));
 const HomeDash = lazy(() => import("./v52"));
 export function Man3DBtn() { const [o, setO] = useState(() => /man3d=1/.test(location.hash));

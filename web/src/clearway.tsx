@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import "@fontsource-variable/inter";
 import "./clearway.css";
 import { fmtT, best, delay, dur, estDurMin, withEstArr, type Flight } from "./lib";
-import { AirlineTile, airlineName } from "./brand";
+import { airlineName, hasLogo } from "./brand";
 import { status as boardStatus } from "./terminal";
 
 export const CW = "clearway";
@@ -33,11 +33,24 @@ export function warmDest() {
     for (let i = 0; i < urls.length; i += 8) { const part: string[] = []; for (const u of urls.slice(i, i + 8)) if (!(await cache.match(u))) part.push(u); if (part.length) await cache.addAll(part).catch(() => {}); await new Promise(r => setTimeout(r, 120)); } });
 }
 
+// Tiny blurred previews (lazy chunk, ~50 KB) so a photo-shaped preview shows on the first frame; the real WebP replaces it.
+let LQ: Record<string, string> | null = null; let lqP: Promise<Record<string, string>> | null = null;
+export const loadLqip = (): Promise<Record<string, string>> => lqP ||= import("./destlqip").then(m => (LQ = m.LQIP)).catch(() => (LQ = {} as Record<string, string>));
+export const hasPhoto = (iata?: string) => !!iata && !!LQ?.[iata];
+// Start the photo download right away (row tap / overlay open), before React even mounts the hero.
+export function preloadHero(iata?: string) {
+  if (!iata || typeof document === "undefined" || document.querySelector(`link[data-hero="${iata}"]`)) return;
+  const go = () => { if (LQ && !LQ[iata]) return; const l = document.createElement("link"); l.rel = "preload"; l.as = "image"; l.href = `/dest/${iata}.webp`; l.dataset.hero = iata; (l as any).fetchPriority = "high"; document.head.appendChild(l); };
+  LQ ? go() : loadLqip().then(go);
+}
 export function Hero({ iata, children, tall }: { iata?: string; children?: ReactNode; tall?: boolean }) {
-  const d = useDest(iata); const [ok, setOk] = useState(false);
-  useEffect(() => setOk(false), [iata]);
-  return <div className={"cw-hero" + (tall ? " tall" : "")} style={{ background: d?.img?.col ? `linear-gradient(180deg, rgba(11,31,63,.25), rgba(11,31,63,.55)), ${d.img.col}` : undefined }}>
-    {d?.img && <img src={`/dest/${d.iata}.webp`} alt={d.name} decoding="async" fetchPriority="high" className={ok ? "on" : ""} onLoad={() => setOk(true)} onError={e => ((e.target as HTMLImageElement).style.display = "none")} />}
+  const d = useDest(iata); const [ok, setOk] = useState(false); const [lq, setLq] = useState(() => (iata && LQ ? LQ[iata] || "" : null));
+  useEffect(() => { setOk(false); if (!iata) return setLq(""); if (LQ) setLq(LQ[iata] || ""); else loadLqip().then(m => setLq(m[iata] || "")); }, [iata]);
+  // the photo is requested as soon as we know it exists (from the bundled preview list), without waiting for index.json
+  const photo = !!iata && (lq ? true : !!d?.img);
+  return <div className={"cw-hero" + (tall ? " tall" : "")} style={d?.img?.col ? { backgroundColor: d.img.col } : undefined}>
+    {lq && <i className="cw-lq" style={{ backgroundImage: `url(data:image/webp;base64,${lq})` }} />}
+    {photo && <img src={`/dest/${iata}.webp`} alt={d?.name || ""} decoding="async" loading="eager" fetchPriority="high" className={ok ? "on" : ""} onLoad={() => setOk(true)} ref={el => { if (el?.complete && el.naturalWidth) setOk(true); }} onError={e => ((e.target as HTMLImageElement).style.display = "none")} />}
     <i className="cw-hero-shade" />{children}
     {d?.img && <a className="cw-credit" href={d.img.page} target="_blank" rel="noreferrer">Photo: {d.name}{d.img.by ? " · " + d.img.by : ""} · {d.img.lic}</a>}</div>;
 }
@@ -80,7 +93,7 @@ export function BoardList({ list, dir, date, tz, open, extra }: { list: any[]; d
   useEffect(() => { loadDest().then(j => { const seen = new Set<string>(); for (const f of list.slice(0, 40)) { const i = (dir === "dep" ? f.destination : f.origin)?.iata; if (i && j[i]?.img && !seen.has(i)) { seen.add(i); const im = new Image(); im.decoding = "async"; im.src = `/dest/${i}.webp`; } } }); }, [list.length, dir]);
   return <div className="cw-list"><h1 className="cw-title">{dir === "dep" ? "Departures" : "Arrivals"}</h1><div className="cw-date">{capsDate(date)}</div>{extra}
     {list.map((f, i) => { const t = dir === "dep" ? f.dep : f.arr; const o = dir === "dep" ? f.destination : f.origin; const p = pill(f, dir); const cx = p.k === "cx"; const d = delay(t);
-      return <button key={f.id + i} className={"cw-item" + (cx ? " cx" : "")} onClick={() => open(f)}><div className="cw-time"><b>{f.liveOnly ? "Live" : fmtT(t.scheduled, tz)}</b>{!cx && d != null && d >= 5 && t.estimated && <small>{fmtT(t.estimated, tz)}</small>}</div>
+      return <button key={f.id + i} className={"cw-item" + (cx ? " cx" : "")} onPointerDown={() => preloadHero(o?.iata)} onClick={() => { preloadHero(o?.iata); open(f); }}><div className="cw-time"><b>{f.liveOnly ? "Live" : fmtT(t.scheduled, tz)}</b>{!cx && d != null && d >= 5 && t.estimated && <small>{fmtT(t.estimated, tz)}</small>}</div>
         <div className="cw-mid"><b className="cw-dest">{o?.city || o?.name || o?.iata}{o?.iata ? ` (${o.iata})` : ""}</b><div className="cw-line">{f.number} | {airlineName(f.airline) || f.airline?.iata}</div>{!cx && t.terminal && <div className="cw-line">T{String(t.terminal).replace(/^T/i, "")}</div>}<Pill p={p} /></div>
         <span className="cw-more">Details ›</span></button>; })}
     {!list.length && <div className="cw-empty">No flights to show.</div>}</div>;
@@ -91,10 +104,10 @@ const Tile = ({ l, v, s }: { l: string; v: ReactNode; s?: ReactNode }) => <div c
 export function FlightTop({ f, nav, discover, crumbs }: { f: Flight; nav: CwNav; discover: (iata: string) => void; crumbs?: string }) {
   const g: any = withEstArr(f); const o = f.origin, a = f.destination; const dd = useDest(a?.iata); const dir = "dep";
   const ds = f.dep.scheduled, as_ = f.arr.scheduled; const real = ds && as_ ? (+new Date(as_) - +new Date(ds)) / 6e4 : 0; const mins = real > 0 ? real : estDurMin(o, a);
-  const dep = best(f.dep); const p = pill(f, dir);
+  const dep = best(f.dep); const p = pill(f, dir); preloadHero(a?.iata);
   return <div className="cw-fd"><Hero iata={a?.iata}><TopBar nav={nav} over /></Hero>
-    <div className="cw-card"><div className="cw-card-h"><AirlineTile a={f.airline} className="cw-tail" mode="colour" /><Pill p={p} /></div>
-      <h2 className="cw-city">{dd?.name || a?.city || a?.iata}</h2><div className="cw-line">{f.number} | {airlineName(f.airline) || f.airline?.iata}</div>
+    <div className="cw-card"><div className="cw-card-h"><div className="cw-logo">{f.airline?.iata && hasLogo(f.airline.iata) ? <img src={`/logos/${f.airline.iata}.png`} alt={airlineName(f.airline)} /> : <b>{airlineName(f.airline) || f.airline?.iata}</b>}</div>
+      <div className="cw-hd"><h2 className="cw-city">{dd?.name || a?.city || a?.iata}</h2><div className="cw-line">{f.number} | {airlineName(f.airline) || f.airline?.iata}</div></div><Pill p={p} /></div>
       <div className="cw-route"><div><b>{o?.iata}</b><small>{o?.city}{o?.country ? ", " + o.country : ""}</small></div>
         <div className="cw-path"><small>{mins ? dur(mins) + (real > 0 ? "" : " est.") : ""}</small><span><i />{ic.plane}<i /></span></div>
         <div className="r"><b>{a?.iata}</b><small>{a?.city}{a?.country ? ", " + a.country : ""}</small></div></div>
@@ -125,7 +138,7 @@ function Itinerary({ f, g }: { f: Flight; g: any }) {
 // ---- destination guide ----
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export function DestPage({ iata, from, nav }: { iata: string; from?: any; nav: CwNav }) {
-  const d = useDest(iata);
+  const d = useDest(iata); preloadHero(iata);
   if (d === undefined) return <div className="cw-dest"><Hero iata={iata} tall><TopBar nav={nav} over /></Hero></div>;
   if (!d) return <div className="cw-dest"><Hero tall><TopBar nav={nav} over /></Hero><div className="cw-body"><h1 className="cw-big">{iata}</h1><p>No destination guide for {iata} yet.</p></div></div>;
   const zone = d.tz || from?.destination?.tz; const tz = (() => { if (!zone) return ""; try { const p = new Intl.DateTimeFormat("en-GB", { timeZone: zone, timeZoneName: "shortOffset" }).formatToParts(new Date()).find(x => x.type === "timeZoneName"); return p?.value; } catch { return ""; } })();
