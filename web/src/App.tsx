@@ -60,19 +60,20 @@ import { Timeline, Progress, WeatherCard, AirportInfo, PassportMore, PasteImport
 import { AskSkyline, LockView, RouteWeather, useInsights } from "./v21";
 import { FactorViz, WarmBanner, syncPush, testPush, pushState, pushStatus, exportBackup, importBackup, makeShareLink, parseShare, LeaveCard, PassportExtras, DepartureDay, UpdateBanner, PushChecklist, BUILD, localNotify, testLocal, notifEnv } from "./extras";
 
+const GIc = <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 8h12a4 4 0 0 1 4 4v1.5a3.5 3.5 0 0 1-6.3 2.1L14.5 14h-5l-1.2 1.6A3.5 3.5 0 0 1 2 13.5V12a4 4 0 0 1 4-4z" /><path d="M7 10.5v3M5.5 12h3" /><circle cx="15.5" cy="11" r=".9" fill="currentColor" /><circle cx="17.8" cy="13" r=".9" fill="currentColor" /></svg>;
 type Ov = { t: "inbox" } | { t: "dest"; iata: string; f?: any } | { t: "find" } | { t: "airline"; iata?: string; icao?: string; name?: string } | { t: "type"; q: string } | { t: "ask" } | { t: "live" } | { t: "play" } | { t: "lock" } | { t: "flight"; f: Flight } | { t: "board"; iata: string; term?: boolean; dir?: string } | { t: "airports"; mode?: string } | { t: "search" } | { t: "settings" } | { t: "addpast" } | { t: "paste" } | { t: "tools"; id?: string } | { t: "features" } | { t: "labs"; id?: string; apt?: string; f?: Flight } | { t: "dayof"; f: Flight } | { t: "guide"; iata: string } | { t: "overhead" } | { t: "wrapped" } | { t: "conn" } | { t: "trip"; f?: Flight } | { t: "spots" } | { t: "cmp"; a?: string } | { t: "pins" } | { t: "plan" } | { t: "net" } | { t: "look" } | { t: "pat" } | { t: "gate"; f: any } | { t: "gatewall"; iata: string } | { t: "games"; tab?: string; init?: any };
 const Logo = ({ a, s = 34 }: { a?: any; s?: number }) => <AirlineTile a={a} className="card-tile" mode="colour" style={{ width: Math.round(s * 2.4), height: s }} />;
 
 export default function App() {
-  const [tab, setTab] = useState<"mine" | "friends" | "tracked" | "passport">("mine");
+  const [tab, setTab] = useState<"mine" | "friends" | "tracked" | "passport" | "games">(() => /[#&]tab=games|^#games(&|$)/.test(location.hash) ? "games" : "mine");
   const [flights, setFlights] = useState<Flight[]>(() => load().map(finishStale));
   useEffect(() => { const t = setTimeout(() => trackPing(flights.filter((f: any) => !f.friend)), 3000); return () => clearTimeout(t); }, [flights.map(f => f.id).join(",")]);
   const [ov, setOv] = useState<Ov[]>([]);
   const [live, setLive] = useState<Record<string, any>>({});
   const [mapStyle, setMapStyle] = useState(localStorage.getItem("sk.map2") || "dark");
   const [radar, setRadar] = useState(false); const [locate, setLocate] = useState(0);
-  useEffect(() => { const tb = location.hash.match(/tab=(mine|friends|tracked|passport)/); if (tb) setTab(tb[1] as any); const v = location.hash.match(/ov=(find|overhead|wrapped|conn|ask|settings|search|trip|spots|labs|tools|cmp|pins|plan|net|look|pat|live|play)/); if (v) setOv([{ t: v[1] } as Ov]); const gh = location.hash.match(/guide=([A-Z]{3})/); if (gh) setOv([{ t: "guide", iata: gh[1] }]); const dh = location.hash.match(/[#&]dest=([A-Z]{3})/); if (dh) setOv([{ t: "dest", iata: dh[1] }]); const alh = location.hash.match(/airline=([A-Z0-9]{2})?,?([A-Z]{3})?/); if (alh) setOv([{ t: "airline", iata: alh[1], icao: alh[2] }]); const tyh = location.hash.match(/actype=([\w-]+)/); if (tyh) setOv([{ t: "type", q: tyh[1] }]); const lb = location.hash.match(/labs=?(\w*)/); if (lb) setOv([{ t: "labs", id: lb[1] || undefined }]); const fm = location.hash.match(/flight=([\w-]+)/); if (fm) { const f = load().find(x => x.id === fm[1]); if (f) setOv([{ t: "flight", f }]); } const gm = location.hash.match(/[#&](?:games|ov=games)(?:=(gate|board))?(?=&|$)/); if (gm) setOv([{ t: "games", tab: gm[1] || (/[#&]g=/.test(location.hash) ? "gate" : /[#&]b=/.test(location.hash) ? "board" : undefined) }]); }, []);
-  useEffect(() => { const h = () => { const fm = location.hash.match(/flight=([\w-]+)/); const f = fm && load().find(x => x.id === decodeURIComponent(fm[1])); if (f) setOv([{ t: "flight", f }]); const v = location.hash.match(/ov=(overhead|wrapped|conn|ask|settings|search|trip|spots|labs|tools)/); if (v) setOv([{ t: v[1] } as Ov]); const b = location.hash.match(/board=([A-Za-z]{3})/); if (b) setOv([{ t: "board", iata: b[1].toUpperCase() }]); const gm = location.hash.match(/[#&](?:games|ov=games)(?:=(gate|board))?(?=&|$)/); if (gm) setOv([{ t: "games", tab: gm[1] }]); }; window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
+  useEffect(() => { const tb = location.hash.match(/tab=(mine|friends|tracked|passport|games)/); if (tb) setTab(tb[1] as any); const v = location.hash.match(/ov=(find|overhead|wrapped|conn|ask|settings|search|trip|spots|labs|tools|cmp|pins|plan|net|look|pat|live|play)/); if (v) setOv([{ t: v[1] } as Ov]); const gh = location.hash.match(/guide=([A-Z]{3})/); if (gh) setOv([{ t: "guide", iata: gh[1] }]); const dh = location.hash.match(/[#&]dest=([A-Z]{3})/); if (dh) setOv([{ t: "dest", iata: dh[1] }]); const alh = location.hash.match(/airline=([A-Z0-9]{2})?,?([A-Z]{3})?/); if (alh) setOv([{ t: "airline", iata: alh[1], icao: alh[2] }]); const tyh = location.hash.match(/actype=([\w-]+)/); if (tyh) setOv([{ t: "type", q: tyh[1] }]); const lb = location.hash.match(/labs=?(\w*)/); if (lb) setOv([{ t: "labs", id: lb[1] || undefined }]); const fm = location.hash.match(/flight=([\w-]+)/); if (fm) { const f = load().find(x => x.id === fm[1]); if (f) setOv([{ t: "flight", f }]); } const gm = location.hash.match(/[#&](?:games|ov=games)(?:=([a-z]+))?(?=&|$)/); if (gm) { const id = gm[1] || (/[#&]g=/.test(location.hash) ? "gate" : /[#&]b=/.test(location.hash) ? "board" : undefined); if (id) setOv([{ t: "games", tab: id }]); else setTab("games"); } }, []);
+  useEffect(() => { const h = () => { const fm = location.hash.match(/flight=([\w-]+)/); const f = fm && load().find(x => x.id === decodeURIComponent(fm[1])); if (f) setOv([{ t: "flight", f }]); const v = location.hash.match(/ov=(overhead|wrapped|conn|ask|settings|search|trip|spots|labs|tools)/); if (v) setOv([{ t: v[1] } as Ov]); const b = location.hash.match(/board=([A-Za-z]{3})/); if (b) setOv([{ t: "board", iata: b[1].toUpperCase() }]); const gm = location.hash.match(/[#&](?:games|ov=games)(?:=([a-z]+))?(?=&|$)/); if (gm) { if (gm[1]) setOv([{ t: "games", tab: gm[1] }]); else { setOv([]); setTab("games"); } } }; window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
   useEffect(() => { const m = location.hash.match(/board=([A-Za-z]{3})/); if (m) setOv([{ t: "board", iata: m[1].toUpperCase() }]); const a = location.hash.match(/airports=(\w+)/); if (a) setOv([{ t: "airports", mode: a[1] }]); }, []);
   const [why, setWhy] = useState<any>(null); (window as any).__why = (f: any) => { navigator.vibrate?.(8); setWhy(f); };
   const [theme, setTheme] = useState(() => location.hash.match(/[#&]skin=([a-z-]+)/)?.[1] || localStorage.getItem("sk.theme") || "dark"); // #skin=clearway forces (and saves) a skin
@@ -117,7 +118,8 @@ export default function App() {
     <MapView flights={mapFlights} live={live} style={mapStyle} radar={radar} focus={focus} locate={locate} onPlane={id => { const f = flights.find(x => x.id === id); f && push({ t: "flight", f }); }} />
     <div className="maptint" /><div className="aurora" />{cw && !ov.length && <TopBar nav={cwNav} fixed />}
     <div className="mapbtns"><button aria-label="Change map style" onClick={() => setMapStyle(MAP_STYLES[(MAP_STYLES.indexOf(mapStyle) + 1) % MAP_STYLES.length])}>{I.layers}</button><button aria-label="Weather radar" aria-pressed={radar} className={radar ? "on" : ""} onClick={() => setRadar(!radar)}>{I.cloud}</button><button aria-label="Show my location" onClick={() => setLocate(Date.now())}>{I.locate}</button></div>
-    <Sheet snaps={[0.3, 0.55, 0.94]} initial={1} z={5}>
+    <Sheet key={tab === "games" ? "g" : "m"} snaps={[0.3, 0.55, 0.94]} initial={tab === "games" ? 2 : 1} z={5}>
+      {tab === "games" && <Boundary label="games"><GamesView inTab tab0={location.hash.match(/[#&]game=([a-z]+)/)?.[1]} /></Boundary>}
       {tab === "tracked" && <Tracked flights={flights.filter(f => !f.friend)} setFlights={setFlights} open={f => push({ t: "flight", f })} />}
       {tab === "mine" && <MyFlights list={active.filter(f => !f.friend && !isTracked(f))} open={f => push({ t: "flight", f })} push={push} />}
       {tab === "friends" && <Friends list={flights.filter(f => f.friend)} open={f => push({ t: "flight", f })} push={push} />}
@@ -125,8 +127,8 @@ export default function App() {
       <div style={{ height: 120 }} />
     </Sheet>
     <Suspense fallback={null}><Welcome theme={theme} setTheme={setTheme} /></Suspense>
-    {!ov.length && <nav className="tabbar"><div className="pill"><i className="tabind" style={{ transform: `translateX(${["mine","friends","tracked","passport"].indexOf(tab) * 100}%)` }} />
-      {([["mine", "My Flights", I.plane], ["friends", "Friends", I.friends], ["tracked", "Tracked", I.clock], ["passport", "Passport", I.passport]] as const).map(([k, l, ic]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{ic}<span>{l}</span></button>)}
+    {!ov.length && <nav className="tabbar"><div className="pill"><i className="tabind" style={{ width: "calc((100% - 10px) / 5)", transform: `translateX(${["mine","friends","tracked","passport","games"].indexOf(tab) * 100}%)` }} />
+      {([["mine", "My Flights", I.plane], ["friends", "Friends", I.friends], ["tracked", "Tracked", I.clock], ["passport", "Passport", I.passport], ["games", "Games", GIc]] as const).map(([k, l, ic]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => { setTab(k); if (k === "games") history.replaceState(history.state, "", "#tab=games"); else if (/tab=games/.test(location.hash)) history.replaceState(history.state, "", " "); }}>{ic}<span>{l}</span></button>)}
     </div><button className="searchbtn" aria-label="Search" onClick={() => push({ t: "search" })}>{I.search}</button></nav>}
     {ov.map((o, i) => <Boundary key={i + o.t} label="screen"><Overlay o={o} z={20 + i} close={pop} push={push} flights={flights} setFlights={setFlights} upd={upd} live={live} theme={theme} setTheme={setTheme} tab={tab} /></Boundary>)}
   </div>;
@@ -474,7 +476,7 @@ function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => voi
 }
 function Board({ iata, x, push, term0 }: any) { const cw = useCw();
   const [info, setInfo] = useState(() => /[#&]info\b/.test(location.hash)); const [term, setTerm] = useState(() => !!term0 || /term=1/.test(location.hash));
-  const [dir, setDir] = useState(() => /[#&]dir=arr\b/.test(location.hash) ? "arr" : "dep"); const [date, setDate] = useState(today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState(""); const [earlier, setEarlier] = useState(false); const [qf, setQf] = useState("");
+  const [dir, setDir] = useState(() => /[#&]dir=arr\b/.test(location.hash) ? "arr" : "dep"); const [date, setDate] = useState(() => location.hash.match(/[#&]date=(\d{4}-\d\d-\d\d)/)?.[1] || today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState(""); const [earlier, setEarlier] = useState(false); const [qf, setQf] = useState("");
   const isGr = FRAPORT_GR.has(iata); const [gr, setGr] = useState(() => localStorage.getItem("sk.grboard") !== "off");
   useEffect(() => setD(null), [iata, dir, date]);
   const poll = usePoll(() => api(`/board/${iata}?dir=${dir}&date=${date}`).then(setD).catch(e => setD((p: any) => p && !p.error ? p : { error: e.message, needsKey: e.needsKey, airport: e.airport || p?.airport })), [iata, dir, date]);
@@ -649,7 +651,8 @@ function Settings({ x, theme, setTheme, push }: any) {
 
 const Man3D = lazy(() => import("./v35"));
 import { Apt3DBtn, WhatMatters } from "./v63b";
-import { GatePreview, GateWall, GamesView } from "./gate";
+import { GatePreview, GateWall } from "./gate";
+import { GamesView } from "./games";
 import { useCw, TopBar, BoardList, FlightTop, DestPage, warmDest, loadLqip, loadDest, ThemeFeature, type CwNav } from "./clearway";
 const Welcome = lazy(() => import("./v53"));
 const HomeDash = lazy(() => import("./v52"));

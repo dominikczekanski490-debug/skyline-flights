@@ -12,7 +12,7 @@ assert.strictEqual(m.stateOf(F("Final call")), "final"); assert.strictEqual(m.st
 // KRK: Polish strings come from the feed; next line is the next flight at the same gate
 const nxt = { id: "n", number: "EZY1872", destination: { city: "Manchester" }, localName: "MANCHESTER", statusText: "", dep: { scheduled: soon(180), gate: "5" }, arr: {} };
 const s = m.specFromFlight({ ...F("Final call"), localName: "EJLAT", remarksLocal: "OSTATNIE WEZWANIE" }, "krk", [nxt]);
-assert.strictEqual(s.destPl, "EJLAT"); assert.strictEqual(s.stPl, "OSTATNIE WEZWANIE"); assert.match(s.next, /^EZY 1872 MANCHESTER \d\d:\d\d$/); assert.strictEqual(s.lang, "enpl"); assert.strictEqual(s.gate, "5");
+assert.strictEqual(s.destPl, "EJLAT"); assert.strictEqual(s.stPl, undefined, "feed remark (may mix languages) is not used"); assert.match(s.next, /^EZY 1872 MANCHESTER \d\d:\d\d$/); assert.strictEqual(s.lang, "enpl"); assert.strictEqual(s.gate, "5");
 assert.strictEqual(m.specFromFlight(F("Boarding"), "krk", []).next, "", "no invented next flight");
 // share link round trip (unicode)
 const g = { ...m.DEFAULT_GATE, dest: "Łódź – Kraków", stPl: "PROSZĘ CZEKAĆ" }; assert.deepStrictEqual(m.dec(m.enc(g)), g); assert.ok(/^[\w-]+$/.test(m.enc(g))); assert.strictEqual(m.dec("!!bad"), null);
@@ -23,4 +23,15 @@ assert.ok(lhr.includes("B32") && lhr.includes("Dubai") && /Pre-boarding/.test(lh
 for (const p of m.PRESETS) assert.ok(renderToStaticMarkup(h(m.GateScreen, { s: p.s })).length > 200, p.n);
 // custom board data → flight objects TerminalBoard understands
 const d = m.boardData(m.BDEF); assert.strictEqual(d.flights.length, m.BDEF.rows.length); for (const f of d.flights) { assert.ok(!isNaN(+new Date(f.dep.scheduled)), "utc time"); assert.ok(f.number && f.airline.iata); }
+// Polish status lines are pure Polish, English pure English (no "GATE ZAMKNIĘTY")
+for (const [k, v] of Object.entries(m.ST)) { assert.ok(!/GATE|BOARD|CALL|WAIT|CLOSED|OPEN|DELAY|CANCEL|DEPART/.test(v.pl), k + " pl: " + v.pl); assert.ok(!/[ĄĆĘŁŃÓŚŹŻ]/.test(v.en), k + " en"); }
+assert.strictEqual(m.ST.closed.pl, "BRAMKA ZAMKNIĘTA"); assert.strictEqual(m.ST.boarding.pl, "WEJŚCIE NA POKŁAD"); assert.strictEqual(m.ST.departed.pl, "ODLECIAŁ");
+// screen clocks use the airport's zone
+assert.strictEqual(m.tzFor({ style: "krk" }), "Europe/Warsaw"); assert.strictEqual(m.tzFor({ style: "lhr" }), "Europe/London"); assert.strictEqual(m.tzFor({ style: "mag" }), "Europe/London");
+assert.strictEqual(m.boardTz("krk"), "Europe/Warsaw"); assert.strictEqual(m.boardTz("mag"), "Europe/London"); assert.strictEqual(m.boardTz("lhr"), "Europe/London");
+assert.strictEqual(m.tzOff("UTC"), 0); assert.ok([60, 120].includes(m.tzOff("Europe/Warsaw")));
+// a Kraków-style board typed "07:50" shows 07:50 Kraków time
+const kb = m.boardData({ ...m.BDEF, theme: "krk" }); const t0 = kb.flights[0].dep.scheduled; assert.strictEqual(new Date(t0).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Warsaw" }), m.BDEF.rows[0].t); assert.strictEqual(kb.airport.tz, "Europe/Warsaw");
+// MAG status bars: bright colours with white text
+for (const k of ["final", "boarding", "closed", "wait"]) { const c = parseInt(m.ST[k].col.slice(1), 16); const mx = Math.max(c >> 16, (c >> 8) & 255, c & 255); assert.ok(mx >= 0xb0, k + " bar bright"); }
 console.log("gate ok");

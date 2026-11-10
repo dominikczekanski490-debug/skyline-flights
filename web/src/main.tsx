@@ -7,5 +7,5 @@ import { lazy, Suspense } from "react";
 const LivPreview = lazy(() => import("./livprev"));
 installGuards();
 createRoot(document.getElementById("root")!).render(/livpreview/.test(location.hash) ? <Suspense fallback={<div>Loading livery preview…</div>}><LivPreview /></Suspense> : location.pathname.startsWith("/s/") ? <SharedView id={location.pathname.slice(3)} /> : <Boundary label="app"><App /></Boundary>);
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then(r => r.update().catch(() => {}));
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then(r => r?.update?.()?.catch?.(() => {})).catch(() => {});
 import "./v40.css";
