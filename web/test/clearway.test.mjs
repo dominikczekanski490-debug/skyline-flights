@@ -25,9 +25,17 @@ const { createElement: h } = await import("react"); const { renderToStaticMarkup
 for (const c of ["BA", "VS", "EZY", "U2", "LS", "EI", "LH", "AF", "KL", "EK", "QR", "TK", "AA", "DL", "UA", "W6", "FR", "TOM", "RK", "ZZ"]) {
   const a = c.length === 3 ? { icao: c } : { iata: c }; const html = renderToStaticMarkup(h(m.Tail, { a })); const code = m.tailCode(a);
   if (/harp/.test(html)) continue;
+  const tl = html.match(/src="\/liveries\/tails\/([A-Z0-9]+)\.webp"/);
+  if (tl) { const f = path.join(here, "../public/liveries/tails", tl[1] + ".webp"); assert.ok(fs.existsSync(f) && fs.statSync(f).size > 1000 && fs.statSync(f).size < 40000, c + " tail file"); continue; }
   const img = html.match(/src="\/logos\/([A-Z0-9]+)\.png"/);
   if (img) { const f = path.join(here, "../public/logos", img[1] + ".png"); assert.ok(fs.existsSync(f) && fs.statSync(f).size > 500, c + " logo file"); continue; }
   assert.ok(/cw-badge/.test(html) && html.includes(">" + code + "<"), c + " badge: " + html);
   assert.ok(c === "ZZ", c + " should have a real logo, got badge");
+}
+// every real tail photo is credited, and every priority carrier (2- and 3-letter codes) resolves to one
+const tatt = fs.readFileSync(path.join(here, "../public/liveries/tails/ATTRIBUTION.md"), "utf8");
+for (const f of fs.readdirSync(path.join(here, "../public/liveries/tails")).filter(f => f.endsWith(".webp"))) assert.ok(tatt.includes("| " + f + " |") && /\| CC BY|\| Public domain|\| PD/.test(tatt.split("| " + f + " |")[1].split("\n")[0]), f + " credited with a free licence");
+for (const c of ["BA", "BAW", "VS", "VIR", "U2", "EZY", "EJU", "EZS", "LS", "EXS", "BY", "TOM", "W6", "WZZ", "WUK", "EI", "LH", "DLH", "AF", "KL", "EK", "QR", "TK", "LO", "LOT", "AA", "DL", "UA", "SK", "SAS", "AY", "IB", "VY", "TP", "LX", "SWR", "OS", "SN"]) {
+  const a = c.length === 3 ? { icao: c } : { iata: c }; assert.ok(/liveries\/tails\/[A-Z0-9]+\.webp/.test(renderToStaticMarkup(h(m.Tail, { a }))), c + " has a tail photo");
 }
 console.log("clearway tests ok");

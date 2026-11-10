@@ -162,10 +162,12 @@ html[data-skin="clearway"] .sheet:has(.cw-fd) .sheet-body{background:#f4f6fa}
 .cw-fd .cw-route{margin:2px 0 6px!important}
 .cw-rc{display:flex;justify-content:space-between;gap:16px;margin:0 0 18px}.cw-rc small{font-size:15px;line-height:1.45;color:#0b1f3f;max-width:48%}.cw-rc small.r{text-align:right}
 /* logo tile: explicit sizes (Safari collapsed the % sized img inside the grid tile to 0 → empty white box) */
-.cw-fd .cw-logo{grid-area:logo;display:flex!important;align-items:center;justify-content:center;width:74px;height:50px;padding:6px;box-sizing:border-box;border:1px solid #e1e5ec;border-radius:10px;background:#fff;overflow:hidden;flex:none}
-.cw-fd .cw-logo img{display:block;width:62px!important;height:36px!important;max-width:none;max-height:none;object-fit:contain}
+.cw-fd .cw-logo{grid-area:logo;display:flex!important;align-items:center;justify-content:center;width:74px;height:56px;padding:3px;box-sizing:border-box;border:1px solid #e1e5ec;border-radius:10px;background:#fff;overflow:hidden;flex:none}
+.cw-fd .cw-logo img{display:block;width:68px!important;height:50px!important;max-width:none;max-height:none;object-fit:contain}
 .cw-fd .cw-badge{border:0}.cw-fd .cw-badge b{color:#fff;font-size:20px;font-weight:800;letter-spacing:.02em}
 /* all three tiles share one layout: label, big value, optional small line, centred */
 .cw-fd .cw-tile.c{align-items:center;text-align:center;justify-content:center}
 .cw-fd .cw-tiles{align-items:stretch}
 .cw-fd .cw-tile,.cw-fd .cw-tile.c{justify-content:flex-start!important;padding-top:14px}
+
+.cw-tail-img{grid-area:logo;display:block;width:74px;height:56px;border-radius:10px;overflow:hidden;flex:none;background:#e8eef7;box-shadow:inset 0 0 0 1px rgba(11,31,63,.08)}.cw-tail-img img{display:block;width:74px!important;height:56px!important;max-width:none;object-fit:cover}

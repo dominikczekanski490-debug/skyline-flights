@@ -105,12 +105,18 @@ export function BoardList({ list, dir, date, tz, open, extra }: { list: any[]; d
 // Airline tail fin. Ryanair group: navy fin with the gold harp (harp shape extracted from a CC BY-SA Commons drawing, see liveries/ATTRIBUTION.md).
 // Other airlines: their bundled logo in a tile (no invented tail art).
 const HARP = new Set(["FR", "RK", "AL"]); // Ryanair group (FR mainline, RK Ryanair UK, AL Malta Air)
-const ICAO2: Record<string, string> = { EZY: "U2", EJU: "EC", EZS: "DS", TOM: "BY", RYR: "FR", RUK: "RK", BAW: "BA", VIR: "VS", EXS: "LS", WZZ: "W6", WUK: "W9", DLH: "LH", AFR: "AF", KLM: "KL", UAE: "EK", QTR: "QR", THY: "TK", AAL: "AA", DAL: "DL", UAL: "UA", EIN: "EI" };
+const ICAO2: Record<string, string> = { EZY: "U2", EJU: "EC", EZS: "DS", TOM: "BY", RYR: "FR", RUK: "RK", BAW: "BA", VIR: "VS", EXS: "LS", WZZ: "W6", WUK: "W9", DLH: "LH", AFR: "AF", KLM: "KL", UAE: "EK", QTR: "QR", THY: "TK", AAL: "AA", DAL: "DL", UAL: "UA", EIN: "EI", LOT: "LO", SAS: "SK", FIN: "AY", IBE: "IB", VLG: "VY", TAP: "TP", SWR: "LX", AUA: "OS", BEL: "SN", WMT: "W4" };
+// Real tail-fin photo crops from Wikimedia Commons (web/public/liveries/tails/ATTRIBUTION.md). Subsidiaries flying the same livery share a file.
+const TAILS = new Set(["BA", "VS", "U2", "LS", "BY", "W6", "EI", "LH", "AF", "KL", "EK", "QR", "TK", "LO", "AA", "DL", "UA", "SK", "AY", "IB", "VY", "TP", "LX", "OS", "SN"]);
+const TAIL_ALIAS: Record<string, string> = { EC: "U2", DS: "U2", W4: "W6", W9: "W6" };
+export const tailFile = (code: string) => { const k = TAIL_ALIAS[code] || code; return TAILS.has(k) ? `/liveries/tails/${k}.webp` : ""; };
 export const tailCode = (a: any) => { const c = String(a?.iata || a?.icao || "").toUpperCase(); return ICAO2[c] || ICAO2[String(a?.icao || "").toUpperCase()] || c; };
 // Fallback chain: real tail (Ryanair harp) → the airline's real logo → a badge with the airline code in its brand colour. Never an empty box.
 export function Tail({ a }: { a: any }) {
-  const i = tailCode(a); const [bad, setBad] = useState(false); useEffect(() => setBad(false), [i]);
+  const i = tailCode(a); const [bad, setBad] = useState(false); const [tbad, setTbad] = useState(false); useEffect(() => { setBad(false); setTbad(false); }, [i]);
+  const tf = tailFile(i);
   if (HARP.has(i)) return <span className="cw-tail-fin" role="img" aria-label={airlineName({ ...a, iata: i }) + " tail"}><svg viewBox="0 0 74 56"><path d="M0 56 L46 0 L74 0 L58 56 Z" fill="#073590" /></svg><i className="harp" /></span>;
+  if (tf && !tbad) return <span className="cw-tail-img"><img src={tf} alt={(airlineName({ ...a, iata: i }) || i) + " tail fin"} width={74} height={56} decoding="async" onError={() => setTbad(true)} onLoad={e => { if (!e.currentTarget.naturalWidth) setTbad(true); }} /></span>;
   if (i && hasLogo(i) && !bad) return <span className="cw-logo"><img src={`/logos/${i}.png`} alt={airlineName({ ...a, iata: i })} width={60} height={30} onError={() => setBad(true)} onLoad={e => { const im = e.currentTarget; if (!im.naturalWidth) setBad(true); }} /></span>;
   return <span className="cw-logo cw-badge" style={{ background: BRAND[i] || "#0b1f3f" }} role="img" aria-label={airlineName(a) || i}><b>{i || "✈"}</b></span>;
 }
