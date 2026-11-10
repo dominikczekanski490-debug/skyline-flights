@@ -130,24 +130,26 @@ function Flap({ text, w }: { text: string; w: number }) {
   return <span className="flap">{[...s].map((c, i) => <i key={i + c} style={{ animationDelay: i * 18 + "ms" }}>{c === " " ? "\u00a0" : c}</i>)}</span>;
 }
 
-export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen }: { iata: string; dir: string; date: string; onClose: () => void; onDir?: (d: string) => void; onOpen?: (f: any) => void }) {
+export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen, custom, theme0, inline }: { iata: string; dir: string; date: string; onClose: () => void; onDir?: (d: string) => void; onOpen?: (f: any) => void; custom?: any; theme0?: string; inline?: boolean }) {
+  // custom: a user-built board ({ airport, flights }) from Games → Board studio; inline: render inside the page (live preview) instead of fullscreen.
   const [dir, setDir0] = useState(dir0); const setDir = (v: string) => { setDir0(v); onDir?.(v); }; useEffect(() => setDir0(dir0), [dir0]);
   // Exit paths: X button, Esc, browser back / iOS back swipe (history entry), swipe down.
   const closed = useRef(false); const exit = useRef(onClose); exit.current = onClose;
   const close = () => { if (closed.current) return; closed.current = true; if (history.state?.tb) history.back(); else exit.current(); };
-  useEffect(() => { history.pushState({ ...(history.state || {}), tb: 1 }, ""); const pop = () => { closed.current = true; exit.current(); }; const key = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+  useEffect(() => { if (inline) return; history.pushState({ ...(history.state || {}), tb: 1 }, ""); const pop = () => { closed.current = true; exit.current(); }; const key = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     addEventListener("popstate", pop); addEventListener("keydown", key); return () => { removeEventListener("popstate", pop); removeEventListener("keydown", key); }; }, []);
-  const ty = useRef<number | null>(null); const [d, setD] = useState<any>(null); const [theme, setTheme] = useState(() => localStorage.getItem("sk.tb." + iata) || "auto");
+  const ty = useRef<number | null>(null); const [d, setD] = useState<any>(null); const [theme, setTheme] = useState(() => theme0 || localStorage.getItem("sk.tb." + iata) || "auto"); useEffect(() => { if (theme0) setTheme(theme0); }, [theme0]);
   const [earlier, setEarlier] = useState(false); const [page, setPage] = useState(0); const [paused, setPaused] = useState(false); const [now, setNow] = useState(Date.now()); const [upd, setUpd] = useState<number>(0); const [side, setSide] = useState(() => localStorage.getItem("sk.tb.side") || "Airside"); const [sec, setSec] = useState<any>(null);
   const [zoom, setZoom] = useState(() => +(localStorage.getItem("sk.tb.zoom") || 1) || 1); const [vp, setVp] = useState({ w: innerWidth, h: innerHeight });
-  useEffect(() => { const f = () => setVp({ w: innerWidth, h: innerHeight }); addEventListener("resize", f); return () => removeEventListener("resize", f); }, []);
+  useEffect(() => { if (inline) { const el = ref.current; if (!el) return; const ro = new ResizeObserver(() => setVp({ w: el.clientWidth || 360, h: el.clientHeight || 220 })); ro.observe(el); return () => ro.disconnect(); } const f = () => setVp({ w: innerWidth, h: innerHeight }); addEventListener("resize", f); return () => removeEventListener("resize", f); }, []);
   const setZ = (z: number) => { z = Math.round(Math.max(0.6, Math.min(1.8, z)) * 100) / 100; setZoom(z); localStorage.setItem("sk.tb.zoom", String(z)); };
-  useEffect(() => { api(`/security/${iata}`).then(setSec).catch(() => setSec(null)); }, [iata]);
+  useEffect(() => { if (custom) return; api(`/security/${iata}`).then(setSec).catch(() => setSec(null)); }, [iata]);
+  useEffect(() => { if (custom) { setD(custom); setUpd(Date.now()); } }, [custom]);
   const ref = useRef<HTMLDivElement>(null); const th = theme === "auto" || !THEMES[theme] ? autoTheme(iata, d?.airport?.country) : theme;
-  const poll = usePoll(() => api(`/board/${iata}?dir=${dir}&date=${date}`).then(r => { setD(r); setUpd(Date.now()); }).catch(e => setD((p: any) => p || { error: e.message })), [iata, dir, date]);
+  const poll = usePoll(() => custom ? Promise.resolve() : api(`/board/${iata}?dir=${dir}&date=${date}`).then(r => { setD(r); setUpd(Date.now()); }).catch(e => setD((p: any) => p || { error: e.message })), [iata, dir, date]);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
-  useEffect(() => { localStorage.setItem("sk.tb." + iata, theme); }, [theme]);
-  useEffect(() => { const el = ref.current; el?.requestFullscreen?.().then(() => (screen.orientation as any)?.lock?.("landscape").catch(() => {})).catch(() => {}); return () => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }; }, []);
+  useEffect(() => { if (!custom) localStorage.setItem("sk.tb." + iata, theme); }, [theme]);
+  useEffect(() => { if (inline) return; const el = ref.current; el?.requestFullscreen?.().then(() => (screen.orientation as any)?.lock?.("landscape").catch(() => {})).catch(() => {}); return () => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }; }, []);
   const tz = d?.airport?.tz || "Europe/London";
   const rows = useMemo(() => d?.liveOnly ? (d?.flights || []).filter((f: any) => f.liveOnly).sort((a: any, b: any) => (a.live?.dist ?? 0) - (b.live?.dist ?? 0)) : (d?.flights || []).filter((f: any) => !f.liveOnly).filter((f: any) => { if (earlier) return true; const t = dir === "dep" ? f.dep : f.arr; const b = +new Date(t.actual || t.estimated || t.scheduled); if (b < Date.now() - 90 * 60e3 && f.status !== "landed") return false; return f.status === "cancelled" ? +new Date(t.scheduled) > Date.now() - 30 * 60e3 : (f.status !== "departed" && f.status !== "landed") || b > Date.now() - 15 * 60e3; })
     .sort((a: any, b: any) => ((dir === "dep" ? a.dep : a.arr).scheduled < (dir === "dep" ? b.dep : b.arr).scheduled ? -1 : 1)), [d, dir, earlier]);
@@ -186,7 +188,7 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen }:
   const W: Record<Col, string> = { tile: "minmax(100px,.8fr)", time: th === "mag" ? "84px" : "4.2em", est: "4em", dest: "minmax(5em,1.4fr)", fl: th === "mag" || th === "syd" || solari ? "6.5em" : "11em", logo: "100px", tag: "6em", gate: "3.4em", term: "3.2em", st: solari ? "minmax(19em,1.4fr)" : "minmax(11.5em,1.3fr)", icon: "22px" };
   const grid = (th === "krk" ? (portrait ? "60px 60px 96px 72px minmax(0,2fr) 60px minmax(0,1.6fr)" : "80px 104px 112px 90px minmax(0,2.6fr) 76px minmax(0,1.6fr)") : tt.cols.map(c => W[c]).join(" ")) + (th === "fra" ? " minmax(0,1fr)" : "");
   const msg = !d ? "Loading live board…" : d.error ? d.error : live && !rows.length ? `Quiet right now — no ${dir === "dep" ? "departures" : "arrivals"} observed near ${iata} in the last 3h. This airport has no free timetable feed, so this board lists only aircraft our ADS-B receivers have observed. Nothing is shown until something is seen.` : rows.length === 0 ? `No more ${dir === "dep" ? "departures" : "arrivals"} listed for this date.` : "";
-  return createPortal(<div ref={ref} className={"tboard " + tt.cls + (paused ? " paused" : "")} onClick={() => setPaused(p => !p)} onTouchStart={e => { ty.current = e.touches[0].clientY; }} onTouchEnd={e => { const y0 = ty.current; ty.current = null; if (y0 != null && y0 < innerHeight * 0.5 && e.changedTouches[0].clientY - y0 > 110) close(); }}>
+  const node = (<div ref={ref} className={"tboard " + tt.cls + (paused ? " paused" : "") + (inline ? " tb-inline" : "")} onClick={() => setPaused(p => !p)} onTouchStart={e => { ty.current = e.touches[0].clientY; }} onTouchEnd={e => { const y0 = ty.current; ty.current = null; if (y0 != null && y0 < innerHeight * 0.5 && e.changedTouches[0].clientY - y0 > 110) close(); }}>
     <div className="tb-fab" onClick={e => e.stopPropagation()}><div className="tb-seg" role="tablist"><button className={dir === "dep" ? "on" : ""} onClick={() => { setDir("dep"); setPage(0); }}>Departures</button><button className={dir === "arr" ? "on" : ""} onClick={() => { setDir("arr"); setPage(0); }}>Arrivals</button></div>
       <button className="tb-x" aria-label="Close board" onClick={close}><svg viewBox="0 0 24 24" width="22" height="22"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" /></svg></button></div><div className="tb-stage" style={{ ["--per" as any]: per, ["--rh" as any]: rowH + "px", width: vp.w / s, height: stageH, transform: `scale(${s})` }}>
     {(panels === 1 || !["avinor", "ams", "led"].includes(th)) && <div className="tb-top"><div className="tb-title">{tt.logoMark && <i className="tb-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="100%" height="100%"><path fill="#fff" d="M21 15.5v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V8.5l-8 5v2l8-2.5V18l-2 1.5V21l3.5-1 3.5 1v-1.5L13 18v-5z" transform="rotate(45 12 12)"/></svg></i>}<b>{tt.title(dir)[0]}</b>{tt.title(dir)[1] && <span>{tt.title(dir)[1]}</span>}</div>
@@ -201,5 +203,6 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen }:
         <select value={theme} onChange={e => setTheme(e.target.value)}><option value="auto">Authentic ({THEMES[autoTheme(iata, d?.airport?.country)].name})</option><option value="led">Classic</option>{Object.entries(THEMES).filter(([k]) => k !== "led").map(([k, v]) => <option key={k} value={k}>{v.name}</option>)}</select>
         <span className="tb-zoom"><button onClick={() => setZ(zoom - 0.1)} aria-label="Zoom out">A-</button><button className={zoom === 1 ? "on" : ""} onClick={() => setZ(1)}>Fit</button><button onClick={() => setZ(zoom + 0.1)} aria-label="Zoom in">A+</button></span>
         <button onClick={close}>Close</button></span></div>
-  </div></div>, document.body);
+  </div></div>);
+  return inline ? node : createPortal(node, document.body);
 }
