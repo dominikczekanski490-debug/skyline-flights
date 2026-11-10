@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import "@fontsource-variable/inter";
 import "./clearway.css";
 import { fmtT, best, delay, dur, estDurMin, withEstArr, type Flight } from "./lib";
-import { airlineName, hasLogo } from "./brand";
+import { airlineName, hasLogo, BRAND } from "./brand";
 import { status as boardStatus } from "./terminal";
 
 export const CW = "clearway";
@@ -104,12 +104,17 @@ export function BoardList({ list, dir, date, tz, open, extra }: { list: any[]; d
 // ---- flight detail ----
 // Airline tail fin. Ryanair group: navy fin with the gold harp (harp shape extracted from a CC BY-SA Commons drawing, see liveries/ATTRIBUTION.md).
 // Other airlines: their bundled logo in a tile (no invented tail art).
-const HARP = new Set(["FR", "RK", "AL", "RYR", "RUK"]);
+const HARP = new Set(["FR", "RK", "AL"]); // Ryanair group (FR mainline, RK Ryanair UK, AL Malta Air)
+const ICAO2: Record<string, string> = { EZY: "U2", EJU: "EC", EZS: "DS", TOM: "BY", RYR: "FR", RUK: "RK", BAW: "BA", VIR: "VS", EXS: "LS", WZZ: "W6", WUK: "W9", DLH: "LH", AFR: "AF", KLM: "KL", UAE: "EK", QTR: "QR", THY: "TK", AAL: "AA", DAL: "DL", UAL: "UA", EIN: "EI" };
+export const tailCode = (a: any) => { const c = String(a?.iata || a?.icao || "").toUpperCase(); return ICAO2[c] || ICAO2[String(a?.icao || "").toUpperCase()] || c; };
+// Fallback chain: real tail (Ryanair harp) → the airline's real logo → a badge with the airline code in its brand colour. Never an empty box.
 export function Tail({ a }: { a: any }) {
-  const i = a?.iata;
-  if (HARP.has(i)) return <span className="cw-tail-fin" role="img" aria-label={airlineName(a) + " tail"}><svg viewBox="0 0 74 56"><path d="M0 56 L46 0 L74 0 L58 56 Z" fill="#073590" /></svg><i className="harp" /></span>;
-  return <div className="cw-logo">{i && hasLogo(i) ? <img src={`/logos/${i}.png`} alt={airlineName(a)} /> : <b>{airlineName(a) || i}</b>}</div>;
+  const i = tailCode(a); const [bad, setBad] = useState(false); useEffect(() => setBad(false), [i]);
+  if (HARP.has(i)) return <span className="cw-tail-fin" role="img" aria-label={airlineName({ ...a, iata: i }) + " tail"}><svg viewBox="0 0 74 56"><path d="M0 56 L46 0 L74 0 L58 56 Z" fill="#073590" /></svg><i className="harp" /></span>;
+  if (i && hasLogo(i) && !bad) return <span className="cw-logo"><img src={`/logos/${i}.png`} alt={airlineName({ ...a, iata: i })} width={60} height={30} onError={() => setBad(true)} onLoad={e => { const im = e.currentTarget; if (!im.naturalWidth) setBad(true); }} /></span>;
+  return <span className="cw-logo cw-badge" style={{ background: BRAND[i] || "#0b1f3f" }} role="img" aria-label={airlineName(a) || i}><b>{i || "✈"}</b></span>;
 }
+
 export function FlightTop({ f, nav, discover, crumbs }: { f: Flight; nav: CwNav; discover: (iata: string) => void; crumbs?: string }) {
   const g: any = withEstArr(f); const o = f.origin, a = f.destination; const dd = useDest(a?.iata); const dir = "dep";
   const ds = f.dep.scheduled, as_ = f.arr.scheduled; const real = ds && as_ ? (+new Date(as_) - +new Date(ds)) / 6e4 : 0; const mins = real > 0 ? real : estDurMin(o, a);
@@ -123,7 +128,7 @@ export function FlightTop({ f, nav, discover, crumbs }: { f: Flight; nav: CwNav;
       <div className="cw-route"><b>{o?.iata}</b><span className="cw-path"><i />{ic.planeO}<i /></span><b className="r">{a?.iata}</b>
 </div>
       <div className="cw-rc"><small>{o?.city}{o?.country ? ", " + o.country : ""}</small><small className="r">{a?.city}{a?.country ? ", " + a.country : ""}</small></div>
-      {(dep || term || gate) && <div className="cw-tiles">{dep && <div className="cw-tile l"><small>Departure</small><b>{fmtT(dep, o?.tz)}</b><em>{dep ? new Date(dep).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: o?.tz || "Europe/London" }).replace(/ (\d{4})$/, ", $1") : ""}</em></div>}
+      {(dep || term || gate) && <div className="cw-tiles">{dep && <div className="cw-tile c"><small>Departure</small><b>{fmtT(dep, o?.tz)}</b><em>{dep ? new Date(dep).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: o?.tz || "Europe/London" }).replace(/ (\d{4})$/, ", $1") : ""}</em></div>}
         {term && <div className="cw-tile c"><small>Terminal</small><b>{term}</b></div>}{gate && <div className="cw-tile c"><small>Gate</small><b>{gate}</b></div>}</div>}
       {dd && <><div className="cw-perf" aria-hidden /><button className="cw-disc" onClick={() => discover(a!.iata)}>Discover {dd.name}<span>{ic.chev}</span></button></>}</div>
     <div className="cw-crumbs">Home › {crumbs || "Departures"} › {f.number}</div>

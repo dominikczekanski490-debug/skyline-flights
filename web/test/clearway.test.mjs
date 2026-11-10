@@ -20,4 +20,14 @@ const lq = fs.readFileSync(path.join(here, "../src/destlqip.ts"), "utf8"); for (
 // no Manchester Airports Group / airport logo artwork anywhere in the bundle assets
 for (const f of fs.readdirSync(path.join(here, "../public/logos"))) assert.ok(!/^(MAG|MAN|M\.A\.G)/i.test(f), "airport logo file " + f);
 assert.ok(!/\bMAG\b|Manchester Airport/.test(fs.readFileSync(path.join(here, "../src/clearway.tsx"), "utf8")), "no MAG branding in Clearway");
+// Tail slot is never empty: tail fin, real logo file, or a coloured code badge — checked for common LHR/MAN carriers
+const { createElement: h } = await import("react"); const { renderToStaticMarkup } = await import("react-dom/server");
+for (const c of ["BA", "VS", "EZY", "U2", "LS", "EI", "LH", "AF", "KL", "EK", "QR", "TK", "AA", "DL", "UA", "W6", "FR", "TOM", "RK", "ZZ"]) {
+  const a = c.length === 3 ? { icao: c } : { iata: c }; const html = renderToStaticMarkup(h(m.Tail, { a })); const code = m.tailCode(a);
+  if (/harp/.test(html)) continue;
+  const img = html.match(/src="\/logos\/([A-Z0-9]+)\.png"/);
+  if (img) { const f = path.join(here, "../public/logos", img[1] + ".png"); assert.ok(fs.existsSync(f) && fs.statSync(f).size > 500, c + " logo file"); continue; }
+  assert.ok(/cw-badge/.test(html) && html.includes(">" + code + "<"), c + " badge: " + html);
+  assert.ok(c === "ZZ", c + " should have a real logo, got badge");
+}
 console.log("clearway tests ok");
