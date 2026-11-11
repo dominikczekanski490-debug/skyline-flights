@@ -32,7 +32,7 @@ export function warmDest() {
   // The heroes are now ~100-250 KB each (1600x1200 for DPR 3), so only pre-warm the whole set on an unmetered, fast connection.
   if (warmed || typeof caches === "undefined") return; warmed = true; const c = (navigator as any).connection;
   if (c?.saveData || c?.type === "cellular" || (c?.effectiveType && c.effectiveType !== "4g")) return;
-  loadDest().then(async j => { const cache = await caches.open("skyline-dest-v3"); const urls = (Object.values(j) as Dest[]).filter(d => d.img).map(d => `/dest/${d.iata}.webp`);
+  loadDest().then(async j => { const cache = await caches.open("skyline-dest-v3"); const urls = (Object.values(j) as Dest[]).filter(d => d.img).map(d => `/dest/v3/${d.iata}.webp`);
     for (let i = 0; i < urls.length; i += 8) { const part: string[] = []; for (const u of urls.slice(i, i + 8)) if (!(await cache.match(u))) part.push(u); if (part.length) await cache.addAll(part.map(u => new Request(u, { cache: "reload" }))).catch(() => {}); await new Promise(r => setTimeout(r, 120)); } });
 }
 
@@ -43,7 +43,7 @@ export const hasPhoto = (iata?: string) => !!iata && !!LQ?.[iata];
 // Start the photo download right away (row tap / overlay open), before React even mounts the hero.
 export function preloadHero(iata?: string) {
   if (!iata || typeof document === "undefined" || document.querySelector(`link[data-hero="${iata}"]`)) return;
-  const go = () => { if (LQ && !LQ[iata]) return; const l = document.createElement("link"); l.rel = "preload"; l.as = "image"; l.href = `/dest/${iata}.webp`; l.dataset.hero = iata; (l as any).fetchPriority = "high"; document.head.appendChild(l); };
+  const go = () => { if (LQ && !LQ[iata]) return; const l = document.createElement("link"); l.rel = "preload"; l.as = "image"; l.href = `/dest/v3/${iata}.webp`; l.dataset.hero = iata; (l as any).fetchPriority = "high"; document.head.appendChild(l); };
   LQ ? go() : loadLqip().then(go);
 }
 export function Hero({ iata, children, tall, big }: { iata?: string; children?: ReactNode; tall?: boolean; big?: boolean }) {
@@ -53,7 +53,7 @@ export function Hero({ iata, children, tall, big }: { iata?: string; children?: 
   const photo = !!iata && (lq ? true : !!d?.img);
   return <div className={"cw-hero" + (tall ? " tall" : "") + (big ? " big" : "")} style={d?.img?.col ? { backgroundColor: d.img.col } : undefined}>
     {lq && <i className="cw-lq" style={{ backgroundImage: `url(data:image/webp;base64,${lq})` }} />}
-    {photo && <img src={`/dest/${iata}.webp`} alt={d?.name || ""} decoding="async" loading="eager" fetchPriority="high" className={ok ? "on" : ""} onLoad={() => setOk(true)} ref={el => { if (el?.complete && el.naturalWidth) setOk(true); }} onError={e => ((e.target as HTMLImageElement).style.display = "none")} />}
+    {photo && <img src={`/dest/v3/${iata}.webp`} alt={d?.name || ""} decoding="async" loading="eager" fetchPriority="high" className={ok ? "on" : ""} onLoad={() => setOk(true)} ref={el => { if (el?.complete && el.naturalWidth) setOk(true); }} onError={e => ((e.target as HTMLImageElement).style.display = "none")} />}
     <i className="cw-hero-shade" />{children}
     {d?.img && <a className="cw-credit" href={d.img.page} target="_blank" rel="noreferrer">Photo: {d.name}{d.img.by ? " · " + d.img.by : ""} · {d.img.lic}</a>}</div>;
 }
@@ -95,7 +95,7 @@ export const capsDate = (ymd: string) => { const d = new Date(ymd + "T12:00:00Z"
 
 export function BoardList({ list, dir, date, tz, open, extra }: { list: any[]; dir: string; date: string; tz: string; open: (f: any) => void; extra?: ReactNode }) {
   // warm the hero photos of what's on screen first, so tapping a row shows its photo instantly
-  useEffect(() => { loadDest().then(j => { const seen = new Set<string>(); for (const f of list.slice(0, 40)) { const i = (dir === "dep" ? f.destination : f.origin)?.iata; if (i && j[i]?.img && !seen.has(i)) { seen.add(i); const im = new Image(); im.decoding = "async"; im.src = `/dest/${i}.webp`; } } }); }, [list.length, dir]);
+  useEffect(() => { loadDest().then(j => { const seen = new Set<string>(); for (const f of list.slice(0, 40)) { const i = (dir === "dep" ? f.destination : f.origin)?.iata; if (i && j[i]?.img && !seen.has(i)) { seen.add(i); const im = new Image(); im.decoding = "async"; im.src = `/dest/v3/${i}.webp`; } } }); }, [list.length, dir]);
   return <div className="cw-list"><h1 className="cw-title">{dir === "dep" ? "Departures" : "Arrivals"}</h1><div className="cw-date">{capsDate(date)}</div>{extra}
     {list.map((f, i) => { const t = dir === "dep" ? f.dep : f.arr; const o = dir === "dep" ? f.destination : f.origin; const p = pill(f, dir); const cx = p.k === "cx"; const d = delay(t);
       return <button key={f.id + i} className={"cw-item" + (cx ? " cx" : "")} onPointerDown={() => preloadHero(o?.iata)} onClick={() => { preloadHero(o?.iata); open(f); }}><div className="cw-time"><b>{f.liveOnly ? "Live" : fmtT(t.scheduled, tz)}</b>{!cx && d != null && d >= 5 && t.estimated && <small>{fmtT(t.estimated, tz)}</small>}</div>

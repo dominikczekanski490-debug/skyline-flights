@@ -71,7 +71,7 @@ function CodeGame() { const D = useDests(); const make = (): Q | null => { if (!
 
 function PhotoGame() { const D = useDests(); const make = (): Q | null => { if (!D) return null; const L = D.filter(d => d.img); const a = L[Math.floor(Math.random() * L.length)];
   const o = shuffle([a, ...pickN(L.filter(x => x.name !== a.name), 3)]);
-  return { prompt: <div className="gq-photo"><img src={`/dest/${a.iata}.webp`} alt="Mystery destination" /><small>Photo: {a.img.by} · {a.img.lic} · Wikimedia Commons</small></div>, opts: o.map(x => ({ k: x.iata, l: x.name })), ans: a.iata, after: <div className="sm">{a.name}, {NICE[a.country] || a.country}</div> }; };
+  return { prompt: <div className="gq-photo"><img src={`/dest/v3/${a.iata}.webp`} alt="Mystery destination" /><small>Photo: {a.img.by} · {a.img.lic} · Wikimedia Commons</small></div>, opts: o.map(x => ({ k: x.iata, l: x.name })), ans: a.iata, after: <div className="sm">{a.name}, {NICE[a.country] || a.country}</div> }; };
   return <Quiz id="photo" make={make} ready={!!D} />; }
 
 function FlagGame() { const D = useDests(); const cs = useMemo(() => D ? [...new Set(D.map(d => d.country).filter(c => CC[c]))] : [], [D]);
@@ -87,7 +87,7 @@ function HiLo() { const D = useDests(); const [best, report] = useBest("hilo"); 
   const m = (d: any) => { const t = estDurMin(MAN, d); return `${Math.floor(t / 60)}h ${String(t % 60).padStart(2, "0")}m`; };
   const guess = (longer: boolean) => { if (res != null) return; const ok = (estDurMin(MAN, b) > estDurMin(MAN, a)) === longer; buzz(ok); setRes(ok); if (ok) setN(n + 1); else { report(n); setOver(true); } };
   if (!a || !b) return <p className="muted">Loading routes…</p>;
-  const Card = ({ d, show }: { d: any; show: boolean }) => <div className="hl-card" style={{ backgroundImage: d.img ? `linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.7)),url(/dest/${d.iata}.webp)` : undefined }}><small>Manchester →</small><b>{d.name}</b><span>{flag(CC[d.country])} {NICE[d.country] || d.country}</span><em>{show ? m(d) : "?"}</em></div>;
+  const Card = ({ d, show }: { d: any; show: boolean }) => <div className="hl-card" style={{ backgroundImage: d.img ? `linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.7)),url(/dest/v3/${d.iata}.webp)` : undefined }}><small>Manchester →</small><b>{d.name}</b><span>{flag(CC[d.country])} {NICE[d.country] || d.country}</span><em>{show ? m(d) : "?"}</em></div>;
   return <div className="hl"><div className="gq-top"><span>Streak {n}</span><span /><span>{best != null ? `Best ${best}` : ""}</span></div>
     <Card d={a} show /><Card d={b} show={res != null} />
     {res == null ? <div className="hl-btns"><button className="gq-opt" onClick={() => guess(true)}>▲ Longer</button><button className="gq-opt" onClick={() => guess(false)}>▼ Shorter</button></div>

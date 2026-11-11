@@ -1831,6 +1831,7 @@ api.get("/plane-card", async (req, res) => { try {
 } catch (e) { res.status(500).json({ error: e.message }); } });
 app.use("/api", api);
 const dist = path.join(__dir, "../web/dist");
+app.use("/dest/v3", express.static(path.join(dist, "dest"), { setHeaders: r => r.setHeader("cache-control", "public, max-age=31536000, immutable") })); // v3 photo URLs: new path, so phones can never reuse the old soft 800x450 copies
 app.use(express.static(dist, { setHeaders: (r, p) => { if (p.endsWith("sw.js") || p.endsWith(".html") || p.endsWith("version.json")) r.setHeader("cache-control", "no-cache");
   else if (/[\\/]dest[\\/][A-Z0-9]{3}\.webp$/.test(p)) r.setHeader("cache-control", "public, max-age=86400, must-revalidate"); } })); // destination hero photos: 1 day, then revalidate by ETag (file name = airport code, so a replaced photo must not stick for weeks)
 app.get(/^\/(?!api).*/, (q, r) => r.set("cache-control", "no-cache").sendFile(path.join(dist, "index.html")));
