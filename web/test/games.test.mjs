@@ -16,5 +16,5 @@ const D = JSON.parse(fs.readFileSync(path.join(here, "../public/dest/index.json"
 for (const v of Object.values(D)) assert.ok(cc.includes(JSON.stringify(v.country) + ":"), "flag for " + v.country);
 // hub + each game renders (server-side, effects off)
 assert.ok(renderToStaticMarkup(h(m.GamesView, {})).includes("Quick games"));
-for (const id of ["gate", "board", ...m.GAMES.map(g => g.id)]) { const html = renderToStaticMarkup(h(m.GamesView, { tab0: id })); assert.ok(html.length > 100, id); }
+for (const id of ["gate", "board", "signs", ...m.GAMES.map(g => g.id)]) { const html = renderToStaticMarkup(h(m.GamesView, { tab0: id })); assert.ok(html.length > 100, id); }
 console.log("games ok");

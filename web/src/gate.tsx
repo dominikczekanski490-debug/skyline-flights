@@ -93,7 +93,7 @@ export function GateScreen({ s }: { s: GSpec }) {
 }
 export const DIM: Record<GStyle, [number, number]> = { mag: [640, 360], krk: [640, 360], lhr: [380, 720] };
 
-function FullScreen({ children, onClose, bg = "#05070c" }: { children: ReactNode; onClose: () => void; bg?: string }) {
+export function FullScreen({ children, onClose, bg = "#05070c" }: { children: ReactNode; onClose: () => void; bg?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.requestFullscreen?.().catch(() => {}); const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); addEventListener("keydown", k); return () => { removeEventListener("keydown", k); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }; }, []);
   return createPortal(<div ref={ref} className="gs-full" style={{ background: bg }} onClick={onClose}><div className="gs-full-in">{children}</div><button className="gs-full-x" aria-label="Close fullscreen" onClick={onClose}>✕</button><span className="gs-full-hint">Tap to close</span></div>, document.body);

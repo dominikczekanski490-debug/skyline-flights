@@ -1,0 +1,82 @@
+/* Sign studio. Every size is in em of a font-size derived from the container width (cqw), so a sign keeps its real
+   proportions at any width and its height simply follows the rows: no fixed-height box, no squashing. */
+.sg-wrap{position:relative;container-type:inline-size;width:100%}
+.sg{position:relative;box-sizing:border-box;-webkit-font-smoothing:antialiased;font-family:"Frutiger","Segoe UI","Inter Variable",Inter,"Helvetica Neue",Arial,sans-serif}
+.sg .pi{width:1em;height:1em;display:block;flex:none}
+.sg .ar{width:1em;height:1em;display:block;flex:none}
+/* ceiling rods */
+.sg-hang{position:relative;height:3.2em;font-size:3.2vw;font-size:3.2cqw}
+.sg-hang i{position:absolute;top:0;bottom:-.1em;width:.22em;background:linear-gradient(90deg,#6c7178,#e6e9ee 45%,#8d929a);border-radius:.05em}
+.sg-hang i::before{content:"";position:absolute;top:-.05em;left:-.35em;right:-.35em;height:.35em;border-radius:.1em;background:linear-gradient(#cfd3d8,#80858c)}
+.sg-hang.krk i:nth-child(1){left:38%}.sg-hang.krk i:nth-child(2){left:58%}
+.sg-hang.lhr i:nth-child(1){left:22%}.sg-hang.lhr i:nth-child(2){left:76%}
+/* 1. Kraków: charcoal panel in a slim silver frame; Polish white, English yellow; thin divider between blocks */
+.sg-krk{font-size:2.85vw;font-size:2.85cqw;padding:.9em 1.4em 2.9em 2.3em;color:#fff;background:linear-gradient(180deg,#2d2e31 0%,#232427 55%,#1d1e20 100%);
+  border:.2em solid #c3c7cc;border-radius:.12em;box-shadow:inset 0 0 0 .07em #7d8288,0 0 0 .07em #5d6168,0 .8em 1.6em rgba(0,0,0,.55),inset 0 .5em 1.4em rgba(255,255,255,.04)}
+.sgk-corner{position:absolute;top:.85em;right:1.1em;display:flex;gap:.4em;font-size:1.3em;color:#fff;opacity:.95}
+.sgk-row{display:grid;grid-template-columns:1.45em 1.55em 1fr;column-gap:.4em;align-items:start}
+.sgk-row.div{margin-top:.35em;padding-top:.45em;border-top:.06em solid rgba(235,238,242,.55)}
+.sgk-ar,.sgk-ic{font-size:1.45em;display:flex;gap:.25em;padding-top:.06em;color:#fff;filter:drop-shadow(0 0 .12em rgba(255,255,255,.35))}
+.sgk-ic{font-size:1.45em}
+.sgk-lines{min-width:0}
+.sgk-head{font-size:1.5em;line-height:1.15;font-weight:500;margin-bottom:.1em;display:flex;flex-wrap:wrap;gap:0 .35em;align-items:center}
+.sgk-sub{font-size:.98em;line-height:1.24;padding-left:.15em;display:flex;flex-wrap:wrap;gap:0 .35em;align-items:center}
+.sg-krk .pl{color:#fbfbf8;text-shadow:0 0 .25em rgba(255,255,255,.28)}
+.sg-krk .en{color:#f3d21a;text-shadow:0 0 .3em rgba(243,210,26,.35)}
+/* 2. Manchester: black backlit box, yellow outlined pictogram squares, big white words, white arrow tiles */
+.sg-man{font-size:4vw;font-size:4cqw;padding:.45em .35em 3em 1.2em;background:linear-gradient(180deg,#0b0b0c,#030303 60%,#060606);border:.07em solid #3a3c40;border-bottom:.22em solid #8c9097;border-radius:.06em;
+  box-shadow:0 0 0 .04em #18191b,0 .7em 1.4em rgba(0,0,0,.6),inset 0 0 2em rgba(255,255,255,.03);margin-right:1.1em}
+.sm-brk{position:absolute;right:-1.15em;top:18%;width:1.1em;height:.62em;border-radius:.1em;background:linear-gradient(#e2e5e9,#8e939a 55%,#c8ccd1)}
+.sm-brk.b{top:46%}
+.sm-row{display:flex;align-items:center;justify-content:flex-end;gap:.45em;margin-bottom:.12em}
+.sm-ic{display:flex;gap:.32em;margin-right:.22em}
+.sm-sq{width:1.6em;height:1.6em;box-sizing:border-box;border:.075em solid #f0c419;border-radius:.1em;display:grid;place-items:center;color:#f0c419;font-size:1em;filter:drop-shadow(0 0 .12em rgba(240,196,25,.45))}
+.sm-sq .pi{width:1.15em;height:1.15em}
+.sm-lines{min-width:0;text-align:right}
+.sm-t{font-size:2.05em;line-height:1.05;font-weight:600;color:#fff;letter-spacing:.035em;text-shadow:0 0 .14em rgba(255,255,255,.55),0 0 .5em rgba(255,255,255,.18);white-space:nowrap;display:flex;align-items:center;gap:.25em;justify-content:flex-end}
+.sm-sub{font-size:.95em;color:#e8e8e8;display:flex;gap:.3em;justify-content:flex-end;align-items:center}
+.sm-tile{width:2.3em;height:2.3em;margin-left:.25em;flex:none;background:linear-gradient(#ffffff,#eef0f2);color:#0a0a0a;border-radius:.06em;display:grid;place-items:center;font-size:1em;box-shadow:0 0 .35em rgba(255,255,255,.45)}
+.sm-tile .ar{width:1.6em;height:1.6em}.sm-tile.none{visibility:hidden}
+/* 3. Heathrow: yellow sign, black type, black circular pictograms, ruled rows */
+.sg-lhr{font-size:2.55vw;font-size:2.55cqw;color:#141414;background:linear-gradient(180deg,#ffd31f 0%,#f9c80e 50%,#f2bf05 100%);border:.22em solid #a3a8ae;border-radius:.08em;
+  box-shadow:inset 0 0 0 .06em #6f747a,0 .7em 1.4em rgba(0,0,0,.45),inset 0 0 1.6em rgba(255,255,255,.18)}
+.sl-row{display:grid;grid-template-columns:2.3em auto 1fr;column-gap:.7em;align-items:center;padding:.9em 1.2em .9em 1em}
+.sl-row+.sl-row{border-top:.09em solid #3a3a3a}
+.sl-ar{font-size:2.3em;color:#141414}
+.sl-ic{display:flex;gap:.35em;align-items:center}
+.sl-c{width:2.4em;height:2.4em;border-radius:50%;background:#161616;color:#fff;display:grid;place-items:center}
+.sl-c .pi{width:1.55em;height:1.55em}
+.sl-ic.stack{flex-direction:column;gap:.15em;background:#161616;border-radius:1em;padding:.3em 0}
+.sl-ic.stack .sl-c{width:2.4em;height:1.85em;background:none}
+.sl-lines{min-width:0}
+.sl-t{font-size:2.05em;line-height:1.22;font-weight:700;letter-spacing:-.005em;display:flex;align-items:center;gap:.35em;flex-wrap:wrap}
+.sg .sg-cross{width:1em;height:1em;flex:none;filter:drop-shadow(0 0 .08em rgba(0,0,0,.25))}
+.sg .sg-al.al-tile{height:.85em;width:2.9em;aspect-ratio:auto;padding:.08em .22em;border-radius:.08em;box-sizing:border-box;flex:none;box-shadow:0 0 0 .04em rgba(0,0,0,.25)}
+.sg .sg-al.al-tile img{object-fit:contain;width:100%;height:100%;display:block;filter:none!important}
+.sg .sg-al.al-tile{background:#fff!important}
+.sg-krk .sg-al.al-tile,.sg-man .sg-al.al-tile{height:.8em;width:2.7em}
+/* studio */
+.sg-stage{border-radius:16px;padding:0 6% 7%;background:linear-gradient(180deg,#2b2f37 0%,#1a1d23 40%,#101216 100%);cursor:zoom-in;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.sg-stage::before{content:"";display:block;height:10px;margin:0 -8%;background:repeating-linear-gradient(90deg,#3a3f48 0 14px,#30343c 14px 16px);opacity:.8}
+.sg-stage.man{padding-top:24px}
+.sg-stage.man::before{margin-bottom:-14px}
+.sg-full{width:min(100%,1100px);margin:auto;display:flex;flex-direction:column;justify-content:center;min-height:100%}
+.sg-themes{margin-top:12px}
+.sg-card{margin-top:12px;padding:12px;border-radius:16px;background:#121829;border:1px solid rgba(255,255,255,.1);display:grid;gap:10px}
+.sg-card-h{display:flex;justify-content:space-between;align-items:center;font-size:14px}
+.sg-card-h span{display:flex;gap:6px}
+.sg-mini{min-width:38px;height:38px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:#1b2236;color:#fff;font:inherit;font-size:15px;cursor:pointer;padding:0 8px}
+.sg-mini:disabled{opacity:.35}.sg-mini.del{color:#f87171}.sg-mini.on{background:#16a34a;border-color:#22c55e}
+.sg-chips{display:flex;flex-wrap:wrap;gap:6px}
+.sg-chip{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 10px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:#1b2236;color:#fff;font:inherit;font-size:13px;cursor:pointer}
+.sg-chip .pi{width:20px;height:20px}.sg-chip.add{border-style:dashed;color:#93c5fd}
+.sg-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:6px;padding:8px;border-radius:12px;background:#0b1020;border:1px solid rgba(255,255,255,.1);max-height:260px;overflow:auto}
+.sg-pick button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:10px;border:0;background:#1b2236;color:#fff;font:inherit;cursor:pointer}
+.sg-pick .pi{width:26px;height:26px}.sg-pick small{font-size:10px;line-height:1.15;color:rgba(255,255,255,.75);text-align:center}
+.sg-line{display:grid;gap:8px;padding:10px;border-radius:12px;background:rgba(255,255,255,.04)}
+.sg-line-x{display:grid;grid-template-columns:minmax(0,1fr) 44px 44px;gap:6px}
+.sg-add{justify-self:start}
+/* games-home card art */
+.gm-art.signs{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:10px;align-items:center;padding:6px 12px 10px}
+.gm-sg{min-width:0;max-height:118px;overflow:hidden;display:flex;align-items:center}
+.gm-sg .sg-hang{height:1.4em}
