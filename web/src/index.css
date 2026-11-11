@@ -689,7 +689,7 @@ html,body{overflow-x:hidden;overscroll-behavior-x:none}
 .tb-lpa .tb-row.alt{background:#1d42cc}
 .tb-lpa .c-time{color:#fff}.tb-lpa .c-fl,.tb-lpa .c-dest{color:#ffe94a;overflow:hidden;text-overflow:ellipsis}
 .tb-lpa .c-logo{height:100%;display:flex;align-items:center}
-.tb-lpa .c-logo .tb-logo{width:22px;height:calc(var(--rh,40px) - 4px);aspect-ratio:auto;padding:1px;border-radius:1px;background:#fff!important}
+.tb-lpa .c-logo .tb-logo{width:22px;height:calc(var(--rh,40px) - 4px);aspect-ratio:auto;padding:1px;border-radius:1px}
 .tb-lpa .c-logo .tb-logo img{object-fit:contain}
 .tb-lpa .c-gate{text-align:center}
 .tb-lpa .tb-g{font-style:normal;display:inline-block;min-width:2.5em;padding:.12em .2em;border-radius:2px;color:#fff;background:#6b7280;line-height:1.2;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18)}
@@ -714,3 +714,12 @@ html,body{overflow-x:hidden;overscroll-behavior-x:none}
 .tb-fgr .tb-top{justify-content:space-between}.tb-fgr .tb-clock{margin-left:auto}
 .gsx-pre{flex-wrap:wrap;overflow-x:visible}
 .tb-lpa .c-logo .tb-logo:not(:has(img)){visibility:hidden}
+/* v65 LPA re-match against photo 2 pixels: flight numbers white, destinations yellow; brand-coloured logo chips; remark colours */
+.tb-lpa .c-fl{color:#fff}.tb-lpa .c-dest{color:#ffe94a}
+.tb-lpa .c-logo .tb-logo{width:38px;height:calc(var(--rh,40px) - 8px);padding:3px 4px;border-radius:2px;box-sizing:border-box;background-clip:padding-box}
+.tb-lpa .c-logo .tb-logo.m-colour{background:#fff!important}
+.tb-lpa .c-logo .tb-logo.m-white:not([style*="background"]){background:#2a3142}
+.tb-lpa .tb-st.bad,.tb-lpa .tb-st.blink.bad{color:#ff5a3c}
+.tb-lpa .tb-st.ok,.tb-lpa .tb-st.blink.ok{color:#7ed957}
+.tb-lpa .tb-st.warn{color:#fff}.tb-lpa .tb-st.info{color:#e6f3ff}
+.tb-lpa .tb-g[data-z="C"]{background:#6cc23a}

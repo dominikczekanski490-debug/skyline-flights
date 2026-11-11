@@ -55,7 +55,7 @@ export const THEMES: Record<string, Th> = {
   fgr: { name: "Fraport Greece (photo-matched)", cls: "tb-fgr", logoMark: true, secs: true, nogs: true, cols: ["time", "fl", "logo", "dest", "via", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Αναχωρήσεις", "Departures"] : ["Αφίξεις", "Arrivals"], heads: { time: "Ώρα|Time", fl: "Πτήση|Flight", logo: "", dest: "Προς|To", via: "Μέσω|Via", gate: "Πύλη|Gate", st: "Κατάσταση|Status" }, w: { time: "3.6em", fl: "5.6em", logo: "84px", via: "minmax(3em,.6fr)", gate: "3em" }, tr: { "Scheduled": "", "Wait in lounge": "", "On time": "" } } as Th,
   // v64: Gran Canaria (LPA) portrait blue FIDS, recreated from the user's photo (no operator logo): yellow plane tile + white clock, colour-coded gate boxes, German footer.
   lpa: { name: "Gran Canaria (photo-matched)", cls: "tb-lpa", logoMark: true, gbox: true, caps: true, spc: true, nogs: true, cols: ["time", "logo", "fl", "dest", "gate", "st"], clock: "top", title: () => ["", ""], heads: { time: "TIME", logo: "", fl: "FLIGHT", dest: "TO", gate: "GATE", st: "REMARKS" }, headsArr: { dest: "FROM", gate: "BELT" },
-    w: { time: "3.1em", logo: "22px", fl: "4.6em", dest: "minmax(4em,1.25fr)", gate: "2.8em", st: "minmax(6.5em,1.15fr)" }, foot: "keine Flugsteige per Lautsprecher Ansage",
+    w: { time: "3.1em", logo: "40px", fl: "4.6em", dest: "minmax(4em,1.25fr)", gate: "2.8em", st: "minmax(6.5em,1.15fr)" }, foot: "keine Flugsteige per Lautsprecher Ansage",
     tr: { "Final call": "LAST CALL", "Flight closing": "LAST CALL", "Go to gate": "Go to Gate", "Gate open": "Go to Gate", "Boarding": "BOARDING", "Gate closed": "GATE CLOSED", "New gate": "NEW GATE", "Scheduled": "", "Wait in lounge": "", "Departed": "DEPARTED", "Cancelled": "CANCELLED", "Delayed": "DELAYED", "On time": "" } } as Th,
   // v23 regional fallbacks (NOT photo-matched): local-language titles on a neutral dark LCD.
   tr: { name: "Turkey (fallback)", cls: "tb-ee tb-tr", cols: ["time", "fl", "logo", "dest", "gate", "st"], clock: "top", title: d => d === "dep" ? ["Giden Uçuşlar", "Departures"] : ["Gelen Uçuşlar", "Arrivals"], heads: { time: "Saat Time", fl: "Uçuş Flight", logo: "", dest: "Gidilecek Yer To", gate: "Kapı Gate", st: "Durum Remarks" } },
@@ -131,7 +131,8 @@ export function status(f: any, dir: string) {
 
 /** "Ώρα|Time" → Greek over English (stacked bilingual column heads). */
 const splitHead = (h: any) => typeof h === "string" && h.includes("|") ? <span className="tb-h2"><b>{h.split("|")[0]}</b><i>{h.split("|")[1]}</i></span> : h;
-function Logo({ a }: { a: any }) { return a?.iata ? <AirlineTile a={a} className="tb-logo" mode="colour" /> : null; }
+// colour: full-colour logo on a white chip (most boards). Gran Canaria passes "brand": white logo on the airline-coloured chip, like the photo's small coloured rectangles.
+function Logo({ a, m = "colour" }: { a: any; m?: "colour" | "brand" }) { return a?.iata ? <AirlineTile a={a} className="tb-logo" mode={m === "brand" ? undefined : "colour"} /> : null; }
 
 function Flap({ text, w }: { text: string; w: number }) {
   const s = (text || "").toUpperCase().slice(0, w).padEnd(w, " ");
@@ -181,7 +182,7 @@ export function TerminalBoard({ iata, dir: dir0, date, onClose, onDir, onOpen, c
       case "fl": return <span className="tb-fl">{!solari && !tt.cols.includes("tile") && !tt.cols.includes("logo") && <Logo a={f.airline} />}{txt(th === "fra" ? f.number.replace(/^([A-Z0-9]{2})/, "$1 ") : tt.spc ? f.number.replace(/^([A-Z]{3}(?=\d)|[A-Z0-9]{2})(\d)/, "$1 $2") : f.number, 7)}</span>;
       case "via": return f.via || "";
       case "tile": return <Tile a={f.airline} />;
-      case "logo": return <span className="tb-fl"><Logo a={f.airline} /></span>;
+      case "logo": return <span className="tb-fl"><Logo a={f.airline} m={th === "lpa" ? "brand" : "colour"} /></span>;
       case "tag": return <span className="tb-tag" style={{ background: tagColor(f.airline?.iata) }}>{f.number}</span>;
       case "gate": { const g = (dir === "dep" ? t.gate : f.arr?.baggage) || ""; return (tt as any).gbox && g ? <i className="tb-g" data-z={g[0]}>{g}</i> : txt(g, 4); }
       case "term": return t.terminal ? (th === "fra" && !/^T/.test(t.terminal) ? "T" + t.terminal : t.terminal) : "";
