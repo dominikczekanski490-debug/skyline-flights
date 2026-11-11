@@ -84,3 +84,59 @@
 .gm-sg .sg-hang{height:1.4em}
 
 .sgs input,.sgs select{font-feature-settings:"calt" 0}
+/* 4. Gran Canaria: separate dark-chocolate bars, big yellow arrow, yellow square pictogram, DE/EN white + ES bold yellow,
+   bright green gate-range chips with "to / a", optional walking-time letter chips */
+.sg-lpa-stack{display:flex;flex-direction:column}
+.sg-hang.lpa{font-size:2.6vw;font-size:2.6cqw;height:2.4em}
+.sp-unit+.sp-unit .sg-hang.lpa{height:2.2em}
+.sg-hang.lpa i:nth-child(1){left:14%}.sg-hang.lpa i:nth-child(2){left:84%}
+.sg-hang.lpa i{background:linear-gradient(90deg,#3a3d42,#8b9097 45%,#3f4247)}
+.sg-lpa{font-size:2.6vw;font-size:2.6cqw;display:grid;grid-template-columns:3.4em 3.6em minmax(7.6em,max-content) minmax(0,1fr) auto;align-items:center;column-gap:1em;padding:.9em 1.4em .9em 1.6em;
+  background:linear-gradient(180deg,#2b1712 0%,#1d0b07 40%,#170705 100%);border-radius:.12em;box-shadow:0 0 0 .07em #0b0302,inset 0 .1em 0 rgba(255,255,255,.07),inset 0 -.18em 0 rgba(0,0,0,.45),0 .6em 1.2em rgba(0,0,0,.55);color:#fff}
+.sp-ar{color:#ffe92e;font-size:3.1em;display:flex;filter:drop-shadow(0 0 .08em rgba(255,233,46,.35))}
+.sp-ic{display:flex;gap:.3em}
+.sp-sq{width:3.3em;height:2.9em;background:#ffe92e;color:#1d0b07;border-radius:.12em;display:grid;place-items:center;box-shadow:0 0 .4em rgba(255,233,46,.25)}
+.sp-sq .pi{width:2.4em;height:2.4em}
+.sp-lines{display:flex;flex-direction:column;gap:.35em;min-width:0}
+.sp-l{display:flex;flex-direction:column;line-height:1.06;font-size:1.55em;font-weight:500}
+.sp-l .de,.sp-l .en{color:#fff;text-shadow:0 0 .2em rgba(255,255,255,.2)}
+.sp-l .es{color:#ffe92e;font-weight:700;font-size:1.06em;text-shadow:0 0 .2em rgba(255,233,46,.3)}
+.sp-x{display:flex;gap:.3em;margin-top:.15em}
+.sp-gates{display:flex;align-items:center;gap:.45em}
+.sp-g{background:#0bbb17;color:#fff;font-weight:700;font-size:1.8em;line-height:1;padding:.2em .32em .16em;border-radius:.18em;letter-spacing:.02em;box-shadow:0 0 .35em rgba(11,187,23,.35);white-space:nowrap}
+.sp-to{display:flex;flex-direction:column;line-height:1;font-size:1.1em;font-weight:600;text-align:center}
+.sp-to i{font-style:normal;color:#fff}.sp-to i.es{color:#ffe92e}
+.sp-chips{display:flex;gap:.6em;align-items:flex-end}
+.sp-chip{display:flex;flex-direction:column;align-items:center;gap:.12em}
+.sp-chip small{font-size:.62em;color:#fff;font-weight:600;white-space:nowrap}
+.sp-chip b{width:1.75em;height:1.75em;display:grid;place-items:center;font-size:1.3em;font-weight:700;color:#fff;border-radius:.1em}
+.sp-chip .c-blue{background:#2f6fd8}.sp-chip .c-red{background:#f2552c}.sp-chip .c-green{background:#0bbb17}.sp-chip .c-yellow{background:#ffd400;color:#1d0b07}
+/* 5. Fraport Greece: navy panel on two rods, lime arrow + circular pictograms, Greek over bold English, green exit end-cap */
+.sg-hang.fgr i:nth-child(1){left:17%}.sg-hang.fgr i:nth-child(2){left:73%}
+.sg-hang.fgr i{background:linear-gradient(90deg,#2a2d33,#6b7078 45%,#2e3137)}
+.sg-fgr{font-size:2.6vw;font-size:2.6cqw;display:flex;background:linear-gradient(180deg,#2b3655 0%,#232d4a 60%,#1f2844 100%);border-radius:.15em;color:#cfe05a;
+  box-shadow:0 0 0 .08em #151b2e,inset 0 .1em 0 rgba(255,255,255,.06),0 .6em 1.2em rgba(0,0,0,.45);overflow:hidden}
+.sf-rows{flex:1;min-width:0;padding:1em 1.2em 1em 1.1em;display:flex;flex-direction:column;gap:1em}
+.sf-row{display:grid;grid-template-columns:3em 3.4em minmax(0,1fr);column-gap:.8em;align-items:center}
+.sf-ar{font-size:3em;color:#cfe05a;display:flex}
+.sf-c{width:3.4em;height:3.4em;border-radius:50%;background:#cfe05a;color:#232d4a;display:grid;place-items:center}
+.sf-c .pi{width:2.25em;height:2.25em}
+.sf-ic{display:flex;gap:.3em}
+.sf-lines{min-width:0}
+.sf-l{display:flex;flex-direction:column;line-height:1.12}
+.sf-l .el{font-size:1.45em;font-weight:400;color:#d6e66a;letter-spacing:.02em}
+.sf-l .en{font-size:1.75em;font-weight:700;font-style:italic;color:#cfe05a;display:flex;align-items:center;gap:.3em;letter-spacing:.01em}
+.sg-fgr .sf-cap{flex:none;width:9.4em;background:linear-gradient(180deg,#45b23a,#36a12d);display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;gap:1em;padding:1em 0;box-shadow:inset .12em 0 0 rgba(0,0,0,.18)}
+.sf-exit{width:4.8em;height:4.8em;border:.16em solid #fff;border-radius:.12em;display:grid;place-items:center;color:#fff;box-sizing:border-box}
+.sf-exit .pi{width:3.7em;height:3.7em}
+.sf-car{font-size:4.4em;color:#fff;display:flex}
+/* theme tabs: five looks wrap cleanly on a phone */
+.sgs .sg-themes{flex-wrap:wrap}
+.sgs .sg-themes button{flex:1 1 30%;white-space:nowrap}
+.sg-g4{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sg-g4.chip{grid-template-columns:1fr 1fr 1fr 44px;align-items:end}
+.sg-card-h .sg-mini.on{min-width:56px}
+.gm-art.signs{grid-template-columns:repeat(3,minmax(0,1fr))!important;height:auto!important;min-height:132px;row-gap:6px}
+.gm-art.signs .gm-sg{max-height:74px}
+
+.sgs{font-feature-settings:"calt" 0}

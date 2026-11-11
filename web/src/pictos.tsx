@@ -34,6 +34,10 @@ export const PICTOS: Record<string, { n: string; d: ReactNode }> = {
   dog: { n: "Assistance dog", d: <><path d="M4 9.2 6.1 6l1.3.6.7 2h6.3l2.3-3.3 1.6-.4 1.4 2.2 1.6.5-.5 1.9-2.3.6-.5 4.2V21h-2v-5H9.5l-1.3 5h-2l1-5.3L5.6 12z" /></> },
   money: { n: "Currency exchange", d: <><circle cx="12" cy="12" r="9.3" /><path d="M12.9 6v1.3c1.2.2 2.1.8 2.6 1.8l-1.6.8c-.4-.7-1-1-1.9-1-1 0-1.6.4-1.6 1 0 .7.7.9 2 1.2 1.9.4 3.3 1 3.3 2.9 0 1.4-1 2.4-2.8 2.7V18h-1.6v-1.3c-1.5-.2-2.6-1-3-2.2l1.7-.7c.3.8 1.1 1.3 2.1 1.3 1.1 0 1.7-.4 1.7-1.1 0-.7-.7-.9-2.1-1.2-1.6-.4-3.2-.9-3.2-2.8 0-1.3 1-2.3 2.6-2.6V6z" fill="#000" opacity=".6" /></> },
   passport: { n: "Passport control", d: <><rect x="5" y="2.5" width="14" height="19" rx="1.6" /><circle cx="12" cy="10.5" r="3.6" fill="#000" opacity=".55" /><path d="M8.5 16.8h7v1.5h-7z" fill="#000" opacity=".55" /></> },
+  boarding: { n: "Boarding area", d: <><path d="M2.5 18.6h19v1.8h-19z" /><path d="M21.4 12.2c0-.9-.8-1.5-1.8-1.5h-5.1L10 5.2H8l2.4 5.5H5.8L4.2 8.6H2.6l.9 4.3.4 1.1h15.8c1 0 1.7-.9 1.7-1.8z" /></> },
+  screening: { n: "Security screening", d: <><H x={7} y={4} r={2} /><path d="M5.2 7.2h3.6c.8 0 1.4.6 1.4 1.4v5.2H9V21H7.6v-6.4h-1V21H5.2v-7.2H3.8V8.6c0-.8.6-1.4 1.4-1.4z" /><H x={16.8} y={4} r={2} /><path d="M15 7.2h3.6c.8 0 1.4.6 1.4 1.4v5.2h-1.2V21h-1.4v-6.4h-1V21H15v-7.2h-1V11l-2.6 1.6-.8-1.2 3.4-2.4V8.6c0-.8.4-1.4 1-1.4z" /><path d="M10.2 11.6l1.3-.8.6 1-1.3.8z" /></> },
+  officer: { n: "Passport officer", d: <><path d="M8.6 2.6h6.8l.8 2.2H7.8z" /><H x={12} y={6.6} r={1.9} /><path d="M9.6 9.4h4.8c.9 0 1.6.7 1.6 1.6v4H8v-4c0-.9.7-1.6 1.6-1.6z" /><path d="M3 15.6h18v2H3zM5 17.6h2v3.8H5zM17 17.6h2v3.8h-2z" /></> },
+  exit: { n: "Emergency exit", d: <><path d="M14.5 2.5h7v19h-7v-2h5v-15h-5z" /><H x={9.4} y={4.4} r={1.9} /><path d="M7.6 7.6h3.2l2.6 3.2 2.4.3-.2 1.6-3.2-.4-1-1.2-.7 3.1 2.6 2.4.6 4.9h-1.8l-.6-4.1-2.4-2-1.2 2.8-3.4 2.6-1-1.4 3-2.3 1.4-5.6-1.3.7-.9 2.7H4.2l1.2-3.7z" /></> },
   gates: { n: "Gates", d: <><path d="M3 3h18v18H3z" /><path d="M7 21V8h10v13h-2V10H9v11z" fill="#000" opacity=".6" /></> },
 };
 export const PICTO_KEYS = Object.keys(PICTOS);

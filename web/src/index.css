@@ -675,3 +675,42 @@ html,body{overflow-x:hidden;overscroll-behavior-x:none}
 .sheet-body{overflow-y:auto}
 .qf{flex-wrap:wrap}
 .cw-item{max-width:100%;box-sizing:border-box}
+/* v64 Gran Canaria (LPA) portrait FIDS — recreation of the user's photo; no operator logo. */
+.tb-lpa{--bg:#1636b4;--hd:#1636b4;--fg:#ffe94a;--alt:#1b3fc6;--ok:#3ee05a;--warn:#fff;--bad:#ff3d2e;--acc:#fff;font-family:Arial,"Helvetica Neue",sans-serif;background:linear-gradient(180deg,#183bc2 0%,#1534ad 100%)}
+.tb-lpa .tb-top{background:transparent;padding:10px 14px 4px;gap:10px}
+.tb-lpa .tb-title{order:2;margin-left:auto}.tb-lpa .tb-title b,.tb-lpa .tb-title span{display:none}
+.tb-lpa .tb-ap{display:none}
+.tb-lpa .tb-mark{width:34px;height:30px;background:#ffd800;border-radius:3px;padding:3px 4px;display:inline-flex;box-sizing:border-box}
+.tb-lpa .tb-mark path{fill:#14204f}
+.tb-lpa .tb-clock{order:3;color:#fff;font-size:30px;font-weight:700;letter-spacing:.5px;font-variant-numeric:tabular-nums}
+.tb-lpa .tb-head{background:transparent;color:#fff;font-size:9.5px;font-weight:700;opacity:1;padding-top:6px;padding-bottom:3px}
+.tb-lpa .tb-head,.tb-lpa .tb-row{gap:5px;padding:0 8px}
+.tb-lpa .tb-row{font-weight:700;font-size:calc(var(--rh,40px)*.34);border-bottom:1px solid rgba(0,0,30,.25);background:#1636b4}
+.tb-lpa .tb-row.alt{background:#1d42cc}
+.tb-lpa .c-time{color:#fff}.tb-lpa .c-fl,.tb-lpa .c-dest{color:#ffe94a;overflow:hidden;text-overflow:ellipsis}
+.tb-lpa .c-logo{height:100%;display:flex;align-items:center}
+.tb-lpa .c-logo .tb-logo{width:22px;height:calc(var(--rh,40px) - 4px);aspect-ratio:auto;padding:1px;border-radius:1px;background:#fff!important}
+.tb-lpa .c-logo .tb-logo img{object-fit:contain}
+.tb-lpa .c-gate{text-align:center}
+.tb-lpa .tb-g{font-style:normal;display:inline-block;min-width:2.5em;padding:.12em .2em;border-radius:2px;color:#fff;background:#6b7280;line-height:1.2;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18)}
+.tb-lpa .tb-g[data-z="A"]{background:#f39a1c}.tb-lpa .tb-g[data-z="B"]{background:#2e7be6}.tb-lpa .tb-g[data-z="C"]{background:#23b43e}.tb-lpa .tb-g[data-z="D"]{background:#ec3a2c}.tb-lpa .tb-g[data-z="E"]{background:#9b5bd1}
+.tb-lpa .tb-st{color:#fff;font-weight:700;font-size:.92em;animation:none}
+.tb-lpa .tb-st.bad,.tb-lpa .tb-st.blink.bad{color:#ff3d2e}.tb-lpa .tb-st.ok,.tb-lpa .tb-st.blink.ok{color:#3ee05a}.tb-lpa .tb-st.warn{color:#fff}.tb-lpa .tb-st.info{color:#cfe6ff;font-weight:600;font-size:.82em}
+.tb-lpa .tb-xfoot{background:#0d2486;color:#fff;font-weight:700;font-size:17px;padding:7px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-top:2px solid #0a1c6b}
+.tb-inline.tb-lpa .tb-foot{display:none}
+/* v64 Fraport Greece re-match (2026 photo): lime title and seconds clock, light header band with Greek over English, lime "Gate Open" bar */
+.tb-fgr .tb-mark{width:44px;height:44px;background:#b6d335;padding:7px}.tb-fgr .tb-mark path{fill:#0b2a78}
+.tb-fgr .tb-title b{color:#c2dc3c;font-size:30px;font-weight:500;letter-spacing:.5px}.tb-fgr .tb-title span{color:#c2dc3c;font-size:26px;font-weight:600;font-style:italic;margin-left:52px;margin-top:-6px}
+.tb-fgr .tb-clock{color:#c2dc3c;font-size:34px;font-weight:500;letter-spacing:1px}
+.tb-fgr .tb-ap{display:none}
+.tb-fgr .tb-head{background:#e9edf4;color:#0b2a78;font-size:10px;padding-top:3px;padding-bottom:3px}
+.tb-h2{display:flex;flex-direction:column;line-height:1.05}.tb-h2 b{font-weight:600}.tb-h2 i{font-style:italic;font-weight:600}
+.tb-fgr .c-via{color:#fff;opacity:.9}
+.tb-fgr .tb-st.ok,.tb-fgr .tb-st.blink.ok{display:block;background:#8dc63f;color:#fff;padding:0 .4em;line-height:1.35}
+.tb-fgr .tb-st.warn{color:#ffe14a}.tb-fgr .tb-st.bad,.tb-fgr .tb-st.blink.bad{color:#ff3434;animation:none}
+.tb-fgr .tb-st.info{color:#cfe6ff}
+.tb-fgr .tb-title{display:grid;grid-template-columns:auto auto;column-gap:10px;align-items:center;line-height:1.05;justify-content:start}.tb-fgr .tb-title .tb-mark{grid-row:1/3}
+.tb-fgr .tb-title b,.tb-fgr .tb-title span{font-size:29px;font-weight:500;font-style:normal;margin-left:0;margin-top:0;color:#c2dc3c}
+.tb-fgr .tb-top{justify-content:space-between}.tb-fgr .tb-clock{margin-left:auto}
+.gsx-pre{flex-wrap:wrap;overflow-x:visible}
+.tb-lpa .c-logo .tb-logo:not(:has(img)){visibility:hidden}

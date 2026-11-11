@@ -125,3 +125,4 @@ html body .games .gp-seg button{color:#fff!important}
 html body .games .gp-seg button.on{background:#fff!important;color:#0b1f3f!important}
 .sheet-body:has(> .games),.sheet-body:has(.games.in-tab){background:#0b1020!important}
 html body .games h2.gm-h{color:#a9b4d0!important;-webkit-text-fill-color:#a9b4d0}
+.gm-art.gates{grid-template-columns:repeat(3,minmax(0,1fr)) 50px}

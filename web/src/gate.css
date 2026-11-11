@@ -115,3 +115,39 @@
 .gp-entry>span:nth-child(2){flex:1;min-width:0}.gp-entry-go{font-size:22px;opacity:.5}
 html[data-skin="clearway"] .gp-entry{background:#fff;border:1px solid #e1e5ec;color:#0b1f3f;border-radius:14px}
 html[data-skin="clearway"] .gp-seg button.on{background:#0b1f3f;color:#fff}
+/* Gran Canaria gate screen (recreated from the user's photo): dark LCD in a slim gold bezel, amber plane tile,
+   Ausgang/Gate/Puerta, big green gate badge, airline panel + slate flight panel, yellow destination, cyan status bar */
+.gs-lpa{width:640px;height:580px;box-sizing:border-box;background:#06070a;border:10px solid #a9844c;border-image:linear-gradient(135deg,#e2c48a,#8f6a35 40%,#d5b479 70%,#7d5a2a) 1;
+  font-family:"Frutiger","Segoe UI","Helvetica Neue",Arial,sans-serif;color:#fff;display:flex;flex-direction:column;padding:18px 34px 22px;gap:8px;position:relative}
+.gs-lpa::after{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.07),transparent 35%);pointer-events:none}
+.gc-top{display:grid;grid-template-columns:118px 1fr 220px;gap:18px;align-items:center;height:150px}
+.gc-ico{width:118px;height:118px;border-radius:14px;background:linear-gradient(160deg,#f2b13e,#d98f1c);display:block;padding:14px;box-sizing:border-box}
+.gc-words{display:flex;flex-direction:column;line-height:1.02;font-size:42px;font-weight:400}
+.gc-words .de{color:#b7b1a7}.gc-words .en{color:#cfc9be}.gc-words .es{color:#d9a54c;font-weight:600;font-size:46px}
+.gc-gate{height:132px;border-radius:10px;background:linear-gradient(180deg,#2c5a27,#234a1f);color:#ead8b2;font-size:96px;font-weight:600;display:grid;place-items:center;letter-spacing:1px}
+.gc-main{display:grid;grid-template-columns:1fr 1fr;height:118px;margin-top:6px}
+.gc-al{display:grid;place-items:center;padding:16px 22px;box-sizing:border-box;overflow:hidden}
+.gs-lpa .gc-logo.al-tile{width:100%;height:100%;aspect-ratio:auto;background:transparent!important;padding:0}
+.gs-lpa .gc-logo.al-tile b{font-size:40px;color:#222}
+.gc-fl{background:#566f8b;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05}
+.gc-fl b{font:800 46px/1.05 Arial,"Helvetica Neue",sans-serif;letter-spacing:.5px;text-shadow:0 2px 0 rgba(0,0,0,.35)}.gc-fl span{font:700 32px/1.1 Arial,sans-serif;text-shadow:0 2px 0 rgba(0,0,0,.35)}
+.gc-dest{text-align:center;color:#f4e24a;font:800 50px/1.1 Arial,"Helvetica Neue",sans-serif;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gc-co{background:#566f8b;text-align:center;font:800 40px/1.25 Arial,sans-serif;white-space:pre;overflow:hidden;text-shadow:0 2px 0 rgba(0,0,0,.35)}
+.gc-msg{text-align:center;color:#f4e24a;font:800 30px/1.1 Arial,sans-serif;white-space:pre;overflow:hidden}
+.gc-st{margin-top:auto;text-align:center;font:800 38px/1.45 Arial,sans-serif;letter-spacing:1px;color:#fff;text-shadow:0 2px 2px rgba(0,0,0,.45)}
+.gc-st.pulse{animation:gcp 1s steps(2) infinite}@keyframes gcp{50%{filter:brightness(1.5)}}
+.gp-stage.lpa,.gsx .gp-stage.lpa{height:auto;aspect-ratio:640/580}
+.gw-grid.lpa .gw-it{aspect-ratio:640/580}
+.gp-seg{flex-wrap:wrap}
+/* Board studio composition: optional Gran Canaria overhead sign above one or two portrait screens */
+.bs-compose{display:flex;flex-direction:column;align-items:center;background:linear-gradient(180deg,#3b4048,#23272e 30%,#1a1d22)}
+.bs-sign{width:100%;display:flex;justify-content:center;align-items:flex-start;padding-top:12px;box-sizing:border-box;position:relative}
+.bs-sign::before,.bs-sign::after{content:"";position:absolute;top:0;width:10px;height:14px;background:#9aa0a8}.bs-sign::before{left:36%}.bs-sign::after{left:62%}
+.bs-screens{display:flex;gap:24px}
+.bs-screens .bs-board{box-shadow:0 0 0 7px #0d0f13,0 0 0 9px #3a3f47}
+.bs-prev.lpa{background:#1a1d22}
+.lpa-sign{display:flex;align-items:center;gap:22px;background:linear-gradient(180deg,#1c1c1c,#111);padding:18px 34px;height:150px;box-sizing:border-box;border-radius:4px;box-shadow:0 0 0 2px #2c2c2c,0 8px 18px rgba(0,0,0,.5)}
+.lpa-sq{width:104px;height:104px;background:#f7c600;border-radius:8px;display:block;padding:14px;box-sizing:border-box}
+.lpa-w{display:flex;flex-direction:column;line-height:1.02;font-family:"Frutiger","Segoe UI","Helvetica Neue",Arial,sans-serif}
+.lpa-w span{color:#fff;font-size:36px;font-weight:400}.lpa-w b{color:#f7c600;font-size:40px;font-weight:700}
+.gs-lpa>*{flex:none}.gs-lpa .gc-top{height:140px}
