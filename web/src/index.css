@@ -665,3 +665,13 @@ h1,.h1s{letter-spacing:-.6px}h3{letter-spacing:-.2px}.sect{font-size:12px;letter
 .tb-foot{font-size:11px}
 /* header cells never bleed into the next column (OCZEKIWANY|LINIA collision) */
 .tboard .tb-head>span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:clip;padding-right:6px}
+/* v64 scroll fix: lists and sheets scroll vertically only. Anything wider than the phone is clipped instead of turning the
+   whole sheet into a sideways pan (a downward swipe on iPhone was also panning right and pushing the time column off-screen).
+   Intentional horizontal carousels (chips rows, cards) keep their own overflow-x:auto scrollers. */
+html,body{overflow-x:hidden;overscroll-behavior-x:none}
+@supports (overflow:clip){html,body{overflow-x:clip}}
+.sheet-body,.cw-list{overflow-x:hidden!important;overscroll-behavior-x:none}
+@supports (overflow:clip){.sheet-body{overflow-x:clip!important}}
+.sheet-body{overflow-y:auto}
+.qf{flex-wrap:wrap}
+.cw-item{max-width:100%;box-sizing:border-box}
