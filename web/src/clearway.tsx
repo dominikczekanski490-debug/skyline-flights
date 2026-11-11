@@ -32,8 +32,8 @@ export function warmDest() {
   // The heroes are now ~100-250 KB each (1600x1200 for DPR 3), so only pre-warm the whole set on an unmetered, fast connection.
   if (warmed || typeof caches === "undefined") return; warmed = true; const c = (navigator as any).connection;
   if (c?.saveData || c?.type === "cellular" || (c?.effectiveType && c.effectiveType !== "4g")) return;
-  loadDest().then(async j => { const cache = await caches.open("skyline-dest-v2"); const urls = (Object.values(j) as Dest[]).filter(d => d.img).map(d => `/dest/${d.iata}.webp`);
-    for (let i = 0; i < urls.length; i += 8) { const part: string[] = []; for (const u of urls.slice(i, i + 8)) if (!(await cache.match(u))) part.push(u); if (part.length) await cache.addAll(part).catch(() => {}); await new Promise(r => setTimeout(r, 120)); } });
+  loadDest().then(async j => { const cache = await caches.open("skyline-dest-v3"); const urls = (Object.values(j) as Dest[]).filter(d => d.img).map(d => `/dest/${d.iata}.webp`);
+    for (let i = 0; i < urls.length; i += 8) { const part: string[] = []; for (const u of urls.slice(i, i + 8)) if (!(await cache.match(u))) part.push(u); if (part.length) await cache.addAll(part.map(u => new Request(u, { cache: "reload" }))).catch(() => {}); await new Promise(r => setTimeout(r, 120)); } });
 }
 
 // Tiny blurred previews (lazy chunk, ~50 KB) so a photo-shaped preview shows on the first frame; the real WebP replaces it.

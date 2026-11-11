@@ -1,4 +1,4 @@
-const C = "skyline-v30"; const IMG = "skyline-img-v17"; const IMG_MAX = 200; const API = "skyline-api-v1"; const DEST = "skyline-dest-v2"; const API_MAX = 150;
+const C = "skyline-v31"; const IMG = "skyline-img-v17"; const IMG_MAX = 200; const API = "skyline-api-v1"; const DEST = "skyline-dest-v3"; const API_MAX = 150;
 self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(C).then(c => c.addAll(["/", "/manifest.webmanifest", "/icon-192.png"]))); });
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C && k !== IMG && k !== API && k !== DEST).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 // Navigations are network-first (15 s budget for a sleeping free server) so the phone never stays on an old build;
@@ -7,7 +7,7 @@ self.addEventListener("fetch", e => { const u = new URL(e.request.url);
   // Bundled destination hero photos (/dest/*.webp, index.json): cache-first so they show instantly; the Clearway skin pre-fills this cache.
   if (e.request.method === "GET" && u.origin === location.origin && u.pathname.startsWith("/dest/")) { e.respondWith(caches.open(DEST).then(async c => { if (u.pathname.endsWith(".json")) { try { const r = await Promise.race([fetch(u.pathname, { cache: "no-cache" }), new Promise((_, j) => setTimeout(j, 2500))]); if (r.ok) { c.put(u.pathname, r.clone()); return r; } } catch {} const h = await c.match(u.pathname); if (h) return h; } // index.json: network-first so new destinations appear at once
     const hit = await c.match(u.pathname); if (hit) return hit;
-    const r = await fetch(e.request); if (r.ok) c.put(u.pathname, r.clone()); return r; })); return; }
+    const r = await fetch(u.pathname, { cache: "reload" }); if (r.ok) c.put(u.pathname, r.clone()); return r; })); return; } // reload: skip Safari's HTTP cache so a replaced photo never comes back from it
   // Third-party aircraft photos (Planespotters / Wikimedia): stale-while-revalidate, capped at IMG_MAX entries, never pinned forever.
   if (e.request.method === "GET" && (u.pathname === "/api/photo" && u.origin === location.origin || /(^|\.)plnspttrs\.net$|(^|\.)wikimedia\.org$/.test(u.hostname))) { e.respondWith(caches.open(IMG).then(async c => { const hit = await c.match(e.request);
     const net = fetch(e.request).then(async r => { if (r.ok || r.type === "opaque") { await c.put(e.request, r.clone()); const k = await c.keys(); for (const x of k.slice(0, Math.max(0, k.length - IMG_MAX))) await c.delete(x); } return r; }).catch(() => hit);
