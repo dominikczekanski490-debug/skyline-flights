@@ -29,8 +29,10 @@ export function useDest(iata?: string) {
 // Precache every bundled hero photo once the skin is in use (cache-first in the service worker afterwards), so detail screens open instantly.
 let warmed = false;
 export function warmDest() {
-  if (warmed || typeof caches === "undefined") return; warmed = true; const c = (navigator as any).connection; if (c?.saveData) return;
-  loadDest().then(async j => { const cache = await caches.open("skyline-dest-v1"); const urls = (Object.values(j) as Dest[]).filter(d => d.img).map(d => `/dest/${d.iata}.webp`);
+  // The heroes are now ~100-250 KB each (1600x1200 for DPR 3), so only pre-warm the whole set on an unmetered, fast connection.
+  if (warmed || typeof caches === "undefined") return; warmed = true; const c = (navigator as any).connection;
+  if (c?.saveData || c?.type === "cellular" || (c?.effectiveType && c.effectiveType !== "4g")) return;
+  loadDest().then(async j => { const cache = await caches.open("skyline-dest-v2"); const urls = (Object.values(j) as Dest[]).filter(d => d.img).map(d => `/dest/${d.iata}.webp`);
     for (let i = 0; i < urls.length; i += 8) { const part: string[] = []; for (const u of urls.slice(i, i + 8)) if (!(await cache.match(u))) part.push(u); if (part.length) await cache.addAll(part).catch(() => {}); await new Promise(r => setTimeout(r, 120)); } });
 }
 

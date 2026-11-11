@@ -14,7 +14,7 @@ assert.strictEqual(m.capsDate("2026-11-10"), "TUESDAY 10TH NOVEMBER 2026"); asse
 // bundled destination data
 const D = JSON.parse(fs.readFileSync(path.join(here, "../public/dest/index.json"), "utf8")); const att = fs.readFileSync(path.join(here, "../public/dest/ATTRIBUTION.md"), "utf8");
 assert.ok(Object.keys(D).length > 150, "destinations"); for (const k of ["KRK", "MAN", "ACE"]) assert.ok(D[k]?.img, k + " photo");
-for (const [k, v] of Object.entries(D)) { assert.strictEqual(v.iata, k); if (v.img) { const f = path.join(here, "../public/dest", k + ".webp"); assert.ok(fs.existsSync(f), f); assert.ok(fs.statSync(f).size < 90000, k + " size"); assert.ok(v.img.lic && v.img.col, k + " licence/colour"); assert.ok(att.includes(`| ${k} |`), k + " credited"); }
+for (const [k, v] of Object.entries(D)) { assert.strictEqual(v.iata, k); if (v.img) { const f = path.join(here, "../public/dest", k + ".webp"); assert.ok(fs.existsSync(f), f); assert.ok(fs.statSync(f).size <= 250000, k + " size"); /* tools/dest/img.py MAX_BYTES: 1600x1200 heroes for DPR 3 */ assert.ok(v.img.lic && v.img.col, k + " licence/colour"); assert.ok(att.includes(`| ${k} |`), k + " credited"); }
   if (v.climate) { assert.strictEqual(v.climate.hi.length, 12); assert.strictEqual(v.climate.lo.length, 12); v.climate.hi.forEach((h, i) => assert.ok(h >= v.climate.lo[i], k + " hi>=lo")); } }
 const lq = fs.readFileSync(path.join(here, "../src/destlqip.ts"), "utf8"); for (const [k, v] of Object.entries(D)) if (v.img) assert.ok(lq.includes(`"${k}":"`), k + " preview");
 // no Manchester Airports Group / airport logo artwork anywhere in the bundle assets

@@ -1,5 +1,6 @@
-import json,re,math,io,sys,time,html,urllib.parse,urllib.request,concurrent.futures as cf
+import os,json,re,math,io,sys,time,html,urllib.parse,urllib.request,concurrent.futures as cf
 from PIL import Image
+sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 UA={"User-Agent":"SkylineDestGuide/1.0 (https://skyline-flights.onrender.com; dominikczekanski490@gmail.com)"}
 def get(url,raw=False):
   for i in range(4):
@@ -74,19 +75,14 @@ def one(iata,city,lat,lon,country):
       except Exception: img=None
     if img and not BAD.search(img):
       try:
-        ii=get("https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=1100&titles=File:"+urllib.parse.quote(img))["query"]["pages"][0]
+        import img as R  # shared 4:3 1600x1200 WebP q80 renderer (see img.py for the sizing rationale)
+        ii=get("https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&prop=imageinfo&iiprop=url|size|extmetadata&iiurlwidth=%d&titles=File:"%R.THUMB+urllib.parse.quote(img))["query"]["pages"][0]
         if ii.get("imageinfo"):
           inf=ii["imageinfo"][0]; md=inf.get("extmetadata",{}); lic=(md.get("LicenseShortName") or {}).get("value","")
           if lic and re.search(r"CC|Public domain|PD|GFDL|Attribution|FAL",lic,re.I):
-            im=Image.open(io.BytesIO(get(inf["thumburl"],raw=True))).convert("RGB"); w,h=im.size; th=w*9/16
-            if th<=h: top=int((h-th)*0.42); im=im.crop((0,top,w,int(top+th)))
-            else: nw=int(h*16/9); l=(w-nw)//2; im=im.crop((l,0,l+nw,h))
-            im=im.resize((800,450),Image.LANCZOS); col=im.resize((1,1),Image.BOX).getpixel((0,0))
-            for qv in (58,50,42):
-              bio=io.BytesIO(); im.save(bio,"WEBP",quality=qv,method=6)
-              if bio.tell()<70000: break
-            open(f"/tmp/cw/img/{iata}.webp","wb").write(bio.getvalue())
-            r["img"]={"file":img,"page":inf.get("descriptionurl"),"lic":lic,"by":clean((md.get("Artist") or {}).get("value",""))[:120],"col":"#%02x%02x%02x"%col,"kb":round(bio.tell()/1024)}
+            data,colh,_=R.render(Image.open(io.BytesIO(get(R.pick_url(inf),raw=True))),0.42)
+            open(f"/tmp/cw/img/{iata}.webp","wb").write(data)
+            r["img"]={"file":img,"page":inf.get("descriptionurl"),"lic":lic,"by":clean((md.get("Artist") or {}).get("value",""))[:120],"col":colh,"kb":round(len(data)/1024)}
       except Exception as ex: r["imgErr"]=str(ex)[:100]
     r["climate"]=weather(p["title"])
     return r
