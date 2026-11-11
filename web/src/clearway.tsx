@@ -54,8 +54,7 @@ export function Hero({ iata, children, tall, big }: { iata?: string; children?: 
   return <div className={"cw-hero" + (tall ? " tall" : "") + (big ? " big" : "")} style={d?.img?.col ? { backgroundColor: d.img.col } : undefined}>
     {lq && <i className="cw-lq" style={{ backgroundImage: `url(data:image/webp;base64,${lq})` }} />}
     {photo && <img src={`/dest/v3/${iata}.webp`} alt={d?.name || ""} decoding="async" loading="eager" fetchPriority="high" className={ok ? "on" : ""} onLoad={() => setOk(true)} ref={el => { if (el?.complete && el.naturalWidth) setOk(true); }} onError={e => ((e.target as HTMLImageElement).style.display = "none")} />}
-    <i className="cw-hero-shade" />{children}
-    {d?.img && <a className="cw-credit" href={d.img.page} target="_blank" rel="noreferrer">Photo: {d.name}{d.img.by ? " · " + d.img.by : ""} · {d.img.lic}</a>}</div>;
+    <i className="cw-hero-shade" />{children}</div>; // photo credit lives at the bottom of Discover, not on the photo
 }
 
 const ic = { menu: <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18" /></svg>, search: <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>,
@@ -181,7 +180,7 @@ export function DestPage({ iata, from, nav }: { iata: string; from?: any; nav: C
     {c && <><h3>Temp By Month (°C)</h3><div className="cw-temps"><table className="cw-tbl t"><thead><tr><th />{MON.map(m => <th key={m}>{m}</th>)}</tr></thead><tbody><tr><th>High</th>{c.hi.map((v, i) => <td key={i}>{v}</td>)}</tr><tr><th>Low</th>{c.lo.map((v, i) => <td key={i}>{v}</td>)}</tr></tbody></table></div>
       <p className="cw-src">Average daily high/low{c.loc ? ` — ${c.loc}` : ""}. Source: Wikipedia climate table ({c.page}).</p></>}
     <h3>Map</h3><iframe className="cw-map" title={`Map of ${d.name}`} loading="lazy" src={`https://www.openstreetmap.org/export/embed.html?bbox=${d.lon - .25},${d.lat - .15},${d.lon + .25},${d.lat + .15}&layer=mapnik&marker=${d.lat},${d.lon}`} />
-    <p className="cw-src">Text: Wikipedia (CC BY-SA 4.0) · Facts: Wikidata (CC0) · Map © OpenStreetMap contributors</p></div></div>;
+    <p className="cw-src">{d.img && <><a href={d.img.page} target="_blank" rel="noreferrer">Photo: {d.img.by || "Wikimedia Commons"} ({d.img.lic})</a> · </>}Text: Wikipedia (CC BY-SA 4.0) · Facts: Wikidata (CC0) · Map © OpenStreetMap contributors</p></div></div>;
 }
 
 // Settings → top "Theme" row: Clearway featured with a live preview swatch (all skins stay in Appearance below).
