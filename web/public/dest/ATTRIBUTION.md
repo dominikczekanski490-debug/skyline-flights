@@ -162,7 +162,7 @@ Each place was accepted only if the Wikipedia article's coordinates lie within 8
 | KIR | County Kerry | [2019-07-20-Dingle_Lighthouse-0673.jpg](https://commons.wikimedia.org/wiki/File:2019-07-20-Dingle_Lighthouse-0673.jpg) | Superbass | CC BY-SA 4.0 |
 | KLU | Klagenfurt | [Klagenfurt_Villacher_Vorstadt_Kreuzbergl-Stadtblick_20102015_8306.jpg](https://commons.wikimedia.org/wiki/File:Klagenfurt_Villacher_Vorstadt_Kreuzbergl-Stadtblick_20102015_8306.jpg) | Johann Jaritz | CC BY-SA 4.0 |
 | KOI | Kirkwall | [Kirkwall_Harbour.jpg](https://commons.wikimedia.org/wiki/File:Kirkwall_Harbour.jpg) | Stevekeiretsu | CC BY-SA 4.0 |
-| KRK | Kraków | [Krakow_Rynek_Glowny_panorama_2.jpg](https://commons.wikimedia.org/wiki/File:Krakow_Rynek_Glowny_panorama_2.jpg) | Andrzej Otrębski | CC BY-SA 4.0 |
+| KRK | Kraków | [Exterior_of_the_Wawel_Castle_seen_across_the_Vistula_River,_Kraków.jpg](https://commons.wikimedia.org/wiki/File:Exterior_of_the_Wawel_Castle_seen_across_the_Vistula_River,_Krak%C3%B3w.jpg) | Chris Olszewski | CC BY-SA 4.0 |
 | KSC | Košice | [Dóm_svätej_Alžbety.jpg](https://commons.wikimedia.org/wiki/File:D%C3%B3m_sv%C3%A4tej_Al%C5%BEbety.jpg) | Rl91 | GFDL |
 | KTW | Katowice | [Katowice_(50021).jpg](https://commons.wikimedia.org/wiki/File:Katowice_(50021).jpg) | Rhododendrites | CC BY-SA 4.0 |
 | KUL | Kuala Lumpur | [Bukit_Bintang_junction_in_2024_2.jpg](https://commons.wikimedia.org/wiki/File:Bukit_Bintang_junction_in_2024_2.jpg) | Renek78 | CC0 |
