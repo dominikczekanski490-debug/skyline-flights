@@ -24,10 +24,11 @@
 .sg-krk .pl{color:#fbfbf8;text-shadow:0 0 .25em rgba(255,255,255,.28)}
 .sg-krk .en{color:#f3d21a;text-shadow:0 0 .3em rgba(243,210,26,.35)}
 /* 2. Manchester: black backlit box, yellow outlined pictogram squares, big white words, white arrow tiles */
-.sg-man{font-size:4vw;font-size:4cqw;padding:.45em .35em 3em 1.2em;background:linear-gradient(180deg,#0b0b0c,#030303 60%,#060606);border:.07em solid #3a3c40;border-bottom:.22em solid #8c9097;border-radius:.06em;
-  box-shadow:0 0 0 .04em #18191b,0 .7em 1.4em rgba(0,0,0,.6),inset 0 0 2em rgba(255,255,255,.03);margin-right:1.1em}
-.sm-brk{position:absolute;right:-1.15em;top:18%;width:1.1em;height:.62em;border-radius:.1em;background:linear-gradient(#e2e5e9,#8e939a 55%,#c8ccd1)}
-.sm-brk.b{top:46%}
+.sg-man{font-size:4vw;font-size:4cqw;padding:1.1em .35em 4.6em 1.2em;background:linear-gradient(180deg,#0b0b0c,#030303 60%,#060606);border:.07em solid #3a3c40;border-bottom:.22em solid #8c9097;border-radius:.06em;
+  box-shadow:0 0 0 .04em #18191b,0 .7em 1.4em rgba(0,0,0,.6),inset 0 0 2em rgba(255,255,255,.03);margin-right:2.7em}
+.sm-brk{position:absolute;right:-2.05em;top:14%;width:2.05em;height:.62em;border-radius:.1em;background:linear-gradient(#e2e5e9,#8e939a 55%,#c8ccd1)}
+.sm-brk.b{top:auto;bottom:16%}
+.sm-pole{position:absolute;right:-2.75em;top:-6em;bottom:-6em;width:.75em;border-radius:.08em;background:linear-gradient(90deg,#6f747b,#e4e7eb 38%,#b9bdc3 60%,#7d8289)}
 .sm-row{display:flex;align-items:center;justify-content:flex-end;gap:.45em;margin-bottom:.12em}
 .sm-ic{display:flex;gap:.32em;margin-right:.22em}
 .sm-sq{width:1.6em;height:1.6em;box-sizing:border-box;border:.075em solid #f0c419;border-radius:.1em;display:grid;place-items:center;color:#f0c419;font-size:1em;filter:drop-shadow(0 0 .12em rgba(240,196,25,.45))}
@@ -54,11 +55,12 @@
 .sg .sg-al.al-tile{height:.85em;width:2.9em;aspect-ratio:auto;padding:.08em .22em;border-radius:.08em;box-sizing:border-box;flex:none;box-shadow:0 0 0 .04em rgba(0,0,0,.25)}
 .sg .sg-al.al-tile img{object-fit:contain;width:100%;height:100%;display:block;filter:none!important}
 .sg .sg-al.al-tile{background:#fff!important}
+.sg .sg-al.al-tile.al-LH{background:#f9a01b!important}
 .sg-krk .sg-al.al-tile,.sg-man .sg-al.al-tile{height:.8em;width:2.7em}
 /* studio */
 .sg-stage{border-radius:16px;padding:0 6% 7%;background:linear-gradient(180deg,#2b2f37 0%,#1a1d23 40%,#101216 100%);cursor:zoom-in;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
 .sg-stage::before{content:"";display:block;height:10px;margin:0 -8%;background:repeating-linear-gradient(90deg,#3a3f48 0 14px,#30343c 14px 16px);opacity:.8}
-.sg-stage.man{padding-top:24px}
+.sg-stage.man{padding-top:30px;padding-bottom:30px}
 .sg-stage.man::before{margin-bottom:-14px}
 .sg-full{width:min(100%,1100px);margin:auto;display:flex;flex-direction:column;justify-content:center;min-height:100%}
 .sg-themes{margin-top:12px}
@@ -80,3 +82,5 @@
 .gm-art.signs{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:10px;align-items:center;padding:6px 12px 10px}
 .gm-sg{min-width:0;max-height:118px;overflow:hidden;display:flex;align-items:center}
 .gm-sg .sg-hang{height:1.4em}
+
+.sgs input,.sgs select{font-feature-settings:"calt" 0}

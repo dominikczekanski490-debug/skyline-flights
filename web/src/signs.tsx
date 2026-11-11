@@ -66,7 +66,7 @@ export const signLink = (s: SignSpec, origin = "") => `${origin}/#games=signs&s=
 export const signFromHash = (h: string) => sanitize(dec(h.match(/[#&]s=([\w-]+)/)?.[1] || ""));
 
 const Cross = () => <svg className="sg-cross" viewBox="0 0 24 24" aria-label="Pharmacy cross"><path d="M8.5 2h7v6.5H22v7h-6.5V22h-7v-6.5H2v-7h6.5z" fill="#1fa64a" stroke="#fff" strokeWidth="1.2" /></svg>;
-const Al = ({ k }: { k: string }) => <AirlineTile a={{ iata: k, name: AL_NAMES[k] || k }} className="sg-al" mode="colour" />;
+const Al = ({ k }: { k: string }) => <AirlineTile a={{ iata: k, name: AL_NAMES[k] || k }} className={"sg-al al-" + k} mode="colour" />;
 
 /** One sign, sized by its container width (CSS container units), so height follows content and never squashes. */
 export function SignView({ s }: { s: SignSpec }) {
@@ -75,7 +75,7 @@ export function SignView({ s }: { s: SignSpec }) {
     {!!s.corner?.length && <div className="sgk-corner">{s.corner.map(k => <Picto key={k} k={k} />)}</div>}
     {rows.map((r, i) => <div key={i} className={"sgk-row" + (i ? " div" : "")}><span className="sgk-ar"><ArrowSvg a={r.arrow} w={2.6} /></span><span className="sgk-ic">{r.ics.map(k => <Picto key={k} k={k} />)}</span>
       <div className="sgk-lines">{r.lines.map((l, j) => <div key={j} className={j ? "sgk-sub" : "sgk-head"}>{l.t && <span className="pl">{l.t}</span>}{l.en && <span className="en">{l.en}</span>}{l.cross && <Cross />}{l.al?.map(k => <Al key={k} k={k} />)}</div>)}</div></div>)}</div></div>;
-  if (s.theme === "man") return <div className="sg-wrap"><div className="sg sg-man" role="img" aria-label={rows.map(r => r.lines.map(l => l.t).join(" ")).join(", ")}><span className="sm-brk" /><span className="sm-brk b" />
+  if (s.theme === "man") return <div className="sg-wrap"><div className="sg sg-man" role="img" aria-label={rows.map(r => r.lines.map(l => l.t).join(" ")).join(", ")}><span className="sm-pole" /><span className="sm-brk" /><span className="sm-brk b" />
     {rows.map((r, i) => <div key={i} className="sm-row"><span className="sm-ic">{r.ics.map(k => <span key={k} className="sm-sq"><Picto k={k} /></span>)}</span>
       <div className="sm-lines">{r.lines.map((l, j) => <div key={j} className={j ? "sm-sub" : "sm-t"}>{l.t}{l.cross && <Cross />}{l.al?.map(k => <Al key={k} k={k} />)}</div>)}</div>
       <span className={"sm-tile" + (r.arrow === "none" ? " none" : "")}><ArrowSvg a={r.arrow} w={2.4} /></span></div>)}</div></div>;
