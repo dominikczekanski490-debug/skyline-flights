@@ -15,6 +15,6 @@ if (flag) { assert.strictEqual(flag("PL"), "🇵🇱"); assert.strictEqual(CC["U
 const D = JSON.parse(fs.readFileSync(path.join(here, "../public/dest/index.json"), "utf8")); const cc = fs.readFileSync(path.join(here, "../src/countries.ts"), "utf8");
 for (const v of Object.values(D)) assert.ok(cc.includes(JSON.stringify(v.country) + ":"), "flag for " + v.country);
 // hub + each game renders (server-side, effects off)
-assert.ok(renderToStaticMarkup(h(m.GamesView, {})).includes("Quick games"));
-for (const id of ["gate", "board", "signs", ...m.GAMES.map(g => g.id)]) { const html = renderToStaticMarkup(h(m.GamesView, { tab0: id })); assert.ok(html.length > 100, id); }
+const hub = renderToStaticMarkup(h(m.GamesView, {})); assert.ok(hub.includes("Quick games")); assert.ok(hub.includes("Announcement maker"));
+for (const id of ["gate", "board", "signs", "announce", ...m.GAMES.map(g => g.id)]) { const html = renderToStaticMarkup(h(m.GamesView, { tab0: id })); assert.ok(html.length > 100, id); }
 console.log("games ok");

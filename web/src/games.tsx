@@ -13,6 +13,7 @@ import { MapQuiz, TypeGuess, DailyChallenge } from "./v61";
 import { Memory as RouteMemory, Bingo, BeatStats } from "./v60";
 import { CodeQuiz, LaterGame, NatoTrainer } from "./v59";
 import { SignStudio, SignView, DEFAULTS as SIGN_DEFAULTS } from "./signs";
+import { AnnounceStudio } from "./announce";
 import "./games.css";
 
 // ---------- helpers ----------
@@ -194,23 +195,24 @@ const CLASSIC: Def[] = [
   { id: "morse", name: "Morse Ident", sub: "Decode navaid idents", ic: "📶", col: "#334155", C: () => <MorseIdent /> },
 ];
 export const ALL_GAMES = [...GAMES, ...CLASSIC];
-const STUDIOS = ["gate", "board", "signs"];
+const STUDIOS = ["gate", "board", "signs", "announce"];
 export const GAME_IDS = [...STUDIOS, ...ALL_GAMES.map(g => g.id)];
 
 export function GamesView({ x, tab0, init, inTab }: { x?: ReactNode; tab0?: string; init?: GSpec; more?: () => void; inTab?: boolean }) {
   const [t, setT0] = useState<string>(() => tab0 && GAME_IDS.includes(tab0) ? tab0 : "home"); const [bests, setBests] = useState<Best>(readBest);
   const setT = (v: string) => { setT0(v); setBests(readBest()); const h = v === "home" ? (inTab ? "#tab=games" : "#games") : inTab ? `#tab=games&game=${v}` : `#games=${v}`; if (!/[#&][gbs]=/.test(location.hash) || v === "home") history.replaceState(history.state, "", h); document.querySelector(".games")?.scrollIntoView({ block: "start" }); };
-  const g = ALL_GAMES.find(d => d.id === t); const title = t === "gate" ? "Gate studio" : t === "board" ? "Board studio" : t === "signs" ? "Sign studio" : g?.name || "Games";
+  const g = ALL_GAMES.find(d => d.id === t); const title = t === "gate" ? "Gate studio" : t === "board" ? "Board studio" : t === "signs" ? "Sign studio" : t === "announce" ? "Announcement maker" : g?.name || "Games";
   const Card = ({ d }: { d: Def }) => { const b = bests[d.id]; return <button className="gm-tile" onClick={() => setT(d.id)} style={{ ["--c" as any]: d.col }}><span className="gm-ic">{d.ic}</span><b>{d.name}</b><small>{d.sub}</small>{b != null ? <em>Best {b}{d.unit && d.unit.startsWith("/") ? d.unit : d.unit ? " " + d.unit : ""}</em> : d.online ? <em className="on">Needs internet</em> : <em className="new">Play</em>}</button>; };
-  return <div className={"games" + (inTab ? " in-tab" : "")}><div className="gm-hero"><div className="gm-hero-t">{t !== "home" ? <button className="gm-back" onClick={() => setT("home")}>‹ All games</button> : <span className="gm-kick">SKYLINE</span>}<h1>{title}</h1>{t === "home" && <p>Build gate screens, boards and airport signs, then play {GAMES.length + CLASSIC.length} aviation games. Scores stay on this device.</p>}</div>{x}</div>
+  return <div className={"games" + (inTab ? " in-tab" : "")}><div className="gm-hero"><div className="gm-hero-t">{t !== "home" ? <button className="gm-back" onClick={() => setT("home")}>‹ All games</button> : <span className="gm-kick">SKYLINE</span>}<h1>{title}</h1>{t === "home" && <p>Build gate screens, boards, airport signs and announcements, then play {GAMES.length + CLASSIC.length} aviation games. Scores stay on this device.</p>}</div>{x}</div>
     {t === "home" ? <div className="gm-body">
       <h2 className="gm-h">Studios</h2>
       <div className="gm-studios">
         <button className="gm-studio" onClick={() => setT("gate")}><div className="gm-art gates">{[...PRESETS].sort((a, b) => (a.s.style === "lhr" ? 1 : 0) - (b.s.style === "lhr" ? 1 : 0)).map((p, i) => <div key={i} className={"gm-mini " + p.s.style}><Fit w={DIM[p.s.style][0]} h={DIM[p.s.style][1]}><GateScreen s={{ ...p.s, anim: "none" }} /></Fit></div>)}</div><div className="gm-txt"><b>Gate studio</b><small>Animated gate screens in Manchester, Kraków (EN/PL), Heathrow or Gran Canaria style. Share or go fullscreen.</small></div></button>
         <button className="gm-studio" onClick={() => setT("board")}><div className="gm-art board"><div className="gm-flap">{"DEPARTURES".split("").map((c, i) => <i key={i} style={{ animationDelay: i * 90 + "ms" }}>{c}</i>)}</div></div><div className="gm-txt"><b>Board studio</b><small>Build your own departures or arrivals board in 40+ airport styles, with flips and live status changes.</small></div></button>
         <button className="gm-studio" onClick={() => setT("signs")}><div className="gm-art signs">{(["krk", "man", "lhr", "lpa", "fgr"] as const).map(k => <div key={k} className="gm-sg"><SignView s={SIGN_DEFAULTS[k]} /></div>)}</div><div className="gm-txt"><b>Sign studio</b><small>Design hanging airport signs in Kraków, Manchester, Heathrow, Gran Canaria or Fraport Greece style: arrows, pictograms, several languages, share links.</small></div></button>
+        <button className="gm-studio" onClick={() => setT("announce")}><div className="gm-art ann"><div className="gm-ann"><b>LAST CALL</b><small>FR 2134  ·  GATE 32</small></div></div><div className="gm-txt"><b>Announcement maker</b><small>Write and play boarding calls, final calls and more, in the style of Manchester, Kraków, Gran Canaria, Fraport Greece and other airports. Voices come from your iPhone.</small></div></button>
       </div>
       <h2 className="gm-h">Quick games <span>work offline</span></h2><div className="gm-grid">{GAMES.map(d => <Card key={d.id} d={d} />)}</div>
       <h2 className="gm-h">Classics</h2><div className="gm-grid">{CLASSIC.map(d => <Card key={d.id} d={d} />)}</div></div>
-      : <div className="gm-body gm-play">{t === "gate" ? <GateStudio init={init} /> : t === "board" ? <BoardStudio /> : t === "signs" ? <SignStudio /> : g ? <g.C /> : null}</div>}</div>;
+      : <div className="gm-body gm-play">{t === "gate" ? <GateStudio init={init} /> : t === "board" ? <BoardStudio /> : t === "signs" ? <SignStudio /> : t === "announce" ? <AnnounceStudio /> : g ? <g.C /> : null}</div>}</div>;
 }

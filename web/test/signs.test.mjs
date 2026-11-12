@@ -41,5 +41,5 @@ location.hash = ""; assert.ok(R(h(m.SignStudio)).includes("Polski (white"));
 const app = fs.readFileSync(path.join(here, "../src/App.tsx"), "utf8"); assert.ok(app.includes('/[#&]s=/.test(location.hash) ? "signs"'));
 const re = /[#&](?:games|ov=games)(?:=([a-z]+))?(?=&|$)/; assert.strictEqual("#games=signs&s=abc".match(re)[1], "signs"); assert.strictEqual("#skin=clearway&games=signs".match(re)[1], "signs");
 assert.ok(app.includes(re.source.replace(/\//g, "\\/")) || app.includes("(?:games|ov=games)"));
-const g = fs.readFileSync(path.join(here, "../src/games.tsx"), "utf8"); assert.ok(g.includes('"signs"]') && g.includes("[#&][gbs]="));
+const g = fs.readFileSync(path.join(here, "../src/games.tsx"), "utf8"); assert.ok(/"signs"/.test(g) && /"announce"/.test(g) && g.includes("[#&][gbs]="));
 console.log("signs ok");
