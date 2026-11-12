@@ -388,122 +388,219 @@ export async function waitForVoices(speech: SpeechSynthesis, ms = 1800): Promise
   });
 }
 
-export type PlayCtl = { stopped: boolean; osc: { stop: (t?: number) => void }[] };
-export const makeCtl = (): PlayCtl => ({ stopped: false, osc: [] });
+export type PlayCtl = { stopped: boolean; osc: { stop: (t?: number) => void }[]; audio?: HTMLAudioElement | null };
+export const makeCtl = (): PlayCtl => ({ stopped: false, osc: [], audio: null });
 
 export function stopPlayback(ctl: PlayCtl, speech?: SpeechSynthesis | null) {
   ctl.stopped = true;
   try { speech?.cancel(); } catch {}
   for (const o of ctl.osc) { try { o.stop(); } catch {} }
   ctl.osc = [];
+  const a = ctl.audio;
+  if (a) {
+    try { a.pause(); a.currentTime = 0; } catch {}
+  }
 }
 
-class Stopped extends Error { constructor() { super("stopped"); } }
+/** 16-bit mono WAV of the synthesised chime, for HTMLAudioElement (plays with the silent switch off the media channel). */
+export function chimeWav(notes: Note[], sampleRate = 22050): Blob {
+  const seconds = chimeDuration(notes);
+  const n = Math.max(1, Math.ceil(seconds * sampleRate));
+  const samples = new Float32Array(n);
+  for (const note of notes) {
+    const start = Math.floor(Math.max(0, note.t) * sampleRate);
+    const len = Math.floor(Math.max(note.d, 0.05) * sampleRate);
+    const vol = note.v ?? 0.2;
+    const tri = note.type === "triangle";
+    const attack = Math.min(0.018, Math.max(note.d * 0.15, 0.005));
+    const remain = Math.max(note.d - attack, 0.02);
+    const tau = remain / Math.log(Math.max(vol, 0.002) / 0.001);
+    for (let i = 0; i < len && start + i < n; i++) {
+      const tm = i / sampleRate;
+      const phase = 2 * Math.PI * note.f * tm;
+      const s = tri ? (2 / Math.PI) * Math.asin(Math.sin(phase)) : Math.sin(phase);
+      const env = tm < attack ? vol * (tm / attack) : vol * Math.exp(-(tm - attack) / tau);
+      samples[start + i] += s * env;
+    }
+  }
+  const pcm = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = Math.max(-1, Math.min(1, samples[i]));
+    pcm[i] = x < 0 ? x * 0x8000 : x * 0x7fff;
+  }
+  const dataSize = pcm.length * 2;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(buf);
+  const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + dataSize, true); w(8, "WAVE"); w(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, dataSize, true);
+  new Uint8Array(buf, 44).set(new Uint8Array(pcm.buffer, pcm.byteOffset, dataSize));
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+const wavUrls = new Map<string, string>();
+export function chimeUrl(profile: Profile): string {
+  const hit = wavUrls.get(profile.id);
+  if (hit) return hit;
+  try {
+    if (typeof URL !== "undefined" && URL.createObjectURL) {
+      const url = URL.createObjectURL(chimeWav(profile.chime));
+      wavUrls.set(profile.id, url);
+      return url;
+    }
+  } catch {}
+  return "";
+}
 
 export function playChime(ctx: AudioContext, notes: Note[], ctl?: PlayCtl) {
-  const now = ctx.currentTime;
-  for (const n of notes) {
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = n.type || "sine";
-    o.frequency.value = n.f;
-    const t0 = now + n.t;
-    const vol = n.v ?? 0.2;
-    g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(vol, t0 + 0.018);
-    g.gain.exponentialRampToValueAtTime(0.001, t0 + Math.max(n.d, 0.05));
-    o.connect(g); g.connect(ctx.destination);
-    o.start(t0); o.stop(t0 + n.d + 0.05);
-    ctl?.osc.push(o);
-  }
+  try {
+    const now = ctx.currentTime;
+    for (const n of notes) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = n.type || "sine";
+      o.frequency.value = n.f;
+      const t0 = now + n.t;
+      const vol = n.v ?? 0.2;
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(vol, t0 + 0.018);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + Math.max(n.d, 0.05));
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t0); o.stop(t0 + n.d + 0.05);
+      ctl?.osc.push(o);
+    }
+  } catch {}
   return chimeDuration(notes);
 }
 
-const sleep = (ms: number, ctl: PlayCtl) => new Promise<void>((res, rej) => setTimeout(() => ctl.stopped ? rej(new Stopped()) : res(), ms));
+function pauseText(seconds: number) {
+  const n = Math.max(1, Math.round(seconds / 0.35));
+  return Array(n).fill(",").join(" ");
+}
 
 export type PlayHooks = {
-  speech: SpeechSynthesis;
-  ctx: AudioContext;
+  speech?: SpeechSynthesis | null;
+  ctx?: AudioContext | null;
   ctl: PlayCtl;
+  audio?: HTMLAudioElement | null;
+  AudioEl?: { new(): HTMLAudioElement };
   onLine?: (i: number) => void;
   onNote?: (msg: string) => void;
   onDone?: () => void;
+  onMissingSpeech?: () => void;
 };
 
-export async function playAnnouncement(lines: Line[], profile: Profile, hooks: PlayHooks): Promise<void> {
-  const { speech, ctx, ctl } = hooks;
+/** Queue the chime and every spoken line synchronously — must run inside the tap handler, with no await before speak/play. */
+export function startAnnouncement(lines: Line[], profile: Profile, hooks: PlayHooks): void {
+  const { ctl } = hooks;
+  if (ctl.stopped) return;
+
   try {
-    try { await ctx.resume?.(); } catch {}
-    // Unlock iOS speech from the same tap; a silent utterance primes getVoices().
-    await new Promise<void>(res => {
-      try {
-        const U = (globalThis as any).SpeechSynthesisUtterance;
-        if (!U) return res();
-        const u = new U(" ");
-        u.volume = 0; u.rate = 2;
-        u.onend = u.onerror = () => res();
-        speech.speak(u);
-        setTimeout(res, 280);
-      } catch { res(); }
-    });
-    if (ctl.stopped) throw new Stopped();
-    const voices = await waitForVoices(speech);
-    if (ctl.stopped) throw new Stopped();
-    const dur = playChime(ctx, profile.chime, ctl);
-    await sleep(Math.round(dur * 1000), ctl);
-    const notes: string[] = [];
-    for (let i = 0; i < lines.length; i++) {
-      if (ctl.stopped) throw new Stopped();
-      hooks.onLine?.(i);
-      let line = lines[i];
-      let voice = pickVoice(voices, line.lang, profile.enLocale);
-      if (!voice && line.lang !== "en") {
+    const nav = typeof navigator !== "undefined" ? (navigator as any) : null;
+    if (nav?.audioSession) nav.audioSession.type = "playback";
+  } catch {}
+
+  // Chime through an <audio> element (not muted by the iPhone silent switch). AudioContext is a fallback only.
+  try {
+    const AudioEl = hooks.AudioEl || (typeof Audio !== "undefined" ? Audio : null);
+    const audio = hooks.audio || (AudioEl ? new AudioEl() : null);
+    if (audio) {
+      ctl.audio = audio;
+      try { audio.setAttribute?.("playsinline", "true"); } catch {}
+      try { (audio as any).playsInline = true; } catch {}
+      audio.preload = "auto";
+      const url = chimeUrl(profile);
+      if (url) audio.src = url;
+      const played = audio.play?.();
+      if (played && typeof (played as Promise<void>).catch === "function") {
+        (played as Promise<void>).catch(() => { if (hooks.ctx && !ctl.stopped) playChime(hooks.ctx, profile.chime, ctl); });
+      }
+    } else if (hooks.ctx) {
+      playChime(hooks.ctx, profile.chime, ctl);
+    }
+  } catch {
+    try { if (hooks.ctx) playChime(hooks.ctx, profile.chime, ctl); } catch {}
+  }
+
+  const speech = hooks.speech;
+  const U = (globalThis as any).SpeechSynthesisUtterance;
+  if (!speech || typeof speech.speak !== "function" || !U) {
+    hooks.onMissingSpeech?.();
+    const a = ctl.audio;
+    if (a) a.onended = () => { if (!ctl.stopped) hooks.onDone?.(); };
+    else hooks.onDone?.();
+    return;
+  }
+
+  try { speech.cancel(); } catch {}
+
+  let voices: SpeechSynthesisVoice[] = [];
+  try { voices = speech.getVoices?.() || []; } catch {}
+
+  try {
+    const pause = new U(pauseText(chimeDuration(profile.chime)));
+    pause.volume = 0.01;
+    pause.rate = 0.5;
+    pause.lang = profile.enLocale || "en-GB";
+    speech.speak(pause);
+  } catch {}
+
+  const queued: number[] = [];
+  const notes: string[] = [];
+  const finishIfLast = (i: number) => {
+    if (ctl.stopped) return;
+    if (i === queued[queued.length - 1]) { hooks.onLine?.(-1); hooks.onDone?.(); }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    try {
+      const line = lines[i];
+      let text = line.speak || line.text;
+      let lang = line.lang;
+      let voice: SpeechSynthesisVoice | null = null;
+      try { voice = voices.length ? pickVoice(voices, lang, profile.enLocale) : null; } catch {}
+      if (voices.length && !voice && lang !== "en") {
         const en = lines.find(l => l.lang === "en");
-        const enVoice = pickVoice(voices, "en", profile.enLocale);
-        const label = LANG_NAME[line.lang];
-        if (en && enVoice) {
+        let enVoice: SpeechSynthesisVoice | null = null;
+        try { enVoice = pickVoice(voices, "en", profile.enLocale); } catch {}
+        const label = LANG_NAME[lang];
+        if (en) {
           notes.push(`${label} isn’t installed on this phone, so that part is read in English.`);
-          hooks.onNote?.(notes[notes.length - 1]);
-          line = en; voice = enVoice;
+          text = en.speak || en.text;
+          lang = "en";
+          voice = enVoice;
         } else {
           notes.push(`${label} isn’t installed on this phone, so that part was skipped.`);
-          hooks.onNote?.(notes[notes.length - 1]);
           continue;
         }
-      } else if (!voice) {
-        notes.push("This phone has no spoken voices installed.");
-        hooks.onNote?.(notes[notes.length - 1]);
-        continue;
-      } else {
-        hooks.onNote?.(notes[notes.length - 1] || "");
       }
-      await speakLine(speech, line, voice, ctl);
-      if (i < lines.length - 1) await sleep(700, ctl);
-    }
-    hooks.onLine?.(-1);
-    hooks.onDone?.();
-  } catch (e) {
-    if (!(e instanceof Stopped)) throw e;
-    hooks.onLine?.(-1);
+      const u = new U(text);
+      u.lang = (voice && voice.lang) || LANG_TAG[lang] || profile.enLocale;
+      try { if (voice) u.voice = voice; } catch {}
+      u.rate = 0.88;
+      u.pitch = 0.98;
+      const idx = i;
+      u.onstart = () => { if (!ctl.stopped) hooks.onLine?.(idx); };
+      u.onend = () => finishIfLast(idx);
+      u.onerror = () => finishIfLast(idx);
+      speech.speak(u);
+      queued.push(idx);
+    } catch {}
   }
+  if (notes.length) hooks.onNote?.(notes[0]);
+  if (!queued.length) hooks.onDone?.();
 }
 
-function speakLine(speech: SpeechSynthesis, line: Line, voice: SpeechSynthesisVoice | null, ctl: PlayCtl): Promise<void> {
-  return new Promise((res, rej) => {
-    if (ctl.stopped) return rej(new Stopped());
-    let settled = false;
-    const done = () => { if (settled) return; settled = true; ctl.stopped ? rej(new Stopped()) : res(); };
-    try {
-      const U = (globalThis as any).SpeechSynthesisUtterance;
-      const u = new U(line.speak || line.text);
-      u.lang = voice?.lang || LANG_TAG[line.lang];
-      if (voice) u.voice = voice;
-      u.rate = 0.88; u.pitch = 0.98;
-      u.onend = done;
-      u.onerror = done;
-      speech.speak(u);
-      const max = Math.max(5000, ((u.text as string).length / 8) * 1000 + 2500);
-      setTimeout(done, max);
-    } catch (e) { done(); }
+/** Test helper: startAnnouncement plus a promise that settles when playback ends (or is already stopped). */
+export function playAnnouncement(lines: Line[], profile: Profile, hooks: PlayHooks): Promise<void> {
+  return new Promise(resolve => {
+    if (hooks.ctl.stopped) { resolve(); return; }
+    const prev = hooks.onDone;
+    startAnnouncement(lines, profile, {
+      ...hooks,
+      onDone: () => { try { prev?.(); } catch {} resolve(); },
+    });
   });
 }

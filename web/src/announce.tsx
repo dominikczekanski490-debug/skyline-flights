@@ -4,7 +4,7 @@ import { LOGOS } from "./logoset";
 import { AL_NAMES } from "./alnames";
 import { load, type Flight } from "./lib";
 import {
-  AIRPORTS, ANN_TYPES, FEATURED, airportOf, buildScript, defaultFields, fmtFlight, makeCtl, playAnnouncement,
+  AIRPORTS, ANN_TYPES, FEATURED, airportOf, buildScript, defaultFields, fmtFlight, makeCtl, startAnnouncement,
   profileOf, stopPlayback, type AnnType, type Fields, type PlayCtl,
 } from "./announcer";
 import "./announce.css";
@@ -30,6 +30,7 @@ export function AnnounceStudio() {
   const [mine, setMine] = useState<Flight[]>([]);
   const ctl = useRef<PlayCtl>(makeCtl());
   const ctxRef = useRef<AudioContext | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const AL = useMemo(alList, []);
   const groups = useMemo(() => {
     const g: { name: string; items: typeof AIRPORTS }[] = [{ name: "Featured", items: FEATURED.map(c => airportOf(c)) }];
@@ -64,25 +65,39 @@ export function AnnounceStudio() {
 
   const stop = () => { stopPlayback(ctl.current, typeof speechSynthesis !== "undefined" ? speechSynthesis : null); setPlaying(false); setLine(-1); };
 
-  const play = async () => {
+  // Must stay synchronous: iOS Safari drops speechSynthesis.speak() if anything is awaited before the first speak() in the tap.
+  const play = () => {
     stop();
     const next = makeCtl(); ctl.current = next;
     setNote(""); setPlaying(true); setLine(-1);
     try {
-      const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
-      if (!ctxRef.current || ctxRef.current.state === "closed") ctxRef.current = new AC();
-      const ctx = ctxRef.current;
-      try { await ctx.resume(); } catch {}
-      await playAnnouncement(lines, profile, {
-        speech: speechSynthesis, ctx, ctl: next,
+      try {
+        const nav = navigator as any;
+        if (nav.audioSession) nav.audioSession.type = "playback";
+      } catch {}
+      try {
+        const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext | undefined;
+        if (AC) {
+          if (!ctxRef.current || ctxRef.current.state === "closed") ctxRef.current = new AC();
+          ctxRef.current.resume?.();
+        }
+      } catch {}
+      if (typeof speechSynthesis === "undefined") {
+        setNote("Spoken voices aren’t available on this phone, so only the chime can play.");
+      }
+      startAnnouncement(lines, profile, {
+        speech: typeof speechSynthesis !== "undefined" ? speechSynthesis : null,
+        ctx: ctxRef.current,
+        ctl: next,
+        audio: audioRef.current,
         onLine: setLine,
         onNote: m => setNote(m || ""),
+        onMissingSpeech: () => setNote("Spoken voices aren’t available on this phone, so only the chime can play."),
         onDone: () => { setPlaying(false); setLine(-1); },
       });
     } catch {
       setNote("This phone couldn’t play the announcement.");
-    } finally {
-      if (!next.stopped) { setPlaying(false); }
+      setPlaying(false);
     }
   };
 
@@ -90,6 +105,7 @@ export function AnnounceStudio() {
   const showFlight = type !== "security";
 
   return <div className="gsx ann">
+    <audio ref={audioRef} playsInline preload="auto" hidden />
     <div className="ann-stage" aria-hidden="true">
       <div className="ann-panel">
         <div className="ann-grille">{Array.from({ length: 48 }, (_, i) => <i key={i} />)}</div>
@@ -104,6 +120,7 @@ export function AnnounceStudio() {
       <button className="gp-btn pri" onClick={playing ? stop : play} aria-pressed={playing}>{playing ? "Stop" : "Play announcement"}</button>
       {playing && <button className="gp-btn" onClick={stop}>Stop</button>}
     </div>
+    <p className="ann-hint">No sound? Turn off silent mode and turn the volume up.</p>
     {note && <p className="ann-miss">{note}</p>}
     <label className="gsx-f"><span>Airport</span>
       <select value={iata} onChange={e => setIata(e.target.value)} aria-label="Airport">

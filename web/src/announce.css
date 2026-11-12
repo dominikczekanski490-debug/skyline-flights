@@ -26,3 +26,5 @@
 .gm-ann{background:#12151c;border:1px solid #3a3428;border-radius:12px;padding:14px 18px;text-align:center;box-shadow:inset 0 0 0 3px #1a1c22,0 8px 20px rgba(0,0,0,.4);min-width:168px}
 .gm-ann b{display:block;color:#ffbf47;font-size:18px;letter-spacing:3px;font-weight:800}
 .gm-ann small{display:block;margin-top:4px;color:#c9c3b6;font-size:10px;letter-spacing:1px}
+
+.ann-hint{margin:8px 2px 0;font-size:12px;line-height:1.4;color:rgba(244,246,251,.66)}

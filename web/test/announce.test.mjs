@@ -77,29 +77,54 @@ assert.strictEqual(m.pickVoice(voices, "pl", "en-GB").name, "Zosia");
 assert.strictEqual(m.pickVoice(voices, "el", "en-GB"), null);
 assert.strictEqual(m.pickVoice([], "en", "en-GB"), null);
 
-// Stubbed play path: AudioContext + speechSynthesis, including a missing Greek voice fallback.
+// WAV chime is a real RIFF file
+const wav = m.chimeWav(m.profileOf("MAN").chime);
+assert.ok(wav && wav.size > 44);
+const head = new Uint8Array(await wav.slice(0, 12).arrayBuffer());
+assert.strictEqual(String.fromCharCode(...head.slice(0, 4)), "RIFF");
+assert.strictEqual(String.fromCharCode(...head.slice(8, 12)), "WAVE");
+
+// Stubbed play path: HTMLAudioElement chime + speechSynthesis, including a missing Greek voice fallback.
+if (!globalThis.URL) globalThis.URL = {};
+if (!URL.createObjectURL) URL.createObjectURL = () => "blob:chime";
+if (!URL.revokeObjectURL) URL.revokeObjectURL = () => {};
 class Osc { constructor() { this.frequency = { value: 0 }; this.type = "sine"; this.connect = () => this; this.start = () => {}; this.stop = () => {}; } }
 class Gain { constructor() { this.gain = { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }; this.connect = () => this; } }
 class Ctx { constructor() { this.currentTime = 0; this.state = "running"; this.destination = {}; } resume() { return Promise.resolve(); } createOscillator() { return new Osc(); } createGain() { return new Gain(); } }
-class Utt { constructor(text) { this.text = text; this.lang = ""; this.rate = 1; this.pitch = 1; this.volume = 1; this.voice = null; this.onend = null; this.onerror = null; } }
+class Utt { constructor(text) { this.text = text; this.lang = ""; this.rate = 1; this.pitch = 1; this.volume = 1; this.voice = null; this.onend = null; this.onstart = null; this.onerror = null; } }
 globalThis.SpeechSynthesisUtterance = Utt;
 const spoken = [];
+const order = [];
+class AudioStub {
+  constructor() { this.src = ""; this.preload = ""; this.currentTime = 0; }
+  setAttribute() {}
+  play() { order.push("audio.play"); return Promise.resolve(); }
+  pause() { order.push("audio.pause"); }
+}
 const speech = {
   getVoices() { return voices; },
-  speak(u) { spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 0); },
-  cancel() {},
+  speak(u) { order.push("speak"); spoken.push(u.text); setTimeout(() => { u.onstart && u.onstart(); u.onend && u.onend(); }, 0); },
+  cancel() { order.push("cancel"); },
   addEventListener() {},
   removeEventListener() {},
 };
 const ctl = m.makeCtl();
 const lines = m.buildScript("SKG", "boarding", f);
 const ev = { line: [], notes: [] };
-await m.playAnnouncement(lines, m.profileOf("SKG"), {
-  speech, ctx: new Ctx(), ctl,
+order.push("handler-start");
+const playP = m.playAnnouncement(lines, m.profileOf("SKG"), {
+  speech, ctx: new Ctx(), ctl, AudioEl: AudioStub,
   onLine: i => ev.line.push(i),
   onNote: n => n && ev.notes.push(n),
 });
-assert.ok(spoken.length >= 2, "spoke chime-unlock plus lines, got " + spoken.length);
+order.push("handler-end");
+assert.ok(order.indexOf("cancel") > order.indexOf("handler-start"), "cancel in handler: " + order);
+assert.ok(order.indexOf("speak") > order.indexOf("cancel"), "speak after cancel: " + order);
+assert.ok(order.indexOf("speak") < order.indexOf("handler-end"), "speak is synchronous in the click handler: " + order);
+assert.ok(order.indexOf("audio.play") < order.indexOf("handler-end") && order.indexOf("audio.play") > order.indexOf("handler-start"), "audio.play in handler: " + order);
+assert.ok(order.filter(x => x === "speak").length >= 2, "pause + lines queued immediately: " + order);
+await playP;
+assert.ok(spoken.length >= 2, "spoke chime-pause plus lines, got " + spoken.length);
 assert.ok(ev.notes.some(n => /Greek/i.test(n)), "missing Greek voice note: " + ev.notes.join(" | "));
 assert.ok(spoken.some(t => /boarding|gate/i.test(t)), "English fallback spoken");
 assert.ok(ev.line.includes(0) && ev.line.includes(1));
@@ -107,8 +132,14 @@ assert.ok(ev.line.includes(0) && ev.line.includes(1));
 const ctl2 = m.makeCtl();
 m.stopPlayback(ctl2, speech);
 const ev2 = { done: false };
-await m.playAnnouncement(lines, m.profileOf("MAN"), { speech, ctx: new Ctx(), ctl: ctl2, onDone: () => ev2.done = true });
+await m.playAnnouncement(lines, m.profileOf("MAN"), { speech, ctx: new Ctx(), ctl: ctl2, AudioEl: AudioStub, onDone: () => ev2.done = true });
 assert.strictEqual(ev2.done, false, "already-stopped play should not finish");
+
+// missing speechSynthesis: chime still plays, missing-speech hook fires, no throw
+const ev3 = { miss: false, done: false, played: false };
+class Audio2 { constructor() { this.src = ""; this.preload = ""; } setAttribute() {} play() { ev3.played = true; return Promise.resolve(); } pause() {} }
+m.startAnnouncement(lines, m.profileOf("MAN"), { speech: null, ctl: m.makeCtl(), AudioEl: Audio2, onMissingSpeech: () => ev3.miss = true, onDone: () => ev3.done = true });
+assert.ok(ev3.miss && ev3.played, "missing speech still plays chime");
 
 // Studio renders (load games bundle so AnnounceStudio is wired)
 const gout = path.join(here, ".games-ann-bundle.mjs");
@@ -121,5 +152,6 @@ assert.ok(html.includes("Play announcement"), html.slice(0, 200));
 assert.ok(html.includes("Manchester") && html.includes("Kraków") && html.includes("Gran Canaria"));
 assert.ok(html.includes("Thessaloniki") && html.includes("Frankfurt") && html.includes("Heathrow"));
 assert.ok(html.includes("recreations") && /not official/i.test(html));
+assert.ok(html.includes("No sound? Turn off silent mode and turn the volume up."));
 assert.ok(!/aena|MAG |Heathrow Airport Limited|kraków airport logo/i.test(html.replace(/Heathrow/g, "")));
 console.log("announce ok");
