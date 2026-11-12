@@ -5,7 +5,7 @@ import { AL_NAMES } from "./alnames";
 import { load, type Flight } from "./lib";
 import {
   AIRPORTS, ANN_TYPES, FEATURED, airportOf, buildScript, defaultFields, fmtFlight, makeCtl, startAnnouncement,
-  profileOf, stopPlayback, type AnnType, type Fields, type PlayCtl,
+  profileOf, runSoundCheck, setAudioSession, stopPlayback, type AnnType, type Fields, type PlayCtl,
 } from "./announcer";
 import "./announce.css";
 
@@ -27,6 +27,7 @@ export function AnnounceStudio() {
   const [playing, setPlaying] = useState(false);
   const [line, setLine] = useState(-1);
   const [note, setNote] = useState("");
+  const [diag, setDiag] = useState<string[] | null>(null);
   const [mine, setMine] = useState<Flight[]>([]);
   const ctl = useRef<PlayCtl>(makeCtl());
   const ctxRef = useRef<AudioContext | null>(null);
@@ -65,47 +66,62 @@ export function AnnounceStudio() {
 
   const stop = () => { stopPlayback(ctl.current, typeof speechSynthesis !== "undefined" ? speechSynthesis : null); setPlaying(false); setLine(-1); };
 
-  // Must stay synchronous: iOS Safari drops speechSynthesis.speak() if anything is awaited before the first speak() in the tap.
+  const unlockCtx = () => {
+    try {
+      const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext | undefined;
+      if (AC) {
+        if (!ctxRef.current || ctxRef.current.state === "closed") ctxRef.current = new AC();
+        ctxRef.current.resume?.();
+      }
+    } catch {}
+    return ctxRef.current;
+  };
+
+  // Must stay synchronous: no await, and no speech.cancel(), before the first speak() in this tap.
   const play = () => {
-    stop();
+    ctl.current.stopped = true;
+    try { if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; } } catch {}
     const next = makeCtl(); ctl.current = next;
     setNote(""); setPlaying(true); setLine(-1);
     try {
-      try {
-        const nav = navigator as any;
-        if (nav.audioSession) nav.audioSession.type = "playback";
-      } catch {}
-      try {
-        const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext | undefined;
-        if (AC) {
-          if (!ctxRef.current || ctxRef.current.state === "closed") ctxRef.current = new AC();
-          ctxRef.current.resume?.();
-        }
-      } catch {}
+      setAudioSession();
+      const ctx = unlockCtx();
       if (typeof speechSynthesis === "undefined") {
         setNote("Spoken voices aren’t available on this phone, so only the chime can play.");
       }
       startAnnouncement(lines, profile, {
         speech: typeof speechSynthesis !== "undefined" ? speechSynthesis : null,
-        ctx: ctxRef.current,
+        ctx,
         ctl: next,
         audio: audioRef.current,
         onLine: setLine,
         onNote: m => setNote(m || ""),
         onMissingSpeech: () => setNote("Spoken voices aren’t available on this phone, so only the chime can play."),
+        onPlayError: m => setNote(m),
         onDone: () => { setPlaying(false); setLine(-1); },
       });
-    } catch {
-      setNote("This phone couldn’t play the announcement.");
+    } catch (e: any) {
+      setNote(`This phone couldn’t play the announcement.${e?.name ? " " + e.name : ""}`);
       setPlaying(false);
     }
+  };
+
+  const soundCheck = () => {
+    try { setAudioSession(); } catch {}
+    const ctx = unlockCtx();
+    runSoundCheck({
+      audio: audioRef.current,
+      ctx,
+      speech: typeof speechSynthesis !== "undefined" ? speechSynthesis : null,
+      onUpdate: setDiag,
+    });
   };
 
   const needs = (k: keyof Fields) => type === "gatechange" ? k === "newGate" : type === "delay" ? k === "delay" : type === "passenger" ? k === "passenger" : type === "baggage" ? k === "belt" || k === "from" : type === "welcome" ? k === "from" : false;
   const showFlight = type !== "security";
 
   return <div className="gsx ann">
-    <audio ref={audioRef} playsInline preload="auto" hidden />
+    <audio ref={audioRef} className="ann-audio" playsInline preload="auto" />
     <div className="ann-stage" aria-hidden="true">
       <div className="ann-panel">
         <div className="ann-grille">{Array.from({ length: 48 }, (_, i) => <i key={i} />)}</div>
@@ -119,9 +135,11 @@ export function AnnounceStudio() {
     <div className="gp-ctl">
       <button className="gp-btn pri" onClick={playing ? stop : play} aria-pressed={playing}>{playing ? "Stop" : "Play announcement"}</button>
       {playing && <button className="gp-btn" onClick={stop}>Stop</button>}
+      <button className="gp-btn" onClick={soundCheck}>Sound check</button>
     </div>
     <p className="ann-hint">No sound? Turn off silent mode and turn the volume up.</p>
     {note && <p className="ann-miss">{note}</p>}
+    {diag && <pre className="ann-diag" aria-live="polite">{diag.join("\n")}</pre>}
     <label className="gsx-f"><span>Airport</span>
       <select value={iata} onChange={e => setIata(e.target.value)} aria-label="Airport">
         {groups.map(g => <optgroup key={g.name} label={g.name}>{g.items.map(a => <option key={g.name + a.iata} value={a.iata}>{a.iata} · {a.name}</option>)}</optgroup>)}

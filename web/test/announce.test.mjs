@@ -77,17 +77,28 @@ assert.strictEqual(m.pickVoice(voices, "pl", "en-GB").name, "Zosia");
 assert.strictEqual(m.pickVoice(voices, "el", "en-GB"), null);
 assert.strictEqual(m.pickVoice([], "en", "en-GB"), null);
 
-// WAV chime is a real RIFF file
-const wav = m.chimeWav(m.profileOf("MAN").chime);
-assert.ok(wav && wav.size > 44);
-const head = new Uint8Array(await wav.slice(0, 12).arrayBuffer());
-assert.strictEqual(String.fromCharCode(...head.slice(0, 4)), "RIFF");
-assert.strictEqual(String.fromCharCode(...head.slice(8, 12)), "WAVE");
+// WAV chime is a valid 44-byte-header 16-bit mono PCM file, loud enough to hear
+const rendered = m.renderWav(m.profileOf("MAN").chime);
+assert.ok(rendered.bytes.length > 44);
+assert.strictEqual(rendered.sampleRate, 24000);
+assert.ok(rendered.peak >= 0.65, "peak " + rendered.peak);
+const bytes = rendered.bytes;
+assert.strictEqual(String.fromCharCode(...bytes.slice(0, 4)), "RIFF");
+assert.strictEqual(String.fromCharCode(...bytes.slice(8, 12)), "WAVE");
+assert.strictEqual(bytes[20] | (bytes[21] << 8), 1, "PCM format");
+assert.strictEqual(bytes[22] | (bytes[23] << 8), 1, "mono");
+assert.strictEqual(bytes[34] | (bytes[35] << 8), 16, "16-bit");
+const rate = bytes[24] | (bytes[25] << 8) | (bytes[26] << 16) | (bytes[27] << 24);
+assert.ok(rate === 24000 || rate === 44100, "rate " + rate);
+const uri = m.chimeDataUri(m.profileOf("MAN").chime);
+assert.ok(uri.startsWith("data:audio/wav;base64,") && uri.length > 80);
+const beepFile = fs.readFileSync(path.join(here, "../public/announce/beep.wav"));
+assert.ok(beepFile.length > 44 && beepFile[0] === 0x52);
+assert.ok(fs.existsSync(path.join(here, "../public/announce/chime-man.wav")));
+const ios = m.iosInfo("Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X)");
+assert.strictEqual(ios.ios, true); assert.strictEqual(ios.version, "18.3");
 
 // Stubbed play path: HTMLAudioElement chime + speechSynthesis, including a missing Greek voice fallback.
-if (!globalThis.URL) globalThis.URL = {};
-if (!URL.createObjectURL) URL.createObjectURL = () => "blob:chime";
-if (!URL.revokeObjectURL) URL.revokeObjectURL = () => {};
 class Osc { constructor() { this.frequency = { value: 0 }; this.type = "sine"; this.connect = () => this; this.start = () => {}; this.stop = () => {}; } }
 class Gain { constructor() { this.gain = { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }; this.connect = () => this; } }
 class Ctx { constructor() { this.currentTime = 0; this.state = "running"; this.destination = {}; } resume() { return Promise.resolve(); } createOscillator() { return new Osc(); } createGain() { return new Gain(); } }
@@ -118,13 +129,16 @@ const playP = m.playAnnouncement(lines, m.profileOf("SKG"), {
   onNote: n => n && ev.notes.push(n),
 });
 order.push("handler-end");
-assert.ok(order.indexOf("cancel") > order.indexOf("handler-start"), "cancel in handler: " + order);
-assert.ok(order.indexOf("speak") > order.indexOf("cancel"), "speak after cancel: " + order);
-assert.ok(order.indexOf("speak") < order.indexOf("handler-end"), "speak is synchronous in the click handler: " + order);
-assert.ok(order.indexOf("audio.play") < order.indexOf("handler-end") && order.indexOf("audio.play") > order.indexOf("handler-start"), "audio.play in handler: " + order);
-assert.ok(order.filter(x => x === "speak").length >= 2, "pause + lines queued immediately: " + order);
+const mid = order.slice(order.indexOf("handler-start") + 1, order.indexOf("handler-end"));
+assert.ok(!mid.includes("cancel"), "must not cancel() in the same tick as speak(): " + order);
+assert.ok(mid.includes("speak"), "speak is synchronous in the click handler: " + order);
+assert.ok(mid.includes("audio.play"), "audio.play in handler: " + order);
+assert.ok(order.indexOf("audio.play") < order.indexOf("speak"), "audio.play runs before speak: " + order);
+assert.ok(mid.filter(x => x === "speak").length >= 2, "all lines queued immediately: " + order);
+assert.ok(m.heldUtterances.length >= 2, "utterances held so WebKit cannot GC them");
+assert.ok(m.heldUtterances.every(u => u.volume === 1 && u.rate === 0.95 && u.pitch === 1));
 await playP;
-assert.ok(spoken.length >= 2, "spoke chime-pause plus lines, got " + spoken.length);
+assert.ok(spoken.length >= 2, "spoke lines, got " + spoken.length);
 assert.ok(ev.notes.some(n => /Greek/i.test(n)), "missing Greek voice note: " + ev.notes.join(" | "));
 assert.ok(spoken.some(t => /boarding|gate/i.test(t)), "English fallback spoken");
 assert.ok(ev.line.includes(0) && ev.line.includes(1));
@@ -141,6 +155,32 @@ class Audio2 { constructor() { this.src = ""; this.preload = ""; } setAttribute(
 m.startAnnouncement(lines, m.profileOf("MAN"), { speech: null, ctl: m.makeCtl(), AudioEl: Audio2, onMissingSpeech: () => ev3.miss = true, onDone: () => ev3.done = true });
 assert.ok(ev3.miss && ev3.played, "missing speech still plays chime");
 
+// Sound check: all three paths start in the tap, report is readable
+const checkOrder = [];
+const reports = [];
+class Audio3 {
+  constructor() { this.src = ""; this.preload = ""; this.currentTime = 0; }
+  setAttribute() {}
+  play() { checkOrder.push("audio.play"); return Promise.resolve(); }
+  pause() {}
+}
+const speech3 = {
+  getVoices() { return voices; },
+  speak(u) { checkOrder.push("speak:" + u.text); setTimeout(() => { u.onstart && u.onstart(); u.onend && u.onend(); }, 0); },
+  cancel() { checkOrder.push("cancel"); },
+};
+checkOrder.push("check-start");
+m.runSoundCheck({ audio: new Audio3(), ctx: new Ctx(), speech: speech3, onUpdate: lines => reports.push(lines.slice()) });
+checkOrder.push("check-end");
+const cMid = checkOrder.slice(checkOrder.indexOf("check-start") + 1, checkOrder.indexOf("check-end"));
+assert.ok(!cMid.includes("cancel"), "sound check must not cancel() before speak: " + checkOrder);
+assert.ok(cMid.includes("audio.play") && cMid.some(x => String(x).startsWith("speak:")), "beep and speech start in the tap: " + checkOrder);
+assert.ok(cMid.some(x => x === "speak:Testing one two three"), checkOrder);
+const last = reports[reports.length - 1].join("\n");
+for (const key of ["speechSynthesis:", "voices:", "audioSession:", "standalone:", "HTML audio.play():", "utterance:", "AudioContext:", "iOS version:", "user agent:"]) {
+  assert.ok(reports[0].some(l => l.startsWith(key)), "report has " + key + ": " + reports[0].join(" | "));
+}
+
 // Studio renders (load games bundle so AnnounceStudio is wired)
 const gout = path.join(here, ".games-ann-bundle.mjs");
 await build({ input: path.join(here, "../src/games.tsx"), platform: "node", external: [/^react/, /^maplibre/, /^three/, /^framer-motion/], moduleTypes: { ".css": "empty", ".woff2": "empty", ".png": "empty", ".webp": "empty" }, logLevel: "silent", output: { file: gout, format: "esm", codeSplitting: false }, write: true });
@@ -153,5 +193,7 @@ assert.ok(html.includes("Manchester") && html.includes("Kraków") && html.includ
 assert.ok(html.includes("Thessaloniki") && html.includes("Frankfurt") && html.includes("Heathrow"));
 assert.ok(html.includes("recreations") && /not official/i.test(html));
 assert.ok(html.includes("No sound? Turn off silent mode and turn the volume up."));
+assert.ok(html.includes("Sound check"));
+assert.ok(!/\shidden[\s>]/.test(html), "audio element must not be hidden");
 assert.ok(!/aena|MAG |Heathrow Airport Limited|kraków airport logo/i.test(html.replace(/Heathrow/g, "")));
 console.log("announce ok");

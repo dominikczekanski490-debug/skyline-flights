@@ -28,3 +28,7 @@
 .gm-ann small{display:block;margin-top:4px;color:#c9c3b6;font-size:10px;letter-spacing:1px}
 
 .ann-hint{margin:8px 2px 0;font-size:12px;line-height:1.4;color:rgba(244,246,251,.66)}
+
+.ann-audio{position:absolute;width:32px;height:32px;margin:0;padding:0;border:0;opacity:.02;pointer-events:none}
+.ann{position:relative}
+.ann-diag{margin:10px 0 0;padding:12px 14px;border-radius:14px;border:1px solid rgba(255,216,74,.35);background:#111729;color:#f4f6fb;font:12px/1.45 ui-monospace,"SF Mono",Menlo,monospace;white-space:pre-wrap;word-break:break-word;-webkit-user-select:text;user-select:text}

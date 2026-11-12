@@ -402,15 +402,17 @@ export function stopPlayback(ctl: PlayCtl, speech?: SpeechSynthesis | null) {
   }
 }
 
-/** 16-bit mono WAV of the synthesised chime, for HTMLAudioElement (plays with the silent switch off the media channel). */
-export function chimeWav(notes: Note[], sampleRate = 22050): Blob {
-  const seconds = chimeDuration(notes);
+export const WAV_RATE = 24000;
+
+/** Render notes to 16-bit mono PCM WAV bytes (44-byte header) and the float peak before normalisation. */
+export function renderWav(notes: Note[], sampleRate = WAV_RATE, peakTarget = 0.72): { bytes: Uint8Array; peak: number; rawPeak: number; sampleRate: number } {
+  const seconds = Math.max(chimeDuration(notes), 0.08);
   const n = Math.max(1, Math.ceil(seconds * sampleRate));
   const samples = new Float32Array(n);
   for (const note of notes) {
     const start = Math.floor(Math.max(0, note.t) * sampleRate);
     const len = Math.floor(Math.max(note.d, 0.05) * sampleRate);
-    const vol = note.v ?? 0.2;
+    const vol = note.v ?? 0.55;
     const tri = note.type === "triangle";
     const attack = Math.min(0.018, Math.max(note.d * 0.15, 0.005));
     const remain = Math.max(note.d - attack, 0.02);
@@ -423,9 +425,14 @@ export function chimeWav(notes: Note[], sampleRate = 22050): Blob {
       samples[start + i] += s * env;
     }
   }
+  let rawPeak = 0;
+  for (let i = 0; i < n; i++) rawPeak = Math.max(rawPeak, Math.abs(samples[i]));
+  const gain = rawPeak > 0 ? peakTarget / rawPeak : 0;
   const pcm = new Int16Array(n);
+  let peak = 0;
   for (let i = 0; i < n; i++) {
-    const x = Math.max(-1, Math.min(1, samples[i]));
+    const x = Math.max(-1, Math.min(1, samples[i] * gain));
+    peak = Math.max(peak, Math.abs(x));
     pcm[i] = x < 0 ? x * 0x8000 : x * 0x7fff;
   }
   const dataSize = pcm.length * 2;
@@ -437,22 +444,32 @@ export function chimeWav(notes: Note[], sampleRate = 22050): Blob {
   v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true);
   v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, dataSize, true);
   new Uint8Array(buf, 44).set(new Uint8Array(pcm.buffer, pcm.byteOffset, dataSize));
-  return new Blob([buf], { type: "audio/wav" });
+  return { bytes: new Uint8Array(buf), peak, rawPeak, sampleRate };
 }
 
-const wavUrls = new Map<string, string>();
-export function chimeUrl(profile: Profile): string {
-  const hit = wavUrls.get(profile.id);
-  if (hit) return hit;
-  try {
-    if (typeof URL !== "undefined" && URL.createObjectURL) {
-      const url = URL.createObjectURL(chimeWav(profile.chime));
-      wavUrls.set(profile.id, url);
-      return url;
-    }
-  } catch {}
-  return "";
+export function chimeWav(notes: Note[], sampleRate = WAV_RATE): Blob {
+  const { bytes } = renderWav(notes, sampleRate);
+  return new Blob([bytes.buffer as ArrayBuffer], { type: "audio/wav" });
 }
+
+export function encodeDataUri(bytes: Uint8Array): string {
+  let bin = "";
+  const step = 0x8000;
+  for (let i = 0; i < bytes.length; i += step) {
+    bin += String.fromCharCode(...bytes.subarray(i, Math.min(i + step, bytes.length)));
+  }
+  const b64 = typeof btoa === "function" ? btoa(bin) : (globalThis as any).Buffer.from(bytes).toString("base64");
+  return "data:audio/wav;base64," + b64;
+}
+
+export function chimeDataUri(notes: Note[]): string {
+  return encodeDataUri(renderWav(notes).bytes);
+}
+
+export const BEEP_NOTES: Note[] = [{ f: 880, t: 0, d: 0.45, v: 0.7 }];
+export const beepDataUri = () => chimeDataUri(BEEP_NOTES);
+export const chimeSrc = (profile: Profile) => `/announce/chime-${profile.id}.wav`;
+export const BEEP_SRC = "/announce/beep.wav";
 
 export function playChime(ctx: AudioContext, notes: Note[], ctl?: PlayCtl) {
   try {
@@ -463,7 +480,7 @@ export function playChime(ctx: AudioContext, notes: Note[], ctl?: PlayCtl) {
       o.type = n.type || "sine";
       o.frequency.value = n.f;
       const t0 = now + n.t;
-      const vol = n.v ?? 0.2;
+      const vol = Math.max(n.v ?? 0.35, 0.28);
       g.gain.setValueAtTime(0, t0);
       g.gain.linearRampToValueAtTime(vol, t0 + 0.018);
       g.gain.exponentialRampToValueAtTime(0.001, t0 + Math.max(n.d, 0.05));
@@ -475,9 +492,41 @@ export function playChime(ctx: AudioContext, notes: Note[], ctl?: PlayCtl) {
   return chimeDuration(notes);
 }
 
-function pauseText(seconds: number) {
-  const n = Math.max(1, Math.round(seconds / 0.35));
-  return Array(n).fill(",").join(" ");
+export function setAudioSession(): string {
+  try {
+    const s = typeof navigator !== "undefined" ? (navigator as any).audioSession : null;
+    if (!s) return "not supported";
+    try { s.type = "playback"; } catch (e: any) { return `supported, setting playback threw ${e?.name || e}${s.type ? ` (type=${s.type})` : ""}`; }
+    return `supported, type=${s.type || "playback"}`;
+  } catch (e: any) {
+    return `error: ${e?.name || e}`;
+  }
+}
+
+export function iosInfo(ua = typeof navigator !== "undefined" ? navigator.userAgent : "") {
+  const ios = /iPhone|iPad|iPod/i.test(ua);
+  const m = ua.match(/OS (\d+)[._](\d+)/);
+  let standalone = false;
+  try {
+    standalone = !!(typeof navigator !== "undefined" && ((navigator as any).standalone || (typeof matchMedia === "function" && matchMedia("(display-mode: standalone)").matches)));
+  } catch {}
+  return { ios, version: m ? `${m[1]}.${m[2]}` : ios ? "unknown" : "not iOS", standalone, ua: ua || "(none)" };
+}
+
+/** Keep utterance objects alive — WebKit can drop speech if they are garbage-collected. */
+export const heldUtterances: SpeechSynthesisUtterance[] = [];
+export function holdUtterance(u: SpeechSynthesisUtterance) {
+  heldUtterances.push(u);
+  if (heldUtterances.length > 40) heldUtterances.splice(0, heldUtterances.length - 20);
+}
+
+function startHtmlAudio(audio: HTMLAudioElement, src: string): Promise<void> | void {
+  try { audio.setAttribute?.("playsinline", "true"); } catch {}
+  try { (audio as any).playsInline = true; } catch {}
+  try { audio.preload = "auto"; } catch {}
+  audio.src = src;
+  try { audio.currentTime = 0; } catch {}
+  return audio.play?.();
 }
 
 export type PlayHooks = {
@@ -490,37 +539,44 @@ export type PlayHooks = {
   onNote?: (msg: string) => void;
   onDone?: () => void;
   onMissingSpeech?: () => void;
+  onPlayError?: (msg: string) => void;
 };
 
-/** Queue the chime and every spoken line synchronously — must run inside the tap handler, with no await before speak/play. */
+/** Queue the chime and every spoken line synchronously — must run inside the tap, with no await and no cancel() before speak(). */
 export function startAnnouncement(lines: Line[], profile: Profile, hooks: PlayHooks): void {
   const { ctl } = hooks;
   if (ctl.stopped) return;
 
-  try {
-    const nav = typeof navigator !== "undefined" ? (navigator as any) : null;
-    if (nav?.audioSession) nav.audioSession.type = "playback";
-  } catch {}
+  setAudioSession();
 
-  // Chime through an <audio> element (not muted by the iPhone silent switch). AudioContext is a fallback only.
+  // HTML audio first, in the same tick. Prefer a same-origin file; fall back to a data URI (no blob: URLs — flaky in standalone iOS).
   try {
     const AudioEl = hooks.AudioEl || (typeof Audio !== "undefined" ? Audio : null);
     const audio = hooks.audio || (AudioEl ? new AudioEl() : null);
     if (audio) {
       ctl.audio = audio;
-      try { audio.setAttribute?.("playsinline", "true"); } catch {}
-      try { (audio as any).playsInline = true; } catch {}
-      audio.preload = "auto";
-      const url = chimeUrl(profile);
-      if (url) audio.src = url;
-      const played = audio.play?.();
+      const played = startHtmlAudio(audio, chimeSrc(profile));
       if (played && typeof (played as Promise<void>).catch === "function") {
-        (played as Promise<void>).catch(() => { if (hooks.ctx && !ctl.stopped) playChime(hooks.ctx, profile.chime, ctl); });
+        (played as Promise<void>).catch((err: any) => {
+          try {
+            const retry = startHtmlAudio(audio, chimeDataUri(profile.chime));
+            if (retry && typeof (retry as Promise<void>).catch === "function") {
+              (retry as Promise<void>).catch((err2: any) => {
+                hooks.onPlayError?.(`HTML audio: ${err2?.name || err2 || err?.name || err}`);
+                if (hooks.ctx && !ctl.stopped) playChime(hooks.ctx, profile.chime, ctl);
+              });
+            }
+          } catch {
+            hooks.onPlayError?.(String(err?.name || err));
+            if (hooks.ctx && !ctl.stopped) playChime(hooks.ctx, profile.chime, ctl);
+          }
+        });
       }
     } else if (hooks.ctx) {
       playChime(hooks.ctx, profile.chime, ctl);
     }
-  } catch {
+  } catch (e: any) {
+    hooks.onPlayError?.(String(e?.name || e));
     try { if (hooks.ctx) playChime(hooks.ctx, profile.chime, ctl); } catch {}
   }
 
@@ -534,18 +590,10 @@ export function startAnnouncement(lines: Line[], profile: Profile, hooks: PlayHo
     return;
   }
 
-  try { speech.cancel(); } catch {}
+  // Do not call speech.cancel() here: on iOS, cancel() in the same tick as speak() can swallow the utterance.
 
   let voices: SpeechSynthesisVoice[] = [];
   try { voices = speech.getVoices?.() || []; } catch {}
-
-  try {
-    const pause = new U(pauseText(chimeDuration(profile.chime)));
-    pause.volume = 0.01;
-    pause.rate = 0.5;
-    pause.lang = profile.enLocale || "en-GB";
-    speech.speak(pause);
-  } catch {}
 
   const queued: number[] = [];
   const notes: string[] = [];
@@ -560,7 +608,7 @@ export function startAnnouncement(lines: Line[], profile: Profile, hooks: PlayHo
       let text = line.speak || line.text;
       let lang = line.lang;
       let voice: SpeechSynthesisVoice | null = null;
-      try { voice = voices.length ? pickVoice(voices, lang, profile.enLocale) : null; } catch {}
+      try { if (voices.length) voice = pickVoice(voices, lang, profile.enLocale); } catch {}
       if (voices.length && !voice && lang !== "en") {
         const en = lines.find(l => l.lang === "en");
         let enVoice: SpeechSynthesisVoice | null = null;
@@ -579,15 +627,22 @@ export function startAnnouncement(lines: Line[], profile: Profile, hooks: PlayHo
       const u = new U(text);
       u.lang = (voice && voice.lang) || LANG_TAG[lang] || profile.enLocale;
       try { if (voice) u.voice = voice; } catch {}
-      u.rate = 0.88;
-      u.pitch = 0.98;
+      u.volume = 1;
+      u.rate = 0.95;
+      u.pitch = 1;
       const idx = i;
       u.onstart = () => { if (!ctl.stopped) hooks.onLine?.(idx); };
       u.onend = () => finishIfLast(idx);
-      u.onerror = () => finishIfLast(idx);
+      u.onerror = (ev: any) => {
+        hooks.onPlayError?.(`Speech error: ${ev?.error || ev?.name || "onerror"}`);
+        finishIfLast(idx);
+      };
+      holdUtterance(u);
       speech.speak(u);
       queued.push(idx);
-    } catch {}
+    } catch (e: any) {
+      hooks.onPlayError?.(`Speech setup: ${e?.name || e}`);
+    }
   }
   if (notes.length) hooks.onNote?.(notes[0]);
   if (!queued.length) hooks.onDone?.();
@@ -603,4 +658,121 @@ export function playAnnouncement(lines: Line[], profile: Profile, hooks: PlayHoo
       onDone: () => { try { prev?.(); } catch {} resolve(); },
     });
   });
+}
+
+export type SoundCheckUpdate = (lines: string[]) => void;
+
+export function runSoundCheck(opts: {
+  audio?: HTMLAudioElement | null;
+  AudioEl?: { new(): HTMLAudioElement };
+  ctx?: AudioContext | null;
+  speech?: SpeechSynthesis | null;
+  onUpdate: SoundCheckUpdate;
+}): void {
+  const info = iosInfo();
+  const session = setAudioSession();
+  let voices: SpeechSynthesisVoice[] = [];
+  try { voices = opts.speech?.getVoices?.() || []; } catch {}
+  const voiceList = voices.slice(0, 6).map(v => `${v.name} (${v.lang})`).join(", ") || "none";
+  const state: Record<string, string> = {
+    speech: opts.speech && typeof opts.speech.speak === "function" ? "yes" : "NO",
+    voices: `${voices.length}${voices.length ? " — " + voiceList : ""}`,
+    session,
+    standalone: info.standalone ? "yes (Home Screen / standalone)" : "no",
+    html: "play() not called",
+    utter: opts.speech ? "queued, waiting for events" : "speechSynthesis missing",
+    ctx: opts.ctx ? (opts.ctx.state || "unknown") : "not created",
+    ios: info.ios ? info.version : "not iOS",
+    ua: info.ua,
+  };
+  const lines = () => [
+    `speechSynthesis: ${state.speech}`,
+    `voices: ${state.voices}`,
+    `audioSession: ${state.session}`,
+    `standalone: ${state.standalone}`,
+    `HTML audio.play(): ${state.html}`,
+    `utterance: ${state.utter}`,
+    `AudioContext: ${state.ctx}`,
+    `iOS version: ${state.ios}`,
+    `user agent: ${state.ua}`,
+  ];
+  opts.onUpdate(lines());
+
+  try {
+    const AudioEl = opts.AudioEl || (typeof Audio !== "undefined" ? Audio : null);
+    const audio = opts.audio || (AudioEl ? new AudioEl() : null);
+    if (audio) {
+      const played = startHtmlAudio(audio, BEEP_SRC);
+      if (played && typeof (played as Promise<void>).then === "function") {
+        (played as Promise<void>).then(() => { state.html = "ok"; opts.onUpdate(lines()); }).catch((err: any) => {
+          state.html = `${err?.name || "Error"}: ${err?.message || err}`;
+          try {
+            const retry = startHtmlAudio(audio, beepDataUri());
+            if (retry && typeof (retry as Promise<void>).then === "function") {
+              (retry as Promise<void>).then(() => { state.html = `${state.html} — data URI retry: ok`; opts.onUpdate(lines()); })
+                .catch((err2: any) => { state.html = `${state.html} — data URI retry: ${err2?.name || err2}`; opts.onUpdate(lines()); });
+            }
+          } catch (e2: any) { state.html = `${state.html} — data URI retry threw ${e2?.name || e2}`; opts.onUpdate(lines()); }
+          opts.onUpdate(lines());
+        });
+      } else {
+        state.html = played === undefined ? "play() returned nothing" : "ok (no promise)";
+        opts.onUpdate(lines());
+      }
+      audio.onerror = () => {
+        const code = (audio as any).error?.code;
+        const msg = (audio as any).error?.message;
+        state.html = `${state.html} (element error code=${code ?? "?"} ${msg || ""})`.trim();
+        opts.onUpdate(lines());
+      };
+    } else {
+      state.html = "no <audio> element";
+      opts.onUpdate(lines());
+    }
+  } catch (e: any) {
+    state.html = `threw ${e?.name || e}: ${e?.message || ""}`.trim();
+    opts.onUpdate(lines());
+  }
+
+  try {
+    if (opts.ctx) {
+      try { opts.ctx.resume?.(); } catch {}
+      state.ctx = opts.ctx.state || state.ctx;
+      playChime(opts.ctx, BEEP_NOTES);
+      state.ctx = `${opts.ctx.state || "unknown"} — beep started`;
+      opts.onUpdate(lines());
+    }
+  } catch (e: any) {
+    state.ctx = `error ${e?.name || e}`;
+    opts.onUpdate(lines());
+  }
+
+  try {
+    const speech = opts.speech;
+    const U = (globalThis as any).SpeechSynthesisUtterance;
+    if (speech && U) {
+      const u = new U("Testing one two three");
+      u.lang = "en-GB";
+      u.volume = 1;
+      u.rate = 0.95;
+      u.pitch = 1;
+      try {
+        const v = voices.length ? pickVoice(voices, "en", "en-GB") : null;
+        if (v) { u.voice = v; u.lang = v.lang || u.lang; }
+      } catch {}
+      u.onstart = () => { state.utter = "onstart — speaking"; opts.onUpdate(lines()); };
+      u.onend = () => { state.utter = `${state.utter.includes("onstart") ? "onstart, " : ""}onend`; opts.onUpdate(lines()); };
+      u.onerror = (ev: any) => { state.utter = `onerror: ${ev?.error || ev?.name || "unknown"}`; opts.onUpdate(lines()); };
+      holdUtterance(u);
+      speech.speak(u);
+      state.utter = "speak() called, waiting for events";
+      opts.onUpdate(lines());
+    } else {
+      state.utter = "speechSynthesis missing";
+      opts.onUpdate(lines());
+    }
+  } catch (e: any) {
+    state.utter = `threw ${e?.name || e}: ${e?.message || ""}`.trim();
+    opts.onUpdate(lines());
+  }
 }
