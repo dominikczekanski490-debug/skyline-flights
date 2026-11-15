@@ -250,3 +250,10 @@ button.ev-row{-webkit-appearance:none;appearance:none;border:0;margin:0;backgrou
   .ev-board.asia .ev-name{font-size:14px}
   .ev-edit-row{grid-template-columns:auto 1fr 64px auto}
 }
+/* postcard maker */
+.ev-stage .ev-mute{right:auto;left:8px}
+.ev-photo{display:flex;gap:12px;align-items:center}
+.ev-photo-t{flex:0 0 112px;height:63px;border-radius:10px;background:#1b2236 center/cover no-repeat;border:1px solid rgba(255,255,255,.2)}
+.ev-photo-b{display:flex;flex-direction:column;gap:8px;min-width:0}
+.ev-photo-b .ev-styles{margin:0}
+.ev-form small{font-weight:500;opacity:.6}

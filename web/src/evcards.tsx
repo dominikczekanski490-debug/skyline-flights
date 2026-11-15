@@ -19,7 +19,7 @@ const rng = (seed: number) => { let s = seed; return () => ((s = (s * 16807) % 2
 
 const FONTS = ["800 100px 'Baloo 2'", "700 40px 'Baloo 2'", "700 100px 'Fredoka Variable'", "900 100px Montserrat", "700 40px Montserrat", "600 30px Montserrat", "700 100px Outfit"];
 let fontsPromise: Promise<unknown> | null = null;
-function useFontsReady() {
+export function useFontsReady() {
   const [ok, setOk] = useState(typeof document === "undefined");
   useEffect(() => {
     let dead = false; const done = () => { if (!dead) setOk(true); };
@@ -34,7 +34,7 @@ function useFontsReady() {
 }
 
 /** Largest font size (≤ max) at which text fits target width, measured with the real webfont. */
-function fitSize(text: string, font: (px: number) => string, target: number, max: number, spacingEm = 0, ok = true) {
+export function fitSize(text: string, font: (px: number) => string, target: number, max: number, spacingEm = 0, ok = true) {
   if (!ok || typeof document === "undefined") return max;
   const g = document.createElement("canvas").getContext("2d"); if (!g) return max;
   g.font = font(100);
@@ -228,7 +228,7 @@ function useThermalGL(cv: { current: HTMLCanvasElement | null }) {
 }
 
 /** Cursive looped ℓ drawn as a stroke, sized to Outfit's ascender (0.7em) and stem weight. */
-const Ell = ({ w }: { w: number }) => (
+export const Ell = ({ w }: { w: number }) => (
   <svg className="sc-ell" viewBox="0 0 40 72" aria-hidden="true" style={{ strokeWidth: w }}>
     <path d="M3.5 63 C15 55 30 39 30 21 C30 10 26 5.2 21 5.2 C15 5.2 12 12 12 23 L12 54 C12 63.5 16.5 67 23 67 C28 67 32 64 35.5 60" />
   </svg>

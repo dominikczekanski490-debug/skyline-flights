@@ -1,0 +1,47 @@
+// Eurovision Picture Postcard: timeline constants, SSR markup, studio tab, audio engine iOS unlock path, sample photo.
+import { build } from "rolldown"; import fs from "fs"; import assert from "assert"; import path from "path"; import { fileURLToPath, pathToFileURL } from "url";
+const here = path.dirname(fileURLToPath(import.meta.url));
+globalThis.innerWidth = 390; globalThis.innerHeight = 844;
+globalThis.location = { hash: "", origin: "https://x" }; globalThis.history = { replaceState() {}, state: null };
+globalThis.matchMedia = q => ({ matches: false, media: q, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false; } });
+globalThis.localStorage = { _: {}, getItem(k) { return this._[k] ?? null; }, setItem(k, v) { this._[k] = String(v); }, removeItem(k) { delete this._[k]; } };
+globalThis.requestAnimationFrame = cb => setTimeout(() => cb(Date.now()), 0);
+globalThis.cancelAnimationFrame = id => clearTimeout(id);
+
+const out = path.join(here, ".pc-ui.mjs");
+await build({ input: path.join(here, "../src/eurovision.tsx"), platform: "node", external: [/^react/], moduleTypes: { ".css": "empty", ".png": "empty", ".webp": "empty", ".svg": "empty" }, logLevel: "silent", output: { file: out, format: "esm", codeSplitting: false }, write: true });
+const ui = await import(pathToFileURL(out).href); fs.unlinkSync(out);
+const pcOut = path.join(here, ".pc-mod.mjs");
+await build({ input: path.join(here, "../src/evpostcard.tsx"), platform: "node", external: [/^react/], moduleTypes: { ".css": "empty" }, logLevel: "silent", output: { file: pcOut, format: "esm", codeSplitting: false }, write: true });
+const pc = await import(pathToFileURL(pcOut).href); fs.unlinkSync(pcOut);
+const { createElement: h } = await import("react");
+const { renderToStaticMarkup } = await import("react-dom/server");
+
+assert.strictEqual(pc.PC_LEN, 15);
+assert.strictEqual(pc.SAMPLE_PHOTO, "/ev/sample-postcard.webp");
+assert.ok(fs.statSync(path.join(here, "../public/ev/sample-postcard.webp")).size > 10000, "bundled sample photo");
+
+const info = { country: "Philippines", cc: "PH", artist: "CARMELLE", song: "Sobra-Sobra", lyrics: "A & B" };
+for (const style of ["asia", "esc", "jesc"]) {
+  const m = renderToStaticMarkup(h(pc.PostcardTV, { style, info, photo: pc.SAMPLE_PHOTO, start: null, onPlay() {} }));
+  assert.ok(m.includes("Fan-made recreation"), style + " note");
+  assert.ok(m.includes("Philippines"), style + " country (screen-reader text)");
+  assert.ok(m.includes("CARMELLE"), style + " artist");
+  assert.ok(m.includes("Play postcard"), style + " play button");
+  assert.ok(m.includes("/flags/4x3/ph.svg"), style + " flag");
+  assert.ok(!/ebu|eurovision\.tv|official heart logo/i.test(m), "no official marks " + style);
+}
+const studio = renderToStaticMarkup(h(ui.EuroStudio));
+assert.ok(studio.includes(">Postcard<"), "Postcard tab");
+
+// audio engine: iPhone unlock path + original synthesis only (no audio files)
+const a = fs.readFileSync(path.join(here, "../src/evaudio.ts"), "utf8");
+assert.match(a, /audioSession/); assert.match(a, /"playback"/);
+assert.match(a, /createBuffer\(1, 1, 22050\)/, "silent-buffer unlock");
+assert.match(a, /webkitAudioContext/);
+assert.ok(!/\.(mp3|m4a|wav|ogg|aac)\b/i.test(a), "no audio files");
+// the photo is local only: no upload code in the postcard module
+const p = fs.readFileSync(path.join(here, "../src/evpostcard.tsx"), "utf8");
+assert.ok(!/fetch\(|XMLHttpRequest|sendBeacon|FormData/.test(p), "photo never uploaded");
+assert.match(p, /indexedDB/);
+console.log("postcard ok");

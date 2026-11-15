@@ -21,6 +21,8 @@ import {
 import "./eurovision.css";
 import { JescBoard } from "./evjesc";
 import { StageCardTV } from "./evcards";
+import { PostcardTV, SAMPLE_PHOTO, loadPhoto, savePhoto, downscalePhoto, type PcInfo } from "./evpostcard";
+import { unlockAudio, playPostcard, playCardSting, stopAll, isMuted, setMuted } from "./evaudio";
 export { jescLayout } from "./evjesc";
 
 const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -190,7 +192,7 @@ function Seg({ value, opts, onChange }: { value: string; opts: { id: string; lab
 
 export function EuroStudio() {
   const [store, setStore] = useState<EvStore>(() => defaultSafe());
-  const [tab, setTab] = useState<"stage" | "board">("stage");
+  const [tab, setTab] = useState<"stage" | "board" | "postcard">("stage");
   const [style, setStyle] = useState<EvStyle>("asia");
   const [play, setPlay] = useState(0);
   const [full, setFull] = useState(false);
@@ -201,6 +203,18 @@ export function EuroStudio() {
   const [flash, setFlash] = useState<string | undefined>();
   const [addCc, setAddCc] = useState("");
   const ready = useRef(false);
+  // postcard maker
+  const [pcs, setPcs] = useState<Record<EvStyle, PcInfo>>(() => loadPcs());
+  const [photoSrc, setPhotoSrc] = useState<"sample" | "mine">("sample");
+  const [myPhoto, setMyPhoto] = useState<string | null>(null);
+  const [pcStart, setPcStart] = useState<number | null>(null);
+  const [muted, setMute] = useState(false);
+  const [photoErr, setPhotoErr] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { setMute(isMuted()); setPcs(loadPcs()); loadPhoto().then(u => { if (u) { setMyPhoto(u); setPhotoSrc("mine"); } }); }, []);
+  useEffect(() => { if (ready.current) savePcs(pcs); }, [pcs]);
+  useEffect(() => { setPcStart(null); stopAll(); }, [tab, style]);
+  useEffect(() => () => stopAll(), []);
 
   useEffect(() => { setStore(loadStore()); ready.current = true; }, []);
   useEffect(() => { if (ready.current) saveStore(store); }, [store]);
@@ -231,8 +245,25 @@ export function EuroStudio() {
     setTimeout(() => setFlash(undefined), 700);
   };
 
-  const preview = (isFull: boolean) => tab === "stage"
-    ? <div className="ev-stage tv"><StageCard card={card} play={play} full={isFull} /><button className="ev-replay" type="button" aria-label="Replay animation" onClick={e => { e.stopPropagation(); setPlay(n => n + 1); }}>↻</button></div>
+  const pc = pcs[style];
+  const patchPc = (p: Partial<PcInfo>) => setPcs(x => ({ ...x, [style]: { ...x[style], ...p } }));
+  // Sound must start inside the tap itself (iPhone): unlock synchronously, then schedule.
+  const replayCard = () => { if (!isMuted()) { unlockAudio(); playCardSting(style); } setPlay(n => n + 1); };
+  const playPc = () => { unlockAudio(); const a = playPostcard(style); setPcStart(performance.now() + (a ? Math.max(0, (a.at - a.ctx.currentTime) * 1000) : 0)); };
+  const toggleMute = () => { const m = !muted; setMute(m); if (!m) unlockAudio(); setMuted(m); };
+  const pickPhoto = async (f: File | undefined) => {
+    if (!f) return; setPhotoErr("");
+    try { const u = await downscalePhoto(f); setMyPhoto(u); setPhotoSrc("mine"); setPcStart(null); await savePhoto(u); }
+    catch { setPhotoErr("Couldn't open that photo — try another one."); }
+  };
+  const photo = photoSrc === "mine" && myPhoto ? myPhoto : SAMPLE_PHOTO;
+  const soundBtn = <button type="button" className="ev-replay ev-mute" aria-label={muted ? "Turn sound on" : "Mute sound"} aria-pressed={muted} onClick={e => { e.stopPropagation(); toggleMute(); }}>{muted ? "🔇" : "🔊"}</button>;
+
+  const preview = (isFull: boolean) => tab === "postcard"
+    ? <div className="ev-stage tv ev-pc"><PostcardTV style={style} info={pc} photo={photo} start={pcStart} full={isFull} onPlay={playPc} />
+        {pcStart != null && <button className="ev-replay" type="button" aria-label="Play postcard again" onClick={e => { e.stopPropagation(); playPc(); }}>↻</button>}{soundBtn}</div>
+    : tab === "stage"
+    ? <div className="ev-stage tv"><StageCard card={card} play={play} full={isFull} /><button className="ev-replay" type="button" aria-label="Replay animation" onClick={e => { e.stopPropagation(); replayCard(); }}>↻</button>{soundBtn}</div>
     : <div className={"ev-board-wrap" + (style === "jesc" ? " jb" : "")}><ScoreBoard board={board} wide={isFull || wide} full={isFull} play={play} highlight={flash} onPick={reveal ? id => { if (pick != null) award(id, pick); } : undefined} /></div>;
 
   return (
@@ -240,12 +271,16 @@ export function EuroStudio() {
       <div className="ev-tabs" role="tablist">
         <button type="button" role="tab" className={tab === "stage" ? "on" : ""} aria-selected={tab === "stage"} onClick={() => setTab("stage")}>Stage</button>
         <button type="button" role="tab" className={tab === "board" ? "on" : ""} aria-selected={tab === "board"} onClick={() => setTab("board")}>Scoreboard</button>
+        <button type="button" role="tab" className={tab === "postcard" ? "on" : ""} aria-selected={tab === "postcard"} onClick={() => setTab("postcard")}>Postcard</button>
       </div>
       <Seg value={style} opts={EV_STYLES.map(s => ({ id: s, label: EV_STYLE_LABEL[s] }))} onChange={id => setStyle(id as EvStyle)} />
       {preview(false)}
       <div className="ev-actions">
-        {(tab === "stage" || style === "jesc") && <button type="button" className="ev-btn" onClick={() => setPlay(n => n + 1)}>Replay</button>}
-        <button type="button" className="ev-btn pri" onClick={() => setFull(true)}>⛶ Fullscreen</button>
+        {tab === "postcard" && <button type="button" className="ev-btn pri" onClick={playPc}>▶ Play</button>}
+        {tab === "stage" && <button type="button" className="ev-btn" onClick={replayCard}>Replay</button>}
+        {tab === "board" && style === "jesc" && <button type="button" className="ev-btn" onClick={() => setPlay(n => n + 1)}>Replay</button>}
+        <button type="button" className={"ev-btn" + (tab === "postcard" ? "" : " pri")} onClick={() => { if (tab === "postcard") playPc(); setFull(true); }}>⛶ Fullscreen</button>
+        {tab !== "board" && <button type="button" className="ev-btn" aria-pressed={muted} onClick={toggleMute}>{muted ? "🔇 Sound off" : "🔊 Sound on"}</button>}
       </div>
 
       {tab === "stage" && (
@@ -262,6 +297,36 @@ export function EuroStudio() {
           <label>Music &amp; Lyrics
             <textarea value={card.lyrics} onChange={e => patchCard({ lyrics: e.target.value })} rows={2} />
           </label>
+        </div>
+      )}
+
+      {tab === "postcard" && (
+        <div className="ev-form">
+          <div className="ev-photo">
+            <span className="ev-photo-t" style={{ backgroundImage: `url("${photo}")` }} aria-hidden="true" />
+            <div className="ev-photo-b">
+              <button type="button" className="ev-btn pri" onClick={() => fileRef.current?.click()}>📷 {myPhoto ? "Change photo" : "Choose a photo"}</button>
+              <div className="ev-styles" role="tablist" aria-label="Photo">
+                <button type="button" role="tab" className={photoSrc === "sample" || !myPhoto ? "on" : ""} aria-selected={photoSrc === "sample" || !myPhoto} onClick={() => { setPhotoSrc("sample"); setPcStart(null); }}>✨ Sample photo</button>
+                {myPhoto && <button type="button" role="tab" className={photoSrc === "mine" ? "on" : ""} aria-selected={photoSrc === "mine"} onClick={() => { setPhotoSrc("mine"); setPcStart(null); }}>My photo</button>}
+              </div>
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={e => { pickPhoto(e.target.files?.[0]); e.target.value = ""; }} />
+          </div>
+          {photoErr && <p className="ev-note">{photoErr}</p>}
+          <label>Country
+            <input list="ev-countries" value={pc.country} onChange={e => { const v = e.target.value; const hit = countryFromName(v); patchPc({ country: v, cc: hit.cc || pc.cc }); }} autoComplete="off" />
+          </label>
+          <label>Artist
+            <input value={pc.artist} onChange={e => patchPc({ artist: e.target.value })} />
+          </label>
+          <label>Song
+            <input value={pc.song} onChange={e => patchPc({ song: e.target.value })} />
+          </label>
+          <label>Music &amp; Lyrics <small>(shown on the stage card)</small>
+            <textarea value={pc.lyrics} onChange={e => patchPc({ lyrics: e.target.value })} rows={2} />
+          </label>
+          <p className="ev-note">Your photo stays on this phone — it's never uploaded. The music is original and made live by the app.</p>
         </div>
       )}
 
@@ -310,7 +375,7 @@ export function EuroStudio() {
       <datalist id="ev-countries">
         {ISO_COUNTRIES.map(c => <option key={c.cc} value={c.name} />)}
       </datalist>
-      <p className="ev-note">A fan-made recreation of the look of Eurovision Asia, Eurovision 2026 and Junior Eurovision 2026. Not affiliated with the EBU or any broadcaster. Boards you edit stay on this device.</p>
+      <p className="ev-note">A fan-made recreation of the look of Eurovision Asia, Eurovision 2026 and Junior Eurovision 2026. Not affiliated with the EBU or any broadcaster. Boards, postcards and photos you make stay on this device.</p>
       {isSemi(board.round) && tab === "board" && <p className="ev-note">Top 10 in a semi-final are marked Q.</p>}
       {full && <FullScreen onClose={() => setFull(false)} bg="#05060a">{preview(true)}</FullScreen>}
     </div>
@@ -318,6 +383,15 @@ export function EuroStudio() {
 }
 
 function defaultSafe(): EvStore { return loadStore(); }
+
+const PC_KEY = "sk.games.euro.pc.v1";
+function loadPcs(): Record<EvStyle, PcInfo> {
+  const base = loadStore().cards;
+  const def = Object.fromEntries(EV_STYLES.map(s => [s, { country: base[s].country, cc: base[s].cc, artist: base[s].artist, song: base[s].song, lyrics: base[s].lyrics }])) as Record<EvStyle, PcInfo>;
+  try { const raw = typeof localStorage !== "undefined" ? localStorage.getItem(PC_KEY) : null; if (!raw) return def; const j = JSON.parse(raw); for (const s of EV_STYLES) if (j?.[s]) def[s] = { ...def[s], ...j[s] }; } catch { /* corrupt */ }
+  return def;
+}
+function savePcs(p: Record<EvStyle, PcInfo>) { try { localStorage.setItem(PC_KEY, JSON.stringify(p)); } catch { /* full */ } }
 
 /** Mini art for the Games home studio card. */
 export function EuroTileArt() {
