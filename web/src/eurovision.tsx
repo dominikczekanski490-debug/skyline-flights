@@ -10,7 +10,7 @@ import "@fontsource/montserrat/600.css";
 import "@fontsource/montserrat/700.css";
 import "@fontsource/montserrat/800.css";
 import "@fontsource/montserrat/900.css";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { FullScreen } from "./gate";
 import {
   EV_STYLES, EV_STYLE_LABEL, EV_ROUNDS, EV_ROUND_LABEL, EV_REVEAL_VALUES,
@@ -22,7 +22,7 @@ import "./eurovision.css";
 import { JescBoard } from "./evjesc";
 import { StageCardTV } from "./evcards";
 import { PostcardTV, SAMPLE_PHOTO, SAMPLE_PORTRAIT, loadPhoto, savePhoto, downscalePhoto, loadCut, saveCut, photoTag, type PcInfo } from "./evpostcard";
-import { cutoutPerson, SAMPLE_CUT, type Cutout } from "./evcutout";
+import { cutoutPerson, cutoutAllowed, SAMPLE_CUT, type Cutout } from "./evcutout";
 import { unlockAudio, playPostcard, playCardSting, stopAll, isMuted, setMuted, audioRunning } from "./evaudio";
 export { jescLayout } from "./evjesc";
 
@@ -191,6 +191,24 @@ function Seg({ value, opts, onChange }: { value: string; opts: { id: string; lab
   );
 }
 
+/** Keeps a crash in the postcard / stage card from blanking the whole studio: shows a friendly retry instead. */
+class EvSafe extends Component<{ children: ReactNode; onReset?: () => void }, { err: boolean; n: number }> {
+  state = { err: false, n: 0 };
+  static getDerivedStateFromError() { return { err: true }; }
+  componentDidCatch(e: unknown) { console.warn("[ev] preview crashed", e); (window as any).__evCrash = String((e as any)?.message || e); }
+  render() {
+    if (this.state.err) return (
+      <div className="ev-stage tv ev-oops" role="alert">
+        <p>That didn't play properly.</p>
+        <button type="button" className="ev-btn pri" onClick={e => { e.stopPropagation(); this.props.onReset?.(); this.setState(s => ({ err: false, n: s.n + 1 })); }}>↻ Try again</button>
+      </div>
+    );
+    return <div key={this.state.n} className="ev-safe"><EvBoom />{this.props.children}</div>;
+  }
+}
+/** Test hook: while window.__evBoom is set, the preview throws (checks the retry screen). */
+function EvBoom() { if (typeof window !== "undefined" && (window as any).__evBoom) throw new Error("test crash"); return null; }
+
 export function EuroStudio() {
   const [store, setStore] = useState<EvStore>(() => defaultSafe());
   const [tab, setTab] = useState<"stage" | "board" | "postcard">("stage");
@@ -213,7 +231,7 @@ export function EuroStudio() {
   const [photoErr, setPhotoErr] = useState("");
   const [unlocked, setUnlocked] = useState(false);
   // on-device person cut-out of "my photo" (Eurovision Asia postcard); null cut = colour-wash fallback
-  const [myCut, setMyCut] = useState<{ of: string; cut: Cutout | null; state: "busy" | "done" | "none" } | null>(null);
+  const [myCut, setMyCut] = useState<{ of: string; cut: Cutout | null; state: "busy" | "done" | "none" | "off" } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => { setMute(isMuted()); setPcs(loadPcs()); loadPhoto().then(u => { if (u) { setMyPhoto(u); setPhotoSrc("mine"); } }); }, []);
   useEffect(() => { if (ready.current) savePcs(pcs); }, [pcs]);
@@ -264,8 +282,17 @@ export function EuroStudio() {
   const toggleMute = () => { const m = !muted; setMute(m); setMuted(m); if (m) stopAll(.1); else { unlockAudio(); setUnlocked(true); if (tab === "stage") { lastSting.current = 0; sting("unmute"); setPlay(n => n + 1); } } };
   const pickPhoto = async (f: File | undefined) => {
     if (!f) return; setPhotoErr("");
-    try { const u = await downscalePhoto(f); setMyPhoto(u); setPhotoSrc("mine"); setPcStart(null); await savePhoto(u); }
-    catch { setPhotoErr("Couldn't open that photo — try another one."); }
+    let u: string;
+    try { u = await downscalePhoto(f); setMyPhoto(u); setPhotoSrc("mine"); setPcStart(null); await savePhoto(u); }
+    catch { setPhotoErr("Couldn't open that photo — try another one."); return; }
+    // on-device person cut-out (Eurovision Asia look). Loaded only now, released right after; any problem → colour wash.
+    const tag = photoTag(u);
+    await saveCut(null);
+    if (!cutoutAllowed()) { setMyCut(m => { if (m?.cut?.url) URL.revokeObjectURL(m.cut.url); return { of: tag, cut: null, state: "off" }; }); return; }
+    setMyCut(m => { if (m?.cut?.url) URL.revokeObjectURL(m.cut.url); return { of: tag, cut: null, state: "busy" }; });
+    const c = await cutoutPerson(u);
+    setMyCut({ of: tag, cut: c, state: c ? "done" : "none" });
+    if (c?.blob) saveCut({ of: tag, blob: c.blob, box: c.box });
   };
   const stingRef = useRef(sting); stingRef.current = sting;
   useEffect(() => { if (tab === "stage" && audioRunning()) { lastSting.current = 0; stingRef.current("style"); } }, [tab, style]);
@@ -276,25 +303,26 @@ export function EuroStudio() {
   }, [tab]);
   const mine = photoSrc === "mine" && !!myPhoto;
   const photo = mine ? myPhoto! : style === "asia" ? SAMPLE_PORTRAIT : SAMPLE_PHOTO;
-  // cut the person out of my photo when the Asia postcard needs it (cached on this device next to the photo)
+  // the person cut-out of my photo is made once, right after picking it (see pickPhoto); here we only read it back
   useEffect(() => {
-    if (!(tab === "postcard" && style === "asia" && myPhoto && photoSrc === "mine")) return;
+    if (!myPhoto) return;
     const tag = photoTag(myPhoto); if (myCut?.of === tag) return;
-    let dead = false; setMyCut({ of: tag, cut: null, state: "busy" });
-    (async () => {
-      const saved = await loadCut();
-      if (saved && saved.of === tag) { if (!dead) setMyCut({ of: tag, cut: { url: URL.createObjectURL(saved.blob), blob: saved.blob, box: saved.box }, state: "done" }); return; }
-      const c = await cutoutPerson(myPhoto);
+    let dead = false;
+    loadCut().then(saved => {
       if (dead) return;
-      setMyCut({ of: tag, cut: c, state: c ? "done" : "none" });
-      if (c?.blob) saveCut({ of: tag, blob: c.blob, box: c.box });
-    })();
+      if (saved && saved.of === tag) setMyCut(m => { if (m?.cut?.url) URL.revokeObjectURL(m.cut.url); return { of: tag, cut: { url: URL.createObjectURL(saved.blob), blob: saved.blob, box: saved.box }, state: "done" }; });
+      else setMyCut({ of: tag, cut: null, state: "none" });
+    });
     return () => { dead = true; };
-  }, [tab, style, myPhoto, photoSrc]);
+  }, [myPhoto]);
   const cut = style !== "asia" ? null : mine ? (myCut?.of === photoTag(myPhoto!) ? myCut.cut : null) : SAMPLE_CUT;
   const soundBtn = <button type="button" className="ev-replay ev-mute" aria-label={muted ? "Turn sound on" : "Mute sound"} aria-pressed={muted} onClick={e => { e.stopPropagation(); toggleMute(); }}>{muted ? "🔇" : "🔊"}</button>;
 
-  const preview = (isFull: boolean) => tab === "postcard"
+  // Only one live player at a time: while fullscreen is open, the inline preview is just a dark placeholder
+  // (two postcards + two WebGL heart rings at once was too much for an iPhone).
+  const preview = (isFull: boolean) => !isFull && full ? <div className="ev-stage tv" aria-hidden="true" />
+    : <EvSafe onReset={() => { stopAll(.05); setPcStart(null); }}>{previewBody(isFull)}</EvSafe>;
+  const previewBody = (isFull: boolean) => tab === "postcard"
     ? <div className="ev-stage tv ev-pc"><PostcardTV style={style} info={pc} photo={photo} cut={cut} start={pcStart} full={isFull} onPlay={playPc} />
         {pcStart != null && <button className="ev-replay" type="button" aria-label="Play postcard again" onClick={e => { e.stopPropagation(); playPc(); }}>↻</button>}{soundBtn}</div>
     : tab === "stage"
@@ -350,7 +378,7 @@ export function EuroStudio() {
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={e => { pickPhoto(e.target.files?.[0]); e.target.value = ""; }} />
           </div>
           {photoErr && <p className="ev-note">{photoErr}</p>}
-          {style === "asia" && mine && myCut && <p className="ev-note ev-cutnote" role="status">{myCut.state === "busy" ? "✂️ Cutting you out of the photo — on this phone…" : myCut.state === "done" ? "✂️ Cut-out ready: you're on the glowing backdrop." : "Couldn't find a person to cut out, so the whole photo gets the colour wash."}</p>}
+          {style === "asia" && mine && myCut && <p className="ev-note ev-cutnote" role="status">{myCut.state === "busy" ? "✂️ Cutting you out of the photo — on this phone…" : myCut.state === "done" ? "✂️ Cut-out ready: you're on the glowing backdrop." : myCut.state === "off" ? "Cut-out is off on this phone, so the whole photo gets the colour wash." : "No cut-out for this photo, so the whole photo gets the colour wash."}</p>}
           <label>Country
             <input list="ev-countries" value={pc.country} onChange={e => { const v = e.target.value; const hit = countryFromName(v); patchPc({ country: v, cc: hit.cc || pc.cc }); }} autoComplete="off" />
           </label>

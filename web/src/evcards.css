@@ -21,8 +21,8 @@
 .sc-asia-zoom{position:absolute;inset:0;transform-origin:800px 430px;will-change:transform}
 .sc-asia-stage{position:absolute;inset:0}
 .sc-asia-haze{position:absolute;left:200px;top:40px;width:1200px;height:760px;background:radial-gradient(ellipse 50% 50% at 50% 47%,rgba(205,210,235,.2),rgba(120,125,150,.06) 45%,transparent 72%)}
-.sc-beams{position:absolute;inset:0;transform-origin:800px 395px;filter:blur(3px)}
-.sc-beams.w{opacity:calc(var(--wide,0) * .9);filter:blur(10px)}
+.sc-beams{position:absolute;inset:0;transform-origin:800px 395px}
+.sc-beams.w{opacity:calc(var(--wide,0) * .8)}
 .sc-tv.anim .sc-beams.a{animation:sc-sway 7s ease-in-out infinite alternate}
 .sc-tv.anim .sc-beams.b{animation:sc-sway 9s ease-in-out -4s infinite alternate-reverse}
 @keyframes sc-sway{from{transform:rotate(-3deg)}to{transform:rotate(3deg)}}
@@ -148,4 +148,4 @@
   .sc-spark{display:none}
 }
 /* Asia arena truss lamps (light up as the hearts settle) */
-.sc-asia-rig{opacity:calc(var(--rig,0) * .9);mix-blend-mode:screen}
+.sc-asia-rig{opacity:calc(var(--rig,0) * .9)}

@@ -18,34 +18,52 @@ function noTelemetry() {
   }) as typeof fetch;
 }
 
-let segP: Promise<any> | null = null;
-function segmenter() {
-  if (!segP) {
-    segP = (async () => {
-      noTelemetry();
-      const { ImageSegmenter } = await import("@mediapipe/tasks-vision");
-      const model = new Uint8Array(await (await fetch(BASE + "selfie_segmenter.tflite")).arrayBuffer());
-      return ImageSegmenter.createFromOptions({ wasmLoaderPath: BASE + "vision_wasm_internal.js", wasmBinaryPath: BASE + "vision_wasm_internal.wasm" },
-        { baseOptions: { modelAssetBuffer: model, delegate: "CPU" }, runningMode: "IMAGE", outputConfidenceMasks: true, outputCategoryMask: false });
-    })();
-    segP.catch(() => { segP = null; });
+/* Crash guard: if the tab dies while segmenting (iOS kills tabs that use too much memory), the flag survives the reload
+ * and the cut-out is switched off on this device, so the studio never gets stuck in a crash loop. */
+const GUARD = "sk.games.euro.cutting", OFF = "sk.games.euro.nocut";
+const ls = { get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k: string, v: string | null) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* private */ } } };
+if (typeof window !== "undefined" && ls.get(GUARD)) { ls.set(OFF, "1"); ls.set(GUARD, null); }
+/** Whether to try the on-device cut-out here: not after an earlier crash, and not on low-memory devices. */
+export function cutoutAllowed() {
+  if (typeof window === "undefined" || ls.get(OFF)) return false;
+  const dm = (navigator as any).deviceMemory; if (typeof dm === "number" && dm < 2) return false;
+  return typeof WebAssembly === "object";
+}
+
+/** Load the segmenter, run `fn`, then close it and drop the wasm runtime + its WebGL canvas so the memory goes back. */
+async function withSegmenter<T>(fn: (seg: any) => T): Promise<T> {
+  noTelemetry();
+  const { ImageSegmenter } = await import("@mediapipe/tasks-vision");
+  const model = new Uint8Array(await (await fetch(BASE + "selfie_segmenter.tflite")).arrayBuffer());
+  const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;   // MediaPipe's GL canvas — ours, so we can free it
+  let seg: any = null;
+  try {
+    seg = await ImageSegmenter.createFromOptions({ wasmLoaderPath: BASE + "vision_wasm_internal.js", wasmBinaryPath: BASE + "vision_wasm_internal.wasm" },
+      { baseOptions: { modelAssetBuffer: model, delegate: "CPU" }, canvas, runningMode: "IMAGE", outputConfidenceMasks: true, outputCategoryMask: false });
+    return fn(seg);
+  } finally {
+    try { seg?.close(); } catch { /* already gone */ }
+    try { const gl = (canvas.getContext("webgl2") || canvas.getContext("webgl")) as WebGLRenderingContext | null; gl?.getExtension("WEBGL_lose_context")?.loseContext(); } catch { /* none */ }
+    canvas.width = canvas.height = 0;
   }
-  return segP;
 }
 
 const loadImg = (src: string) => new Promise<HTMLImageElement>((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("img")); im.src = src; });
 
-/** Cut the person out of a photo. Resolves null when there's no clear person or it takes too long (caller falls back to a colour wash). */
+/** Cut the person out of a photo. Resolves null when there's no clear person, it fails, or it takes too long (caller falls back to a colour wash). */
 export async function cutoutPerson(src: string, timeoutMs = 20000): Promise<Cutout | null> {
+  if (!cutoutAllowed()) return null;
+  ls.set(GUARD, String(Date.now()));
   const work = (async (): Promise<Cutout | null> => {
-    const [seg, im] = await Promise.all([segmenter(), loadImg(src)]);
-    const k = Math.min(1, 1280 / Math.max(im.naturalWidth, im.naturalHeight));
-    const w = Math.round(im.naturalWidth * k), h = Math.round(im.naturalHeight * k);
+    const im = await loadImg(src);
+    // ≤1280 px long side and ≤1 MP: small for any phone (the model itself only looks at 256×256)
+    const k = Math.min(1, 1280 / Math.max(im.naturalWidth, im.naturalHeight), Math.sqrt(1e6 / (im.naturalWidth * im.naturalHeight)));
+    const w = Math.max(1, Math.round(im.naturalWidth * k)), h = Math.max(1, Math.round(im.naturalHeight * k));
     const c = document.createElement("canvas"); c.width = w; c.height = h;
-    const g = c.getContext("2d", { willReadFrequently: true })!; g.drawImage(im, 0, 0, w, h);
-    const res = seg.segment(c); const mask = res.confidenceMasks?.[0];
-    if (!mask) { res.close?.(); return null; }
-    const mw = mask.width, mh = mask.height; const conf: Float32Array = mask.getAsFloat32Array().slice(); res.close?.();
+    const g = c.getContext("2d", { willReadFrequently: true })!; g.drawImage(im, 0, 0, w, h); im.src = "";
+    const got = await withSegmenter(sg => { const r = sg.segment(c); const m0 = r.confidenceMasks?.[0]; const o = m0 ? { mw: m0.width as number, mh: m0.height as number, conf: (m0.getAsFloat32Array() as Float32Array).slice() } : null; r.close?.(); return o; });
+    if (!got) { c.width = c.height = 0; return null; }
+    const mw = got.mw, mh = got.mh, conf = got.conf;
     // soften: separable box blur (r=2) on the confidence map, then a smooth threshold
     const blur = (a: Float32Array, W2: number, H2: number, r: number) => {
       const t = new Float32Array(a.length), o = new Float32Array(a.length);
@@ -97,12 +115,15 @@ export async function cutoutPerson(src: string, timeoutMs = 20000): Promise<Cuto
       if (a > .5) { on++; const fx = x / w, fy = y / h; if (fx < x0) x0 = fx; if (fx > x1) x1 = fx; if (fy < y0) y0 = fy; if (fy > y1) y1 = fy; }
     }
     const cover = on / (w * h);
-    if (cover < .03 || cover > .9) return null;          // no clear person, or nothing but person
+    if (cover < .03 || cover > .9) { c.width = c.height = 0; return null; }          // no clear person, or nothing but person
     g.putImageData(px, 0, 0);
     const blob: Blob | null = await new Promise(r => c.toBlob(b => r(b), "image/png"));
+    c.width = c.height = 0;
     if (!blob) return null;
     return { url: URL.createObjectURL(blob), blob, box: [+x0.toFixed(3), +y0.toFixed(3), +x1.toFixed(3), +y1.toFixed(3)] };
   })();
-  return Promise.race([work.catch(e => { console.warn("[ev-cutout]", e); return null; }), new Promise<null>(r => setTimeout(() => r(null), timeoutMs))]);
+  const done = work.catch(e => { console.warn("[ev-cutout]", e); return null; });
+  done.finally(() => ls.set(GUARD, null));
+  return Promise.race([done, new Promise<null>(r => setTimeout(() => r(null), timeoutMs))]);
 }
 if (typeof window !== "undefined") (window as any).__evCutout = cutoutPerson;

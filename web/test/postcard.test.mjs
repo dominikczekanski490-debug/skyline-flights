@@ -62,4 +62,13 @@ assert.match(e, /else if \(tab === "stage"\) replayCard\(\); setFull\(true\)/, "
 assert.match(e, /ev-card-loop/); assert.match(e, /audioRunning\(\)/);
 assert.match(fs.readFileSync(path.join(here, "../src/evcards.tsx"), "utf8"), /new CustomEvent\("ev-card-loop"/);
 assert.match(a, /function scheduleCardBed/);
+// crash safety (iPhone memory): one player at a time, an error boundary, MediaPipe only on pick and fully released
+assert.match(e, /class EvSafe extends Component/, "error boundary"); assert.match(e, /That didn't play properly/);
+assert.match(e, /!isFull && full \? <div className="ev-stage tv" aria-hidden="true" \/>/, "inline player unmounted while fullscreen");
+assert.match(e, /cutoutAllowed\(\)/, "cut-out only when the phone can take it");
+const cu = fs.readFileSync(path.join(here, "../src/evcutout.ts"), "utf8");
+assert.match(cu, /WEBGL_lose_context/, "segmenter GL context released"); assert.match(cu, /\.close\(\)/);
+assert.match(cu, /sk\.games\.euro\.cutting/, "crash-loop guard"); assert.match(cu, /deviceMemory/);
+assert.match(p, /1280/, "photos downscaled before any canvas");
+assert.ok(!/mix-blend-mode:\s*(screen|overlay|soft-light|multiply|lighten)/.test(fs.readFileSync(path.join(here, "../src/evpostcard.css"), "utf8")), "no big blend layers in the postcard");
 console.log("postcard ok");

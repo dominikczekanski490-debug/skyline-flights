@@ -41,15 +41,17 @@ export async function loadCut(): Promise<SavedCut | null> {
 export async function saveCut(c: SavedCut | null) {
   try { const db = await idb(); await new Promise<void>(res => { const tx = db.transaction(ST, "readwrite"); const s = tx.objectStore(ST); if (c) s.put(c, KEY + "-cut"); else s.delete(KEY + "-cut"); tx.oncomplete = () => res(); tx.onerror = () => res(); }); } catch { /* storage off */ }
 }
-/** Downscale a picked photo (≤1600 px long side, JPEG) so it stores small and decodes fast on a phone. */
-export function downscalePhoto(file: Blob, max = 1600): Promise<string> {
+/** Downscale a picked photo (≤1280 px long side and ≤1.2 MP, JPEG) so it stores small and decodes fast on a phone.
+ *  iPhone photos are 12–48 MP: the full-size decode is dropped straight after this one draw. */
+export function downscalePhoto(file: Blob, max = 1280): Promise<string> {
   return new Promise((res, rej) => {
     const u = URL.createObjectURL(file); const im = new Image();
     im.onload = () => {
-      const k = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
-      const c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+      const k = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight), Math.sqrt(1.2e6 / (im.naturalWidth * im.naturalHeight)));
+      const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k));
       const g = c.getContext("2d")!; g.imageSmoothingQuality = "high"; g.drawImage(im, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(u); res(c.toDataURL("image/jpeg", .86));
+      URL.revokeObjectURL(u); im.src = "";
+      const out = c.toDataURL("image/jpeg", .86); c.width = c.height = 0; res(out);
     };
     im.onerror = () => { URL.revokeObjectURL(u); rej(new Error("Could not read that photo")); };
     im.src = u;
@@ -64,7 +66,7 @@ function gradePhoto(src: string): Promise<Grades> {
   const p = new Promise<Grades>((res, rej) => {
     const im = new Image(); im.crossOrigin = "anonymous";
     im.onload = () => {
-      const k = Math.min(1, 1600 / im.naturalWidth); const w = Math.round(im.naturalWidth * k), h = Math.round(im.naturalHeight * k);
+      const k = Math.min(1, 1280 / Math.max(im.naturalWidth, im.naturalHeight)); const w = Math.round(im.naturalWidth * k), h = Math.round(im.naturalHeight * k);
       const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d", { willReadFrequently: true })!;
       g.drawImage(im, 0, 0, w, h); const base = g.getImageData(0, 0, w, h);
       const S = (x: number, k2: number) => { const t = x / 255; const s = t < .5 ? .5 * Math.pow(2 * t, k2) : 1 - .5 * Math.pow(2 - 2 * t, k2); return s * 255; };
@@ -83,7 +85,8 @@ function gradePhoto(src: string): Promise<Grades> {
       // soft = heavy blur via down/up-scale (for focus pulls and dreamy transitions)
       const t = document.createElement("canvas"); t.width = 48; t.height = Math.max(8, Math.round(48 * h / w)); t.getContext("2d")!.drawImage(im, 0, 0, t.width, t.height);
       const s2 = document.createElement("canvas"); s2.width = 400; s2.height = Math.round(400 * h / w); const g2 = s2.getContext("2d")!; g2.imageSmoothingQuality = "high"; g2.drawImage(t, 0, 0, s2.width, s2.height);
-      res({ warm, teal, punch, soft: s2.toDataURL("image/jpeg", .8), w, h });
+      const soft = s2.toDataURL("image/jpeg", .8); c.width = c.height = t.width = t.height = s2.width = s2.height = 0;
+      res({ warm, teal, punch, soft, w, h });
     };
     im.onerror = () => rej(new Error("photo"));
     im.src = src;
@@ -194,7 +197,7 @@ export function PostcardTV({ style, info, photo, cut, start, full, onPlay }: { s
       for (const A of anims.current.values()) {
         const [t, o] = A.f(T);
         if (t != null && t !== A.t) { A.t = t; A.el.style.transform = t; }
-        const oo = Math.round(o * 1000) / 1000; if (oo !== A.o) { A.o = oo; A.el.style.opacity = String(oo); }
+        const oo = Math.round(o * 1000) / 1000; if (oo !== A.o) { if (oo === 0 || A.o === 0 || A.o == null) A.el.style.display = oo === 0 ? "none" : ""; A.o = oo; A.el.style.opacity = String(oo); }
       }
       if (start != null || typeof fz === "number") raf = requestAnimationFrame(tick);
     };
@@ -394,7 +397,6 @@ function AsiaShoot({ add, info, photo, cut, dim, ok, still }: { add: Add; info: 
       {/* bloom-flash cut and a softer flash on the dissolve */}
       <div className="pa-flash" ref={add(T => [null, still ? 0 : Math.max(Math.max(0, 1 - Math.abs(T - 3.02) / (T < 3.02 ? .1 : .24)) * 1, Math.max(0, 1 - Math.abs(T - 6.1) / (T < 6.1 ? .08 : .3)) * .45)])} />
       <div className="pc-vig pa-vig" />
-      <div className="pc-grain" style={{ backgroundImage: `url(${grain()})` }} ref={add(T => [still ? null : `translate3d(${((Math.floor(T * 24) * 37) % 160) - 80}px,${((Math.floor(T * 24) * 71) % 160) - 80}px,0)`, .05])} />
       <div className="pa-black" ref={add(T => [null, ease((T - 8.6) / .4)])} />
     </div>
   );
