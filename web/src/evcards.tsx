@@ -4,6 +4,7 @@ import "@fontsource/baloo-2/700.css";
 import "@fontsource/baloo-2/800.css";
 import "@fontsource-variable/fredoka";
 import "@fontsource/montserrat/600.css";
+import "@fontsource/outfit/700.css";
 import "@fontsource/montserrat/700.css";
 import "@fontsource/montserrat/900.css";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -16,7 +17,7 @@ const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-r
 const css = (o: Record<string, string | number>) => o as CSSProperties;
 const rng = (seed: number) => { let s = seed; return () => ((s = (s * 16807) % 2147483647) / 2147483647); };
 
-const FONTS = ["800 100px 'Baloo 2'", "700 40px 'Baloo 2'", "700 100px 'Fredoka Variable'", "900 100px Montserrat", "700 40px Montserrat", "600 30px Montserrat"];
+const FONTS = ["800 100px 'Baloo 2'", "700 40px 'Baloo 2'", "700 100px 'Fredoka Variable'", "900 100px Montserrat", "700 40px Montserrat", "600 30px Montserrat", "700 100px Outfit"];
 let fontsPromise: Promise<unknown> | null = null;
 function useFontsReady() {
   const [ok, setOk] = useState(typeof document === "undefined");
@@ -71,116 +72,223 @@ export function TvFrame({ full, children, className = "", ready }: { full?: bool
 const Txt = ({ d, className, children, style }: { d: number; className: string; children: ReactNode; style?: CSSProperties }) =>
   <div className={"sc-txt " + className} style={{ ...style, "--d": d + "s" } as CSSProperties}>{children}</div>;
 
-/* ───────────────────────── 1. Eurovision Asia — thermal hearts ───────────────────────── */
+/* ───────────────────────── 1. Eurovision Asia — thermal kaleidoscope ───────────────────────── */
+// Timeline (seconds): entry 0–1.2 · hold to 5.0 · exit 5.0–6.6 (matches the broadcast's 1.0–2.6s) · clean stage · loop.
+const A_HOLD = 5.0, A_END = 6.7, A_LOOP = 7.5;
+const clamp01 = (x: number) => x < 0 ? 0 : x > 1 ? 1 : x;
+const ease = (x: number) => { x = clamp01(x); return x * x * (3 - 2 * x); };
+const outCubic = (x: number) => 1 - Math.pow(1 - clamp01(x), 3);
 
-// Three organic heart outlines (100×100 box), deliberately uneven.
-const HEART_PATHS = [
-  "M50 91C30 77 6 60 4 36 2 17 17 5 33 7c9 1 14 7 17 15 3-9 9-15 19-16 16-1 30 12 27 31-3 24-26 41-46 54z",
-  "M48 93C26 80 3 62 5 37 6 18 20 8 35 9c8 1 12 6 15 13 4-8 11-14 21-13 15 1 27 14 24 32-4 22-25 40-47 52z",
-  "M52 90C32 79 8 63 5 40 3 20 15 6 31 6c10 0 15 7 18 15 2-9 9-16 20-16 17 0 30 14 26 33-4 22-23 39-43 52z",
-];
-// Thermal palettes, outer rim → core. Each band is the heart itself shrunk toward a hot spot,
-// so the isotherms follow the heart's shape like a real heat-camera blob.
-const PALS: { c: string; s: number }[][] = [
-  [{ c: "#1a2cc0", s: 1 }, { c: "#2f45e4", s: .93 }, { c: "#c3162f", s: .84 }, { c: "#ef3a1c", s: .72 }, { c: "#ff8a18", s: .6 }, { c: "#ffc62a", s: .47 }, { c: "#ffef7a", s: .34 }, { c: "#fffbd6", s: .24 }, { c: "#d14fd6", s: .12 }],
-  [{ c: "#1a2cc0", s: 1 }, { c: "#3049e8", s: .9 }, { c: "#7a1a8a", s: .8 }, { c: "#d01a2a", s: .74 }, { c: "#f2461a", s: .58 }, { c: "#ff9a1c", s: .44 }, { c: "#ffe04a", s: .3 }, { c: "#fff6c0", s: .2 }, { c: "#c23ad2", s: .1 }],
-  [{ c: "#172aba", s: 1 }, { c: "#2c42e2", s: .86 }, { c: "#3a4cf0", s: .72 }, { c: "#a01650", s: .62 }, { c: "#d81c26", s: .5 }, { c: "#f04a1a", s: .36 }, { c: "#ff9a1e", s: .24 }, { c: "#ffe066", s: .14 }, { c: "#b232cc", s: .06 }],
-];
-
-function HeartDefs() {
-  return (
-    <svg className="sc-defs" width="0" height="0" aria-hidden="true">
-      <defs>
-        <filter id="scthblur" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.9" /></filter>
-        <radialGradient id="scthshade" cx=".42" cy=".36" r=".7">
-          <stop offset=".55" stopColor="#000" stopOpacity="0" /><stop offset="1" stopColor="#000" stopOpacity=".32" />
-        </radialGradient>
-      </defs>
-    </svg>
-  );
-}
-
-function HeartSvg({ shape, pal, hx, hy, seed }: { shape: number; pal: number; hx: number; hy: number; seed: number }) {
-  const P = PALS[pal], d = HEART_PATHS[shape];
-  const R = rng(seed * 7919 + pal * 31 + 1);
-  // each isotherm wanders a little so the bands are uneven, like real heat spread
-  const bands = P.slice(1).map(b => ({ ...b, s: Math.max(.04, b.s + (R() - .5) * .1), ox: (R() - .5) * 7, oy: (R() - .5) * 7 }));
-  return (
-    <svg viewBox="-4 -4 108 108" aria-hidden="true">
-      <path d={d} fill={P[0].c} stroke="#13209a" strokeWidth="2.6" strokeLinejoin="round" />
-      <g filter="url(#scthblur)">
-        {bands.map((b, i) => <path key={i} d={d} fill={b.c} transform={`translate(${hx + b.ox * (1 - b.s)} ${hy + b.oy * (1 - b.s)}) scale(${b.s}) translate(${-hx} ${-hy})`} />)}
-      </g>
-      <path d={d} fill="url(#scthshade)" />
-    </svg>
-  );
-}
-
-type Heart = { x: number; y: number; s: number; r: number; sx: number; shape: number; ramp: number; alt: number; hx: number; hy: number; d: number; p: number; dx: number; dy: number; k: number };
-function makeHearts(): Heart[] {
-  const R = rng(20261114); const out: Heart[] = [];
-  const add = (x: number, y: number, s: number, k: number) => {
-    const ramp = Math.floor(R() * 3);
-    out.push({ x, y, s, r: (R() - .5) * 80, sx: .86 + R() * .28, shape: Math.floor(R() * 3), ramp, alt: (ramp + 1 + Math.floor(R() * 2)) % 3, hx: 42 + R() * 16, hy: 38 + R() * 14,
-      d: R() * -12, p: 6 + R() * 5, dx: (R() - .5) * 26, dy: (R() - .5) * 26, k });
-  };
-  // dense side bands (≈28% each side), staggered rows
-  for (let side = 0; side < 2; side++) {
-    for (let row = 0; row < 8; row++) {
-      for (let col = 0; col < 3; col++) {
-        const cx = [-40, 150, 330][col] + (row % 2 ? 70 : 0) + (R() - .5) * 60;
-        const cy = -60 + row * 138 + (R() - .5) * 50;
-        const s = 210 + R() * 110 - (col === 2 ? 40 : 0);
-        add(side ? W - cx : cx, cy, s, Math.abs(cy - H / 2) / H + (col * .2));
-      }
-    }
+/** Ring state for timeline time T: expand factor, palette shift, scatter (few hearts left), overall fade. */
+function ringAt(T: number) {
+  if (T < A_HOLD) {
+    const k = outCubic(T / 1.1);
+    return { ex: 2.4 - 1.4 * k, sh: .3 * (1 - k), sc: 0, fa: clamp01(T / .35), sz: 1.25 - .25 * k };
   }
-  // spill along the top and bottom corners
-  for (const [cx, cy] of [[470, -50], [600, -80], [1130, -50], [1000, -80], [480, 950], [620, 980], [1120, 950], [980, 980], [540, 20], [1060, 20], [530, 900], [1070, 900]] as const)
-    add(cx + (R() - .5) * 40, cy + (R() - .5) * 30, 150 + R() * 70, .6);
-  return out.sort((a, b) => b.s - a.s);
+  const e = T - A_HOLD;
+  return {
+    ex: 1 + .06 * ease(e / .3) + .25 * ease((e - .45) / .35),
+    sh: .45 * ease(e / .22) * (1 - ease((e - .4) / .18)) - .2 * ease((e - .45) / .18) * (1 - ease((e - .85) / .2)),
+    sc: ease((e - .8) / .3),
+    fa: 1 - ease((e - 1.25) / .4),
+    sz: 1 - .3 * ease(e / .22) * (1 - ease((e - .4) / .25)) + .35 * ease((e - .45) / .3),
+  };
 }
 
-const ThermalHearts = memo(function ThermalHearts() {
-  const hearts = useMemo(makeHearts, []);
+const VS = "attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}";
+const FS = `precision highp float;
+uniform vec2 uRes;uniform float uT,uEx,uSh,uSc,uFa,uSz;
+float h1(float n){return fract(sin(n*91.345)*47453.5453);}
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+ return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+float fbm(vec2 p){return .55*noise(p)+.3*noise(p*2.03+7.1)+.15*noise(p*4.1+3.3);}
+float dot2(vec2 v){return dot(v,v);}
+float sdHeart(vec2 p){p.x=abs(p.x);
+ if(p.y+p.x>1.)return sqrt(dot2(p-vec2(.25,.75)))-.35355;
+ return sqrt(min(dot2(p-vec2(0,1)),dot2(p-.5*max(p.x+p.y,0.))))*sign(p.x-p.y);}
+float smin(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
+vec3 thermal(float x){x=clamp(x,0.,1.);
+ vec3 c=vec3(1.,.95,.62);
+ c=mix(c,vec3(1.,.82,0.),smoothstep(.0,.09,x));
+ c=mix(c,vec3(1.,.48,0.),smoothstep(.09,.2,x));
+ c=mix(c,vec3(1.,.18,.43),smoothstep(.2,.33,x));
+ c=mix(c,vec3(.9,.08,.17),smoothstep(.33,.48,x));
+ c=mix(c,vec3(.45,.08,.5),smoothstep(.56,.68,x));
+ c=mix(c,vec3(.12,.24,1.),smoothstep(.68,.8,x));
+ c=mix(c,vec3(.25,.75,1.),smoothstep(.93,1.,x));
+ return c;}
+void main(){
+ vec2 fc=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y)/uRes*vec2(1600.,900.);
+ vec2 p=fc-vec2(800.,452.);
+ vec2 q=vec2(abs(p.x),p.y);                       // kaleidoscope: mirror left/right
+ float t=uT;
+ vec2 R=vec2(470.,372.)*uEx;
+ float e=length(q/R);
+ float th=atan(q.y/R.y,q.x/R.x);
+ // heart field: three layers of blobs around the oval
+ float d=1e5;float dw=1e5;float id=0.;float sz=1.;vec2 lpk=vec2(0.);
+ for(int L=0;L<3;L++){
+  float fl=float(L);
+  float N=fl==0.?9.:fl==1.?8.:7.;
+  float er=fl==0.?1.1:fl==1.?1.4:1.78;
+  float s0=(fl==0.?112.:fl==1.?150.:190.)*(.8+.2*uEx)*uSz;
+  for(int k=0;k<9;k++){
+   float fk=float(k);if(fk>=N)break;
+   float hid=fl*10.+fk;float r1=h1(hid+1.),r2=h1(hid+2.3),r3=h1(hid+5.7);
+   float a=-1.62+(fk+.5+(r1-.5)*.5)/N*3.24+.05*sin(t*.7+hid);
+   float rr=er+.07*sin(t*1.1+hid*1.7)+(r2-.5)*.12;
+   vec2 c=vec2(cos(a),sin(a))*R*rr;
+   float sc=1.;
+   if(uSc>0.){float keep=step(r3,.5);sc=mix(1.,keep*.55,uSc);c*=1.+uSc*(.04+r1*.16);}
+   float s=s0*(.8+.4*r2)*(1.+.07*sin(t*2.3+hid*2.1))*sc;
+   if(s<1.)continue;
+   if(length(q-c)>s*1.9){d=smin(d,length(q-c)-s*.75,14.);continue;}
+   float ang=(r1-.5)*1.6+a*.6+.55*sin(t*.9+hid*1.3);
+   vec2 lp=q-c;float ca=cos(ang),sa=sin(ang);lp=mat2(ca,-sa,sa,ca)*lp/s;
+   lp.y=-lp.y+.48;
+   lp+=.07*vec2(sin(lp.y*5.+t*2.1+hid),cos(lp.x*5.-t*1.7+hid));   // morph
+   float dk=(sdHeart(lp*vec2(.9+.15*r3,1.))-.05)*s;
+   if(dk<dw){dw=dk;id=hid;sz=s;lpk=lp;}
+   d=smin(d,dk,14.);
+  }
+ }
+ float inside=smoothstep(1.2,-1.2,d);
+ // blob colour: rim hot (yellow/orange) → body red/pink → cool blue/purple spots in the core
+ float u=clamp(-d/(sz*.42),0.,1.);
+ float n=fbm(lpk*2.4+vec2(id*3.1,t*.5));
+ float cyc=.1*sin(t*2.2+id*1.9)+.07*sin(t*3.7+th*4.);
+ // puffy lighting: hot (orange→yellow) highlight on each lobe, red/pink body, purple-blue cool patches, dark rim
+ vec2 lo=vec2(abs(lpk.x)-.26,lpk.y-.72);
+ float hl=exp(-dot(lo,lo)*7.)*smoothstep(.05,.5,u);
+ float x=.42-hl*(.2+.12*sin(t*1.9+id))+cyc+uSh*.32;
+ x+=smoothstep(.6,.8,fbm(lpk*1.7+vec2(id*7.3,-t*.4)))*.4*smoothstep(.15,.4,u);                    // cool spots
+ x-=smoothstep(.12,.0,u)*.12*(.5+.5*sin(t*2.6+id*2.3+th*3.));          // glowing rims (cycle)
+ x=mix(x,floor(x*14.)/14.,.3);
+ vec3 bc=thermal(x);
+ bc*=mix(.55,1.,smoothstep(.0,.12,u));                                   // rim shade
+ bc=mix(bc,vec3(.3,.04,.4),.4*smoothstep(.3,.0,u)*smoothstep(.3,-.3,lpk.y));   // purple underside
+ if(uSc>.0){bc=mix(bc,mix(vec3(.9,.08,.15),vec3(1.,.5,.35),hl),uSc*.9);}
+ // outer colour mush (blurry, abstract) + dark gaps near the hollow
+ float m=fbm(q*.0042+vec2(t*.22,-t*.17)+id*.0);
+ float m2=fbm(q*.009-vec2(t*.3,t*.12)+4.);
+ float xm=.5+(m-.5)*1.1+.14*sin(t*1.6+th*3.)+uSh*.3;
+ vec3 mc=thermal(xm);
+ mc=mix(mc,vec3(.3,.85,1.),smoothstep(.62,.8,m2)*.55);
+ mc=mix(mc,vec3(1.,.85,.1),smoothstep(.66,.82,m)*.45);
+ float mw=smoothstep(1.12,1.55,e)*(1.-uSc);
+ float sh=1.-.8*exp(-max(d,0.)/9.);                                  // shadow halo around blobs
+ vec3 col=mc*sh;float al=mw*(.55+.45*sh);
+ float gap=smoothstep(.98,1.12,e)*(1.-uSc)*.9;
+ al=max(al,gap*(1.-mw)*.92);col=mix(vec3(0.),col,mw/max(al,.001)*.9);
+ col=mix(col,bc,inside);al=max(al,inside);
+ // outer blur ring brightness falloff
+ al*=uFa;
+ gl_FragColor=vec4(col*al,al);
+}`;
+
+/** WebGL thermal kaleidoscope ring; falls back to nothing (CSS glow) without WebGL. Driven by the shared clock. */
+function useThermalGL(cv: { current: HTMLCanvasElement | null }) {
+  const st = useRef<{ draw: (T: number) => void } | null>(null);
+  useEffect(() => {
+    const c = cv.current; if (!c) return;
+    const gl = (c.getContext("webgl", { premultipliedAlpha: true, antialias: false, alpha: true }) || c.getContext("experimental-webgl")) as WebGLRenderingContext | null;
+    if (!gl) { c.classList.add("nogl"); return; }
+    const sh = (type: number, src: string) => { const s = gl.createShader(type)!; gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.warn(gl.getShaderInfoLog(s)); return s; };
+    const pr = gl.createProgram()!; gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) { c.classList.add("nogl"); return; }
+    gl.useProgram(pr);
+    const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(pr, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const U = (n: string) => gl.getUniformLocation(pr, n);
+    const uRes = U("uRes"), uT = U("uT"), uEx = U("uEx"), uSh = U("uSh"), uSc = U("uSc"), uFa = U("uFa"), uSz = U("uSz");
+    // resolution: device pixels of the on-screen frame, capped; drops further if the GPU can't hold ~60fps
+    let cap = (window as any).__scGLCap || 1440, n = 0, slow = 0, last = 0;
+    const size = () => {
+      const r = c.getBoundingClientRect(); const dpr = Math.min(devicePixelRatio || 1, 3);
+      const w = Math.round(Math.min(cap, Math.max(320, Math.max(r.width, r.height) * dpr))), h = Math.round(w * H / W);
+      if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    };
+    const pace = () => {
+      const now = performance.now(), dt = now - last; last = now;
+      if (dt > 0 && dt < 200) { if (dt > 24) slow++; if (++n >= 45) { if (slow > 30 && cap > 700) cap = Math.round(cap * .8); n = slow = 0; } }
+      if (n % 15 === 0) size();
+    };
+    st.current = {
+      draw: (T: number) => {
+        pace(); if (!c.width || c.width === 300) size(); const r = ringAt(T);
+        gl.viewport(0, 0, c.width, c.height);
+        gl.uniform2f(uRes, c.width, c.height); gl.uniform1f(uT, T); gl.uniform1f(uEx, r.ex); gl.uniform1f(uSh, r.sh); gl.uniform1f(uSc, r.sc); gl.uniform1f(uFa, r.fa); gl.uniform1f(uSz, r.sz);
+        gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+      },
+    };
+    return () => { st.current = null; gl.getExtension("WEBGL_lose_context")?.loseContext(); };
+  }, [cv]);
+  return st;
+}
+
+/** Cursive looped ℓ drawn as a stroke, sized to Outfit's ascender (0.7em) and stem weight. */
+const Ell = ({ w }: { w: number }) => (
+  <svg className="sc-ell" viewBox="0 0 40 72" aria-hidden="true" style={{ strokeWidth: w }}>
+    <path d="M3.5 63 C15 55 30 39 30 21 C30 10 26 5.2 21 5.2 C15 5.2 12 12 12 23 L12 54 C12 63.5 16.5 67 23 67 C28 67 32 64 35.5 60" />
+  </svg>
+);
+
+type LetterPlan = { a: number; v: number; tin: string; tout: string; ld: number };
+/** One line split into letter spans; 'l' becomes the looped ℓ. Full text stays readable via aria-label. */
+function Letters({ text, className, plan, stroke, reg, style }: { text: string; className: string; plan: (i: number, n: number) => LetterPlan; stroke: number; reg: (el: HTMLElement | null, p: LetterPlan) => void; style?: CSSProperties }) {
+  const chars = Array.from(text.replace(/"([^"]*)"/g, "\u201c$1\u201d"));
   return (
-    <div className="sc-hearts" aria-hidden="true">
-      <HeartDefs />
-      {hearts.map((h, i) => (
-        <div key={i} className="sc-ht" style={css({ left: h.x - h.s / 2, top: h.y - h.s / 2, width: h.s, height: h.s, transform: `rotate(${h.r}deg) scaleX(${h.sx})`, "--k": h.k.toFixed(2) })}>
-          <div className="sc-ht-in">
-            <div className="sc-ht-b" style={css({ "--d": h.d + "s", "--p": h.p + "s", "--dx": h.dx + "px", "--dy": h.dy + "px" })}>
-              <HeartSvg shape={h.shape} pal={h.ramp} hx={h.hx} hy={h.hy} seed={i} />
-              <div className="sc-ht-alt" style={css({ "--d": h.d * .7 + "s", "--p": h.p * .8 + "s" })}><HeartSvg shape={h.shape} pal={h.alt} hx={h.hx + 3} hy={h.hy - 2} seed={i + 500} /></div>
-            </div>
-          </div>
-        </div>
+    <div className={"sc-al " + className} style={style}>
+      {chars.map((ch, i) => (
+        <span key={i} aria-hidden="true" ref={el => reg(el, plan(i, chars.length))}>{ch === "l" ? <Ell w={stroke} /> : ch === " " ? "\u00a0" : ch}</span>
       ))}
+      <span className="sc-sr">{text}</span>
     </div>
   );
-});
+}
+
+const TINT_P = "#ff5f93", TINT_Y = "#ffd43a", TINT_R = "#ff3b4e", TINT_O = "#ffae2a";
+/** Letter style for time T: types in with a warm tint, sits white, tints then erases. */
+function letterStyle(p: LetterPlan, T: number): [number, string] {
+  if (T < p.a) return [0, "#fff"];
+  const ia = T - p.a;
+  if (ia < .16) return [clamp01(ia / .05), ia < .07 ? p.tin : ia < .12 ? TINT_P : "#fff"];
+  if (T < p.v - p.ld) return [1, "#fff"];
+  if (T < p.v) return [1, T < p.v - p.ld * .45 ? p.tout : TINT_Y];
+  return [1 - clamp01((T - p.v) / .06), TINT_Y];
+}
 
 const AsiaStage = memo(function AsiaStage() {
-  const lx = 800, ly = 250;
+  const lx = 800, ly = 395;
   const beams = useMemo(() => {
     const R = rng(77); const out: { a: number; len: number; w: number; o: number }[] = [];
-    for (let i = 0; i < 34; i++) { const a = -84 + (i / 33) * 168 + (R() - .5) * 3; out.push({ a, len: 760 + R() * 300, w: 5 + R() * 10, o: .35 + R() * .45 }); }
+    for (let i = 0; i < 22; i++) { const a = -58 + (i / 21) * 116 + (R() - .5) * 5; out.push({ a, len: 520 + R() * 320, w: 8 + R() * 16, o: .18 + R() * .32 }); }
     return out;
   }, []);
   const crowd = useMemo(() => {
-    const R = rng(5); const out: { x: number; y: number; r: number }[] = [];
-    for (let x = 360; x < 1260; x += 16 + R() * 14) out.push({ x, y: 868 + R() * 18, r: 13 + R() * 6 });
+    const R = rng(5); const heads: { x: number; y: number; r: number }[] = []; const ph: { x: number; y: number; o: number }[] = [];
+    for (let x = -10; x < 1620; x += 15 + R() * 13) heads.push({ x, y: 846 + R() * 26 + Math.abs(x - 800) * .02, r: 12 + R() * 6 });
+    for (let i = 0; i < 46; i++) ph.push({ x: 40 + R() * 1520, y: 790 + R() * 70, o: .45 + R() * .55 });
+    return { heads, ph };
+  }, []);
+  const pillars = useMemo(() => {
+    const out: { x: number; w: number; top: number; bot: number }[] = [];
+    for (const side of [-1, 1]) for (let i = 0; i < 5; i++) {
+      const x = 800 + side * (210 + i * 50), w = 18 - i * 1.4;
+      out.push({ x: x - w / 2, w, top: 470 - i * 16, bot: 690 + i * 10 });
+    }
     return out;
   }, []);
-  const beamSvg = (set: number) => (
+  const beamSvg = (set: number, wide: boolean) => (
     <svg viewBox={`0 0 ${W} ${H}`} className="sc-svgfill">
       <defs>
-        <linearGradient id={`scbeam${set}`} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#fff" stopOpacity=".95" /><stop offset=".35" stopColor="#fff" stopOpacity=".45" /><stop offset="1" stopColor="#fff" stopOpacity="0" />
+        <linearGradient id={`scbeam${set}${wide ? "w" : ""}`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#fff" stopOpacity=".9" /><stop offset=".3" stopColor="#f2f4ff" stopOpacity=".4" /><stop offset="1" stopColor="#fff" stopOpacity="0" />
         </linearGradient>
       </defs>
       {beams.filter((_, i) => i % 2 === set).map((b, i) => (
-        <polygon key={i} points={`0,-1.2 ${b.len},${-b.w} ${b.len},${b.w} 0,1.2`} fill={`url(#scbeam${set})`} opacity={b.o}
+        <polygon key={i} points={`0,-1.5 ${b.len},${-b.w * (wide ? 4 : 1)} ${b.len},${b.w * (wide ? 4 : 1)} 0,1.5`} fill={`url(#scbeam${set}${wide ? "w" : ""})`} opacity={b.o * (wide ? .45 : 1)}
           transform={`translate(${lx} ${ly}) rotate(${b.a - 90})`} />
       ))}
     </svg>
@@ -188,38 +296,83 @@ const AsiaStage = memo(function AsiaStage() {
   return (
     <div className="sc-asia-stage" aria-hidden="true">
       <div className="sc-asia-haze" />
-      <svg viewBox={`0 0 ${W} ${H}`} className="sc-svgfill">
-        <defs>
-          <linearGradient id="scdeck" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#3a3a46" /><stop offset="1" stopColor="#0c0c10" /></linearGradient>
-          <radialGradient id="sccrowdlight" cx=".5" cy=".9" r=".6"><stop offset="0" stopColor="#4a4a5e" /><stop offset="1" stopColor="#000" stopOpacity="0" /></radialGradient>
-        </defs>
-        <path d="M430 612 L1170 612 L1290 700 L310 700Z" fill="url(#scdeck)" opacity=".35" />
-        <path d="M520 610 L1080 610 L1080 613 L520 613Z" fill="#8a8aa0" opacity=".18" />
-        <ellipse cx="800" cy="860" rx="560" ry="150" fill="url(#sccrowdlight)" />
-        {crowd.map((c, i) => <g key={i} fill="#030305"><circle cx={c.x} cy={c.y} r={c.r} /><ellipse cx={c.x} cy={c.y + c.r * 2.2} rx={c.r * 1.9} ry={c.r * 1.4} /></g>)}
-      </svg>
-      <div className="sc-beams a">{beamSvg(0)}</div>
-      <div className="sc-beams b">{beamSvg(1)}</div>
+      <div className="sc-asia-pillars">
+        {pillars.map((p, i) => <i key={i} style={css({ left: p.x, top: p.top, width: p.w, height: p.bot - p.top, "--d": -(i % 5) * .37 + "s" })} />)}
+      </div>
+      <div className="sc-beams a">{beamSvg(0, false)}</div>
+      <div className="sc-beams b">{beamSvg(1, false)}</div>
+      <div className="sc-beams w">{beamSvg(0, true)}</div>
       <div className="sc-asia-sun" />
+      <svg viewBox={`0 0 ${W} ${H}`} className="sc-svgfill sc-asia-crowd">
+        <defs><radialGradient id="sccrowdlight" cx=".5" cy=".85" r=".6"><stop offset="0" stopColor="#3a3a50" /><stop offset="1" stopColor="#000" stopOpacity="0" /></radialGradient></defs>
+        <ellipse cx="800" cy="840" rx="760" ry="120" fill="url(#sccrowdlight)" opacity=".8" />
+        {crowd.heads.map((c, i) => <g key={i} fill="#020203"><circle cx={c.x} cy={c.y} r={c.r} /><ellipse cx={c.x} cy={c.y + c.r * 2.3} rx={c.r * 1.9} ry={c.r * 1.5} /></g>)}
+        {crowd.ph.map((c, i) => <g key={"p" + i} className="sc-ph" style={css({ "--d": -(i * .53 % 3) + "s" })}><circle cx={c.x} cy={c.y} r="6" fill="#fff" opacity={c.o * .18} /><rect x={c.x - 1.6} y={c.y - 2.6} width="3.2" height="5.2" rx="1" fill="#fff" opacity={c.o} /></g>)}
+      </svg>
     </div>
   );
 });
 
 function AsiaCard({ card, ok }: { card: EvCard; ok: boolean }) {
   const country = card.country || "Country";
-  const big = fitSize(country, px => `800 ${px}px 'Baloo 2'`, 860, 230, 0, ok);
-  const lines = (card.lyrics || "").split(/\s*(?:\n|&)\s*/).map(s => s.trim()).filter(Boolean);
+  const lines = (card.lyrics || "").split(/\s*(?:\n|&)\s*/).map(s => s.trim()).filter(Boolean).map((l, i, a) => l + (i < a.length - 1 ? "," : ""));
+  // fit the country to ~44% of the frame width (the ℓ is wider than Outfit's l)
+  const nL = (country.match(/l/g) || []).length;
+  const big = (() => {
+    if (!ok || typeof document === "undefined") return 132;
+    const g = document.createElement("canvas").getContext("2d"); if (!g) return 132;
+    g.font = "700 100px Outfit"; const w = g.measureText(country.replace(/l/g, "")).width + nL * 40 - country.length * 1.5;
+    return Math.max(48, Math.min(150, 700 / w * 100));
+  })();
+  const els = useRef<{ el: HTMLElement; p: LetterPlan; o: number; c: string }[]>([]);
+  els.current = [];
+  const reg = (el: HTMLElement | null, p: LetterPlan) => { if (el) els.current.push({ el, p, o: -1, c: "" }); };
+  const cv = useRef<HTMLCanvasElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const gl = useThermalGL(cv);
+  const X = A_HOLD;
+  // entry: lines type in from the left top→bottom; exit: country erases from the left, credits vanish bottom-up
+  const planCountry = (i: number) => ({ a: .42 + i * .045, v: X + (i < 3 ? .4 + .11 * i : .69 + .09 * (i - 3)), tin: TINT_Y, tout: TINT_P, ld: .17 });
+  // credit lines: patches of tint sweep through, then the whole line drops out right→left in ~0.1s
+  const linePlan = (a0: number, gone: number, tout: string, tin = TINT_Y) => (i: number, n: number) =>
+    ({ a: a0 + i * .018, v: X + gone + (n - 1 - i) / Math.max(1, n - 1) * -.1 + .1, tin, tout, ld: .1 + .2 * (.5 + .5 * Math.sin(i * .55 + n)) });
+  useEffect(() => {
+    if (!ok) return;
+    const still = reduced();
+    let raf = 0; const t0 = performance.now();
+    const frame = () => {
+      const fz = (window as any).__scFreeze;
+      const T = still ? 3 : typeof fz === "number" ? fz : ((performance.now() - t0) / 1000) % A_LOOP;
+      gl.current?.draw(T);
+      for (const L of els.current) {
+        const [o, c] = still ? [1, "#fff"] : letterStyle(L.p, T);
+        const oo = Math.round(o * 100) / 100;
+        if (oo !== L.o) { L.o = oo; L.el.style.opacity = String(oo); }
+        if (c !== L.c) { L.c = c; L.el.style.color = c; }
+      }
+      const z = T < X ? 1 : 1 + .3 * ease((T - X) / 1.7);
+      const lit = T < X ? .1 : .1 + .9 * ease((T - X - .1) / .35);
+      const s = stage.current; if (s) { s.style.transform = `scale(${z})`; s.style.setProperty("--lit", lit.toFixed(3)); s.style.setProperty("--wide", (T < X ? 0 : ease((T - X - .2) / .6)).toFixed(3)); s.style.opacity = String(T < X ? ease(T / .6) : T > A_END + .5 ? 1 - ease((T - A_END - .5) / .3) : 1); }
+      if (!still) raf = requestAnimationFrame(frame);
+    };
+    frame();
+    return () => cancelAnimationFrame(raf);
+  }, [ok, gl]);
+  const by = card.artist ? `By ${card.artist}` : "By artist";
   return (
     <>
-      <div className="sc-bgfade sc-asia-bg" />
-      <AsiaStage />
-      <ThermalHearts />
+      <div className="sc-asia-bg" />
+      <div className="sc-asia-zoom" ref={stage}><AsiaStage /></div>
+      <canvas ref={cv} className="sc-asia-gl" aria-hidden="true" />
       <div className="sc-asia-copy">
-        <Txt d={1.0} className="sc-asia-song">{card.song || "Song"}</Txt>
-        <Txt d={1.12} className="sc-asia-by">{card.artist ? `By ${card.artist}` : "By artist"}</Txt>
-        <Txt d={1.3} className="sc-asia-country" style={{ fontSize: big }}>{country}</Txt>
-        <Txt d={1.55} className="sc-asia-ml">Music &amp; Lyrics</Txt>
-        {lines.map((l, i) => <Txt key={i} d={1.65 + i * .1} className="sc-asia-ly">{l}{i < lines.length - 1 ? "," : ""}</Txt>)}
+        <Letters text={card.song || "Song"} className="sc-asia-song" stroke={11} reg={reg} plan={linePlan(.3, 1.45, TINT_Y)} />
+        <Letters text={by} className="sc-asia-by" stroke={11} reg={reg} plan={linePlan(.38, .92, TINT_O, TINT_P)} />
+        <Letters text={country} className="sc-asia-country" stroke={11.5} reg={reg} plan={planCountry} style={{ fontSize: big }} />
+        <div className="sc-asia-credits">
+          <Letters text="Music & Lyrics" className="sc-asia-ml" stroke={11} reg={reg} plan={linePlan(.62, .9, TINT_Y)} />
+          {lines.map((l, i) => <Letters key={i} text={l} className="sc-asia-ly" stroke={11} reg={reg}
+            plan={linePlan(.7 + i * .08, Math.max(.4, .7 - (i - (lines.length - 2)) * .22), i === lines.length - 1 ? TINT_R : TINT_P)} />)}
+        </div>
       </div>
     </>
   );
