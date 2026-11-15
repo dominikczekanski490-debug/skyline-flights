@@ -194,12 +194,33 @@ function scheduleBed(o: Out, style: EvStyle, t0: number) {
 
 /** Whoosh + hit for a stage card. `t` = when the card starts. */
 function scheduleSting(o: Out, style: EvStyle, t: number) {
-  whoosh(o, t - .05, .6, .9);
+  whoosh(o, t - .05, .6, 1.15);
   const hit = t + CARD_HIT[style];
   boom(o, hit, .85);
+  // phone speakers can't play the sub boom, so the hit also has a mid "body", a bright crack and a shimmer
+  const b = env(o, hit, .002, .45, .03, .32, o.out); const bo = osc(o, "triangle", 260, hit, hit + .4, b); bo.frequency.exponentialRampToValueAtTime(110, hit + .25);
+  const k = env(o, hit, .001, .4, .01, .12, filt(o, "bandpass", 2600, .9, o.out)); nsrc(o, hit, hit + .2, k);
   const F = FLAV[style];
-  const g = env(o, hit, .005, .07, .3, 1.4, filt(o, "lowpass", 3200, .6, o.out)); const e = env(o, hit, .005, .06, .3, 1.8, o.fx);
+  const g = env(o, hit, .005, .085, .35, 1.4, filt(o, "lowpass", 4200, .6, o.out)); const e = env(o, hit, .005, .07, .3, 1.8, o.fx);
   for (const m of F.chords[3]) { osc(o, F.pad, mtof(m + 12), hit, hit + 2, g, -6); osc(o, "triangle", mtof(m + 12), hit, hit + 2.3, e, 6); }
+  F.chords[3].forEach((m, i) => { const ts = hit + .05 + i * .06; const sg = env(o, ts, .002, .05, .02, .5, o.out); osc(o, "sine", mtof(m + 24), ts, ts + .6, sg); const sf = env(o, ts, .002, .04, .02, .8, o.fx); osc(o, "sine", mtof(m + 24), ts, ts + .9, sf); });
+}
+
+/** Light ambient bed under a stage card's hold (pad + soft arp + shaker), fading out by `t + len`. */
+function scheduleCardBed(o: Out, style: EvStyle, t: number, len: number) {
+  const F = FLAV[style];
+  const bus = o.ac.createGain(); bus.gain.setValueAtTime(0, t); bus.gain.linearRampToValueAtTime(1, t + .8); bus.gain.setValueAtTime(1, t + len - 1.2); bus.gain.linearRampToValueAtTime(0, t + len); bus.connect(o.out); o.n.count++;
+  const lp = filt(o, "lowpass", F.padCut * 1.1, .6, bus);
+  const send = o.ac.createGain(); send.gain.value = .5; lp.connect(send); send.connect(o.fx); o.n.count++;
+  for (let b = 0; b * 2 < len; b++) {
+    const tb = t + b * 2, ch = F.chords[b % 4];
+    const g = env(o, tb, .3, .03, 1.7, .6, lp); for (const m of ch) osc(o, F.pad, mtof(m), tb, tb + 2.6, g, (m % 2 ? 7 : -7));
+    for (let s = 0; s < 8; s++) {
+      const ts = tb + s * .25; if (ts > t + len - .3) break;
+      const a = env(o, ts, .003, F.bell ? .03 : .022, .02, .2, bus); osc(o, F.arp, mtof(ch[s % ch.length] + 12 + (s >= 4 ? 12 : 0)), ts, ts + .3, a);
+      if (ts > t + CARD_HIT[style] + .4) hat(o, ts + .125, .28);
+    }
+  }
 }
 
 function startOn(build: (o: Out, t: number) => void, lead = .06) {
@@ -219,7 +240,9 @@ export function playPostcard(style: EvStyle) {
   return startOn((o, t) => { scheduleBed(o, style, t); scheduleSting({ ...o }, style, t + BED_LEN); });
 }
 /** Stage-card Replay: whoosh + impact. */
-export function playCardSting(style: EvStyle) { stopAll(.08); return startOn((o, t) => scheduleSting(o, style, t + .1)); }
+export function playCardSting(style: EvStyle, bedLen = 7.4) { stopAll(.08); return startOn((o, t) => { scheduleSting(o, style, t + .1); if (bedLen > 0) scheduleCardBed(o, style, t + .1, bedLen); }); }
+/** True once a tap has unlocked the shared context and it's playing (so auto-plays may make sound). */
+export const audioRunning = () => !!ctx && ctx.state === "running";
 
 /** Offline render for checks: returns peak/RMS and node count (no speakers involved). */
 export async function renderOffline(style: EvStyle, what: "bed" | "sting" = "bed") {
@@ -227,7 +250,7 @@ export async function renderOffline(style: EvStyle, what: "bed" | "sting" = "bed
   const len = what === "bed" ? BED_LEN + 3 : 3.5;
   const ac: OfflineAudioContext = new OAC(2, Math.ceil(44100 * len), 44100);
   const bus = buildBus(ac); const o: Out = { ac, out: bus.master, fx: bus.fx, n: { count: 0 } };
-  if (what === "bed") { scheduleBed(o, style, .05); scheduleSting(o, style, .05 + BED_LEN); } else scheduleSting(o, style, .1);
+  if (what === "bed") { scheduleBed(o, style, .05); scheduleSting(o, style, .05 + BED_LEN); } else { scheduleSting(o, style, .1); scheduleCardBed(o, style, .1, 3.3); }
   const buf = await ac.startRendering(); const d = buf.getChannelData(0);
   let peak = 0, sum = 0; for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > peak) peak = v; sum += d[i] * d[i]; }
   // loudness per second, to see the arrangement (intro quiet → impact → card)

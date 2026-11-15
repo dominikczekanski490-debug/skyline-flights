@@ -44,4 +44,11 @@ assert.ok(!/\.(mp3|m4a|wav|ogg|aac)\b/i.test(a), "no audio files");
 const p = fs.readFileSync(path.join(here, "../src/evpostcard.tsx"), "utf8");
 assert.ok(!/fetch\(|XMLHttpRequest|sendBeacon|FormData/.test(p), "photo never uploaded");
 assert.match(p, /indexedDB/);
+// stage card sound: taps unlock the shared engine synchronously; auto-plays/loops only sound once it's running
+const e = fs.readFileSync(path.join(here, "../src/eurovision.tsx"), "utf8");
+assert.match(e, /const replayCard = \(\) => \{ if \(!isMuted\(\)\) unlockAudio\(\);/, "Replay unlocks in the tap");
+assert.match(e, /else if \(tab === "stage"\) replayCard\(\); setFull\(true\)/, "Fullscreen on Stage plays with sound");
+assert.match(e, /ev-card-loop/); assert.match(e, /audioRunning\(\)/);
+assert.match(fs.readFileSync(path.join(here, "../src/evcards.tsx"), "utf8"), /new CustomEvent\("ev-card-loop"/);
+assert.match(a, /function scheduleCardBed/);
 console.log("postcard ok");

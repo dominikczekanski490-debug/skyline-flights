@@ -22,7 +22,7 @@ import "./eurovision.css";
 import { JescBoard } from "./evjesc";
 import { StageCardTV } from "./evcards";
 import { PostcardTV, SAMPLE_PHOTO, loadPhoto, savePhoto, downscalePhoto, type PcInfo } from "./evpostcard";
-import { unlockAudio, playPostcard, playCardSting, stopAll, isMuted, setMuted } from "./evaudio";
+import { unlockAudio, playPostcard, playCardSting, stopAll, isMuted, setMuted, audioRunning } from "./evaudio";
 export { jescLayout } from "./evjesc";
 
 const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -210,6 +210,7 @@ export function EuroStudio() {
   const [pcStart, setPcStart] = useState<number | null>(null);
   const [muted, setMute] = useState(false);
   const [photoErr, setPhotoErr] = useState("");
+  const [unlocked, setUnlocked] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => { setMute(isMuted()); setPcs(loadPcs()); loadPhoto().then(u => { if (u) { setMyPhoto(u); setPhotoSrc("mine"); } }); }, []);
   useEffect(() => { if (ready.current) savePcs(pcs); }, [pcs]);
@@ -248,14 +249,28 @@ export function EuroStudio() {
   const pc = pcs[style];
   const patchPc = (p: Partial<PcInfo>) => setPcs(x => ({ ...x, [style]: { ...x[style], ...p } }));
   // Sound must start inside the tap itself (iPhone): unlock synchronously, then schedule.
-  const replayCard = () => { if (!isMuted()) { unlockAudio(); playCardSting(style); } setPlay(n => n + 1); };
-  const playPc = () => { unlockAudio(); const a = playPostcard(style); setPcStart(performance.now() + (a ? Math.max(0, (a.at - a.ctx.currentTime) * 1000) : 0)); };
-  const toggleMute = () => { const m = !muted; setMute(m); if (!m) unlockAudio(); setMuted(m); };
+  // Stage card sound: every play of the card (tap, fullscreen, style change, each Asia loop) gets whoosh + hit + a light bed.
+  // Taps unlock the shared context synchronously (same path as the postcard); later auto-plays only sound once it's running.
+  const lastSting = useRef(0);
+  const sting = (why: string) => {
+    if (isMuted()) return; const now = performance.now(); if (now - lastSting.current < 1200) return;
+    lastSting.current = now; const r = playCardSting(style); (window as any).__evStingLog = [...((window as any).__evStingLog || []), { why, ok: !!r }];
+  };
+  const replayCard = () => { if (!isMuted()) unlockAudio(); lastSting.current = 0; sting("tap"); setUnlocked(true); setPlay(n => n + 1); };
+  const playPc = () => { unlockAudio(); setUnlocked(true); const a = playPostcard(style); setPcStart(performance.now() + (a ? Math.max(0, (a.at - a.ctx.currentTime) * 1000) : 0)); };
+  const toggleMute = () => { const m = !muted; setMute(m); setMuted(m); if (m) stopAll(.1); else { unlockAudio(); setUnlocked(true); if (tab === "stage") { lastSting.current = 0; sting("unmute"); setPlay(n => n + 1); } } };
   const pickPhoto = async (f: File | undefined) => {
     if (!f) return; setPhotoErr("");
     try { const u = await downscalePhoto(f); setMyPhoto(u); setPhotoSrc("mine"); setPcStart(null); await savePhoto(u); }
     catch { setPhotoErr("Couldn't open that photo — try another one."); }
   };
+  const stingRef = useRef(sting); stingRef.current = sting;
+  useEffect(() => { if (tab === "stage" && audioRunning()) { lastSting.current = 0; stingRef.current("style"); } }, [tab, style]);
+  useEffect(() => {
+    if (tab !== "stage") return;
+    const on = () => { if (audioRunning()) stingRef.current("loop"); };
+    addEventListener("ev-card-loop", on); return () => removeEventListener("ev-card-loop", on);
+  }, [tab]);
   const photo = photoSrc === "mine" && myPhoto ? myPhoto : SAMPLE_PHOTO;
   const soundBtn = <button type="button" className="ev-replay ev-mute" aria-label={muted ? "Turn sound on" : "Mute sound"} aria-pressed={muted} onClick={e => { e.stopPropagation(); toggleMute(); }}>{muted ? "🔇" : "🔊"}</button>;
 
@@ -263,7 +278,8 @@ export function EuroStudio() {
     ? <div className="ev-stage tv ev-pc"><PostcardTV style={style} info={pc} photo={photo} start={pcStart} full={isFull} onPlay={playPc} />
         {pcStart != null && <button className="ev-replay" type="button" aria-label="Play postcard again" onClick={e => { e.stopPropagation(); playPc(); }}>↻</button>}{soundBtn}</div>
     : tab === "stage"
-    ? <div className="ev-stage tv"><StageCard card={card} play={play} full={isFull} /><button className="ev-replay" type="button" aria-label="Replay animation" onClick={e => { e.stopPropagation(); replayCard(); }}>↻</button>{soundBtn}</div>
+    ? <div className="ev-stage tv"><StageCard card={card} play={play} full={isFull} /><button className="ev-replay" type="button" aria-label="Replay with sound" onClick={e => { e.stopPropagation(); replayCard(); }}>↻</button>{soundBtn}
+        {!unlocked && !muted && !isFull && <button type="button" className="ev-tapsound" onClick={e => { e.stopPropagation(); replayCard(); }}>▶ Play with sound</button>}</div>
     : <div className={"ev-board-wrap" + (style === "jesc" ? " jb" : "")}><ScoreBoard board={board} wide={isFull || wide} full={isFull} play={play} highlight={flash} onPick={reveal ? id => { if (pick != null) award(id, pick); } : undefined} /></div>;
 
   return (
@@ -277,9 +293,9 @@ export function EuroStudio() {
       {preview(false)}
       <div className="ev-actions">
         {tab === "postcard" && <button type="button" className="ev-btn pri" onClick={playPc}>▶ Play</button>}
-        {tab === "stage" && <button type="button" className="ev-btn" onClick={replayCard}>Replay</button>}
+        {tab === "stage" && <button type="button" className="ev-btn" onClick={replayCard}>▶ Replay</button>}
         {tab === "board" && style === "jesc" && <button type="button" className="ev-btn" onClick={() => setPlay(n => n + 1)}>Replay</button>}
-        <button type="button" className={"ev-btn" + (tab === "postcard" ? "" : " pri")} onClick={() => { if (tab === "postcard") playPc(); setFull(true); }}>⛶ Fullscreen</button>
+        <button type="button" className={"ev-btn" + (tab === "postcard" ? "" : " pri")} onClick={() => { if (tab === "postcard") playPc(); else if (tab === "stage") replayCard(); setFull(true); }}>⛶ Fullscreen</button>
         {tab !== "board" && <button type="button" className="ev-btn" aria-pressed={muted} onClick={toggleMute}>{muted ? "🔇 Sound off" : "🔊 Sound on"}</button>}
       </div>
 

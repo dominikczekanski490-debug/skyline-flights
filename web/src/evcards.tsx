@@ -339,10 +339,13 @@ function AsiaCard({ card, ok }: { card: EvCard; ok: boolean }) {
   useEffect(() => {
     if (!ok) return;
     const still = reduced();
-    let raf = 0; const t0 = performance.now();
+    let raf = 0, loops = 0; const t0 = performance.now();
     const frame = () => {
       const fz = (window as any).__scFreeze;
-      const T = still ? 3 : typeof fz === "number" ? fz : ((performance.now() - t0) / 1000) % A_LOOP;
+      const raw = (performance.now() - t0) / 1000;
+      const T = still ? 3 : typeof fz === "number" ? fz : raw % A_LOOP;
+      // tell the studio each time the card loops back to its entry, so the sound can play again
+      const lp = Math.floor(raw / A_LOOP); if (!still && typeof fz !== "number" && lp > loops) { loops = lp; dispatchEvent(new CustomEvent("ev-card-loop", { detail: "asia" })); }
       gl.current?.draw(T);
       for (const L of els.current) {
         const [o, c] = still ? [1, "#fff"] : letterStyle(L.p, T);

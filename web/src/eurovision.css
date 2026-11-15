@@ -257,3 +257,5 @@ button.ev-row{-webkit-appearance:none;appearance:none;border:0;margin:0;backgrou
 .ev-photo-b{display:flex;flex-direction:column;gap:8px;min-width:0}
 .ev-photo-b .ev-styles{margin:0}
 .ev-form small{font-weight:500;opacity:.6}
+.ev-tapsound{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:7;border:0;border-radius:999px;padding:8px 14px;font:700 13px/1 Outfit,system-ui,sans-serif;
+  background:rgba(255,255,255,.92);color:#0b1f3f;-webkit-text-fill-color:#0b1f3f;box-shadow:0 6px 20px rgba(0,0,0,.4)}
