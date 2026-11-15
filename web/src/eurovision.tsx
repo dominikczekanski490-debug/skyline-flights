@@ -19,6 +19,8 @@ import {
   addCountry, removeCountry, loadStore, saveStore, padRank, isSemi,
 } from "./eurovision-data";
 import "./eurovision.css";
+import { JescBoard } from "./evjesc";
+export { jescLayout } from "./evjesc";
 
 const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -333,7 +335,12 @@ function Pts({ n }: { n: number }) {
   return <span className="ev-pts">{v}</span>;
 }
 
-export function ScoreBoard({ board, wide, highlight, onPick }: { board: EvBoard; wide: boolean; highlight?: string; onPick?: (id: string) => void }) {
+export function ScoreBoard({ board, wide, highlight, onPick, full, play }: { board: EvBoard; wide: boolean; highlight?: string; onPick?: (id: string) => void; full?: boolean; play?: number }) {
+  if (board.style === "jesc") return <JescBoard board={board} full={full} play={play} onPick={onPick} />;
+  return <ClassicBoard board={board} wide={wide} highlight={highlight} onPick={onPick} />;
+}
+
+function ClassicBoard({ board, wide, highlight, onPick }: { board: EvBoard; wide: boolean; highlight?: string; onPick?: (id: string) => void }) {
   const ranked = useMemo(() => sortRows(board.rows).map((r, i) => ({ ...r, rank: i + 1 })), [board.rows]);
   const cols = boardColumns(board.style, ranked.length, wide);
   const rows = Math.ceil(ranked.length / cols);
@@ -434,9 +441,9 @@ export function EuroStudio() {
     setTimeout(() => setFlash(undefined), 700);
   };
 
-  const preview = tab === "stage"
-    ? <div className={"ev-stage" + (full ? " fullish" : "")}><StageCard card={card} play={play} /><button className="ev-replay" type="button" aria-label="Replay animation" onClick={e => { e.stopPropagation(); setPlay(n => n + 1); }}>↻</button></div>
-    : <div className="ev-board-wrap"><ScoreBoard board={board} wide={full || wide} highlight={flash} onPick={reveal ? id => { if (pick != null) award(id, pick); } : undefined} /></div>;
+  const preview = (isFull: boolean) => tab === "stage"
+    ? <div className={"ev-stage" + (isFull ? " fullish" : "")}><StageCard card={card} play={play} /><button className="ev-replay" type="button" aria-label="Replay animation" onClick={e => { e.stopPropagation(); setPlay(n => n + 1); }}>↻</button></div>
+    : <div className={"ev-board-wrap" + (style === "jesc" ? " jb" : "")}><ScoreBoard board={board} wide={isFull || wide} full={isFull} play={play} highlight={flash} onPick={reveal ? id => { if (pick != null) award(id, pick); } : undefined} /></div>;
 
   return (
     <div className="ev">
@@ -445,9 +452,9 @@ export function EuroStudio() {
         <button type="button" role="tab" className={tab === "board" ? "on" : ""} aria-selected={tab === "board"} onClick={() => setTab("board")}>Scoreboard</button>
       </div>
       <Seg value={style} opts={EV_STYLES.map(s => ({ id: s, label: EV_STYLE_LABEL[s] }))} onChange={id => setStyle(id as EvStyle)} />
-      {preview}
+      {preview(false)}
       <div className="ev-actions">
-        {tab === "stage" && <button type="button" className="ev-btn" onClick={() => setPlay(n => n + 1)}>Replay</button>}
+        {(tab === "stage" || style === "jesc") && <button type="button" className="ev-btn" onClick={() => setPlay(n => n + 1)}>Replay</button>}
         <button type="button" className="ev-btn pri" onClick={() => setFull(true)}>⛶ Fullscreen</button>
       </div>
 
@@ -515,7 +522,7 @@ export function EuroStudio() {
       </datalist>
       <p className="ev-note">A fan-made recreation of the look of Eurovision Asia, Eurovision 2026 and Junior Eurovision 2026. Not affiliated with the EBU or any broadcaster. Boards you edit stay on this device.</p>
       {isSemi(board.round) && tab === "board" && <p className="ev-note">Top 10 in a semi-final are marked Q.</p>}
-      {full && <FullScreen onClose={() => setFull(false)} bg="#05060a">{preview}</FullScreen>}
+      {full && <FullScreen onClose={() => setFull(false)} bg="#05060a">{preview(true)}</FullScreen>}
     </div>
   );
 }

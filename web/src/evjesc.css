@@ -1,0 +1,81 @@
+/* JESC 2026 results board — 1600×900 design frame. Animations use transform/opacity only. */
+.jb-host{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#0d1238;contain:layout paint;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.jb-host.full{position:fixed;inset:0;width:100vw;height:100dvh;aspect-ratio:auto;background:#05060a}
+.jb-tv{position:absolute;left:50%;top:50%;width:1600px;height:900px;transform-origin:50% 50%;overflow:hidden;
+  font-family:Montserrat,system-ui,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;
+  background:radial-gradient(ellipse 75% 70% at 50% 42%,#1a2160 0%,#141a4a 48%,#0d1238 100%)}
+.jb-tv *{box-sizing:border-box}
+
+/* Background */
+.jb-bg{position:absolute;inset:0;pointer-events:none}
+.jb-stars{position:absolute;inset:0;background-size:100% 100%}
+.jb-stars.tw{animation:jb-tw 4.8s ease-in-out infinite alternate}
+@keyframes jb-tw{from{opacity:.35}to{opacity:1}}
+.jb-bk{position:absolute;margin:-0px;animation:jb-drift var(--d,28s) ease-in-out infinite alternate;animation-delay:var(--o,0s)}
+.jb-bk b{position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle,rgba(var(--c),.22) 0%,rgba(var(--c),.3) 50%,rgba(var(--c),.42) 60%,rgba(var(--c),.2) 66%,rgba(var(--c),0) 71%);
+  animation:jb-pulse var(--p,7s) ease-in-out infinite alternate;animation-delay:var(--o,0s)}
+@keyframes jb-drift{from{transform:translate3d(0,0,0)}to{transform:translate3d(var(--dx),var(--dy),0)}}
+@keyframes jb-pulse{from{opacity:.45;transform:scale(.94)}to{opacity:1;transform:scale(1.04)}}
+.jb-vig{position:absolute;inset:0;background:radial-gradient(ellipse 85% 85% at 50% 50%,transparent 60%,rgba(5,8,30,.55) 100%)}
+
+.jb-round{position:absolute;left:64px;top:34px;font-weight:700;font-size:19px;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.62)}
+.jb-fan{position:absolute;right:56px;bottom:26px;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.3)}
+
+/* Rows */
+.jb-rows{position:absolute;inset:0}
+.jb-row{position:absolute;left:0;top:0;display:block;padding:0;margin:0;border:0;background:none;color:#fff;font:inherit;text-align:left;
+  transition:transform .82s cubic-bezier(.3,1.32,.42,1);-webkit-tap-highlight-color:transparent}
+button.jb-row{cursor:pointer;-webkit-appearance:none;appearance:none}
+.jb-tv:not(.ready) .jb-row{visibility:hidden}
+
+.jb-bar{position:absolute;inset:0;border-radius:3px;overflow:hidden;transform-origin:0 50%;
+  background:linear-gradient(180deg,#EC3C7D 0%,#E5296F 46%,#E0256A 100%);
+  box-shadow:0 calc(var(--h) * .05) 0 #A3164A,0 calc(var(--h) * .12) calc(var(--h) * .22) rgba(6,8,40,.35)}
+.jb-ptsbg{position:absolute;right:0;top:0;bottom:0;width:16.5%;background:linear-gradient(180deg,#CF2361 0%,#C81E5B 50%,#C21B57 100%);
+  box-shadow:inset 1px 0 0 rgba(120,8,48,.35)}
+.jb-flag{position:absolute;left:calc(var(--h) * .16);top:50%;height:calc(var(--h) * .66);width:calc(var(--h) * .66 * 1.45);margin-top:calc(var(--h) * -.33);
+  background:#fff;padding:calc(var(--h) * .03);border-radius:1px;box-shadow:0 1px 3px rgba(80,0,30,.35)}
+.jb-flag canvas{display:block;width:100%;height:100%}
+.jb-name{position:absolute;left:calc(var(--h) * (.16 + .66 * 1.45 + .26));top:0;bottom:0;display:flex;align-items:center;white-space:nowrap;
+  font-weight:800;font-size:calc(var(--h) * .37 * var(--fit,1));letter-spacing:.02em;text-transform:uppercase;line-height:1;
+  text-shadow:0 1px 0 rgba(140,10,60,.35)}
+.jb-name>span{display:block;transform:scaleX(var(--sx,1));transform-origin:0 50%}
+.jb-q{position:absolute;right:calc(16.5% + var(--h) * .18);top:50%;height:calc(var(--h) * .36);margin-top:calc(var(--h) * -.18);min-width:calc(var(--h) * .36);
+  display:flex;align-items:center;justify-content:center;border-radius:2px;background:#fff;color:#C81E5B;font-weight:900;font-size:calc(var(--h) * .24);line-height:1}
+.jb-pts{position:absolute;right:0;top:0;bottom:0;width:16.5%;display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:calc(var(--h) * .38);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;letter-spacing:0;line-height:1}
+.jb-sweep{position:absolute;inset:0;border-radius:3px;overflow:hidden;pointer-events:none}
+.jb-sweep i{position:absolute;top:0;bottom:0;left:0;width:38%;
+  background:linear-gradient(100deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.18) 30%,rgba(255,255,255,.85) 50%,rgba(255,255,255,.18) 70%,rgba(255,255,255,0) 100%);
+  transform:translate3d(-110%,0,0);animation:jb-sweep .62s cubic-bezier(.45,.05,.3,1) forwards}
+@keyframes jb-sweep{to{transform:translate3d(275%,0,0)}}
+.jb-row.hit .jb-num{display:inline-block;animation:jb-bump .5s cubic-bezier(.3,1.6,.5,1)}
+@keyframes jb-bump{0%{transform:scale(1)}35%{transform:scale(1.2)}100%{transform:scale(1)}}
+
+/* Leader: a soft breathing halo */
+.jb-glow{position:absolute;inset:0;border-radius:3px;opacity:0;pointer-events:none;
+  box-shadow:0 0 40px 8px rgba(255,80,155,.7),0 0 12px 2px rgba(255,200,225,.55)}
+.jb-row.lead .jb-glow{animation:jb-lead 2.6s ease-in-out infinite alternate;animation-delay:1.6s}
+@keyframes jb-lead{from{opacity:.35}to{opacity:1}}
+.jb-row.pick:active .jb-bar{filter:brightness(1.1)}
+
+/* Intro: wipe from left with slight overshoot, flag pops, name and points settle */
+.jb-tv.intro.ready .jb-bar{animation:jb-wipe .58s cubic-bezier(.25,1.25,.45,1) both;animation-delay:calc(var(--i) * 60ms)}
+.jb-tv.intro.ready .jb-flag{animation:jb-pop .5s cubic-bezier(.3,1.7,.5,1) both;animation-delay:calc(var(--i) * 60ms + 200ms)}
+.jb-tv.intro.ready .jb-name,.jb-tv.intro.ready .jb-q{animation:jb-slide .5s cubic-bezier(.2,.9,.25,1) both;animation-delay:calc(var(--i) * 60ms + 250ms)}
+.jb-tv.intro.ready .jb-pts{animation:jb-fade .35s ease-out both;animation-delay:calc(var(--i) * 60ms + 300ms)}
+.jb-tv.intro.ready .jb-round,.jb-tv.intro.ready .jb-fan{animation:jb-fade .6s ease-out both}
+@keyframes jb-wipe{0%{transform:scaleX(0);opacity:.0}12%{opacity:1}100%{transform:scaleX(1);opacity:1}}
+@keyframes jb-pop{0%{transform:scale(.2);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes jb-slide{0%{transform:translate3d(-24px,0,0);opacity:0}100%{transform:none;opacity:1}}
+@keyframes jb-fade{from{opacity:0}to{opacity:1}}
+
+/* Host chrome in the studio */
+.ev-board-wrap.jb{min-height:0;background:#0d1238}
+.gs-full .ev-board-wrap.jb{width:100vw;height:100dvh;max-height:none;min-height:0;overflow:hidden}
+
+@media (prefers-reduced-motion:reduce){
+  .jb-tv *,.jb-row{animation:none!important;transition:none!important}
+  .jb-row.lead .jb-glow{opacity:.6}
+}

@@ -104,4 +104,17 @@ assert.ok(src.includes('"eurovision"'));
 assert.ok(src.includes("EuroStudio"));
 const sw = fs.readFileSync(path.join(here, "../public/sw.js"), "utf8");
 assert.match(sw, /skyline-v36/);
+// JESC TV board: fixed 16:9 frame, 2 columns column-major, 6.5:1 bars, 25% row gap
+{
+  const L = ui.jescLayout(16);
+  assert.strictEqual(L.cols, 2); assert.strictEqual(L.per, 8);
+  assert.ok(Math.abs(L.w / L.h - 6.5) < 1e-9 && Math.abs(L.gap / L.h - 0.25) < 1e-9);
+  assert.strictEqual(L.pos(7).x, L.pos(0).x); assert.ok(L.pos(8).x > L.pos(7).x); assert.strictEqual(L.pos(8).y, L.pos(0).y);
+  const last = L.pos(15); assert.ok(last.x + L.w <= 1600 && last.y + L.h <= 900 && L.pos(0).x >= 0 && L.pos(0).y >= 0);
+  const big = ui.jescLayout(26); assert.ok(big.pos(25).y + big.h <= 900);
+  assert.strictEqual(ui.jescLayout(5).cols, 1);
+  const jb = renderToStaticMarkup(h(ui.ScoreBoard, { board: d.DEFAULT_BOARDS.jesc, wide: false }));
+  assert.ok(jb.includes("jb-tv") && jb.includes("North Macedonia") && jb.includes("57"));
+  assert.ok(!/<img/.test(jb), "flags drawn to canvas");
+}
 console.log("eurovision ok");
