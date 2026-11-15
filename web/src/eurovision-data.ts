@@ -117,7 +117,7 @@ const row = (cc: string, points: number, name?: string): EvRow => ({
 });
 
 export const DEFAULT_CARDS: Record<EvStyle, EvCard> = {
-  asia: { style: "asia", country: "Philippines", cc: "PH", song: "Sobra-Sobra", artist: "CARMELLE", lyrics: "Gianina Camille del Rosario & Mart Sam Emmanuel Olavides" },
+  asia: { style: "asia", country: "Philippines", cc: "PH", song: "Sobra-Sobra", artist: "CARMELLE", lyrics: "Gianina Camille \"Nica\" del Rosario & Mart Sam Emmanuel \"Mat\" B. Olavides" },
   esc: { style: "esc", country: "Switzerland", cc: "CH", song: "Alice", artist: "Veronica Fusaro", lyrics: "Veronica Fusaro & Charlie McClean" },
   jesc: { style: "jesc", country: "France", cc: "FR", song: "Comment tu vas ?", artist: "ALEC", lyrics: "ALEC & MALO" },
 };
