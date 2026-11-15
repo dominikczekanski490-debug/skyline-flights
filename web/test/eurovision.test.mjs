@@ -103,7 +103,7 @@ const src = fs.readFileSync(path.join(here, "../src/games.tsx"), "utf8");
 assert.ok(src.includes('"eurovision"'));
 assert.ok(src.includes("EuroStudio"));
 const sw = fs.readFileSync(path.join(here, "../public/sw.js"), "utf8");
-assert.match(sw, /skyline-v36/);
+assert.match(sw, /skyline-v37/);
 // JESC TV board: fixed 16:9 frame, 2 columns column-major, 6.5:1 bars, 25% row gap
 {
   const L = ui.jescLayout(16);
