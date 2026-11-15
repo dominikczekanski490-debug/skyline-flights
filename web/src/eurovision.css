@@ -1,0 +1,230 @@
+/* Eurovision studio: original fan-made stage cards and scoreboards. Transform/opacity only. */
+.ev{max-width:560px;margin:0 auto;padding-bottom:24px;overflow-x:hidden}
+.ev *{box-sizing:border-box}
+.ev-tabs,.ev-styles,.ev-rounds,.ev-mode{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.ev-tabs button,.ev-styles button,.ev-rounds button,.ev-mode button,.ev-btn{
+  border:1px solid rgba(255,255,255,.14);background:#1b2236;color:#fff;-webkit-text-fill-color:#fff;
+  font:inherit;font-size:13px;font-weight:700;padding:8px 12px;border-radius:999px;cursor:pointer;line-height:1.2}
+.ev-tabs button.on,.ev-styles button.on,.ev-rounds button.on,.ev-mode button.on{background:#fff;color:#0b1f3f;-webkit-text-fill-color:#0b1f3f;border-color:#fff}
+.ev-btn.pri{background:#fff;color:#0b1f3f;-webkit-text-fill-color:#0b1f3f}
+.ev-actions{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
+.ev-form{display:flex;flex-direction:column;gap:8px;margin:4px 0 12px}
+.ev-form label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#a9b4d0}
+.ev-form input,.ev-form select,.ev-form textarea{width:100%}
+.ev-form textarea{min-height:64px;resize:vertical}
+.ev-note{margin:8px 0 0;font-size:11px;line-height:1.45;color:rgba(244,246,251,.55)}
+.ev-stage{position:relative;width:100%;border-radius:16px;overflow:hidden;margin:0 0 8px;aspect-ratio:16/10;background:#05060a;box-shadow:0 16px 40px rgba(0,0,0,.45);isolation:isolate;touch-action:manipulation}
+.ev-stage.fullish{aspect-ratio:16/9}
+.ev-board-wrap{position:relative;width:100%;border-radius:16px;overflow:hidden;margin:0 0 8px;min-height:420px;box-shadow:0 16px 40px rgba(0,0,0,.45)}
+.ev-card,.ev-board{position:relative;width:100%;height:100%;overflow:hidden;color:#fff;-webkit-font-smoothing:antialiased}
+.ev-card{display:flex;align-items:center;justify-content:center;text-align:center;height:100%}
+.ev-fan{position:absolute;left:10px;bottom:7px;z-index:5;font-size:8px;letter-spacing:.4px;font-weight:700;color:rgba(255,255,255,.38);text-transform:uppercase;pointer-events:none}
+.ev-board .ev-fan{position:static;display:block;margin:8px 4px 0;color:rgba(255,255,255,.45)}
+
+/* Shared intro text */
+.ev-in{animation:ev-in .75s cubic-bezier(.2,.85,.2,1) both;animation-delay:var(--d,0s)}
+@keyframes ev-in{from{opacity:0;transform:translateY(12px) scale(.94);filter:blur(8px)}to{opacity:1;transform:none;filter:none}}
+
+/* ——— Asia postcard ——— */
+.ev-card.asia{background:#000;font-family:ui-rounded,"SF Pro Rounded","Hiragino Maru Gothic ProN",system-ui,sans-serif}
+.ev-asia-bg{position:absolute;inset:0;background:
+  radial-gradient(ellipse 70% 55% at 50% 55%,#1a1a1a 0%,#050505 55%,#000 100%)}
+.ev-beams{position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;overflow:hidden}
+.ev-beams i{position:absolute;left:50%;top:48%;width:16%;height:130%;transform-origin:50% 8%;
+  background:linear-gradient(to bottom,rgba(255,255,255,0),rgba(255,255,255,.55) 42%,rgba(255,255,255,0));
+  clip-path:polygon(48% 0,52% 0,100% 100%,0 100%);filter:blur(5px);will-change:transform;
+  animation:ev-sweep 7.5s ease-in-out infinite;animation-delay:var(--d,0s);
+  transform:translate(-50%,-30%) rotate(var(--r,0deg));opacity:.85}
+.ev-card.asia .ev-beams i{background:linear-gradient(to bottom,rgba(255,255,255,0),rgba(255,255,255,.7) 40%,rgba(255,255,255,0))}
+@keyframes ev-sweep{
+  0%,100%{transform:translate(-50%,-30%) rotate(var(--r,0deg))}
+  50%{transform:translate(-50%,-30%) rotate(calc(var(--r,0deg) + var(--swing,26deg)))}
+}
+.ev-hearts{position:absolute;inset:0;pointer-events:none;container-type:size;z-index:1}
+.ev-heart{position:absolute;left:50%;top:50%;width:var(--s,42px);height:var(--s,42px);margin:calc(var(--s,42px) / -2);
+  transform:translate(calc(cos(var(--a,0deg)) * 47cqw), calc(sin(var(--a,0deg)) * 44cqh));
+  color:var(--c,#ff4d4d);filter:drop-shadow(0 0 8px var(--c,#ff4d4d)) drop-shadow(0 0 18px var(--c,#ff4d4d));
+  animation:ev-pulse 2.6s ease-in-out infinite;animation-delay:var(--d,0s);will-change:transform,opacity;z-index:1}
+.ev-heart svg{width:100%;height:100%;display:block;overflow:visible}
+@keyframes ev-pulse{
+  0%,100%{transform:translate(calc(cos(var(--a,0deg)) * 47cqw), calc(sin(var(--a,0deg)) * 44cqh)) scale(1);opacity:.95}
+  50%{transform:translate(calc(cos(var(--a,0deg)) * 47cqw), calc(sin(var(--a,0deg)) * 47cqh)) scale(1.1);opacity:1}
+}
+.ev-asia-copy{position:relative;z-index:2;padding:8% 8% 10%;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%}
+.ev-asia-song{font-size:clamp(11px,2.6vw,18px);font-weight:800;letter-spacing:.02em;line-height:1.15;text-transform:none}
+.ev-asia-by{font-size:clamp(10px,2.2vw,15px);font-weight:800;margin-top:2px;opacity:.95}
+.ev-asia-country{margin:.35em 0 .3em;font-size:clamp(28px,8.6vw,72px);font-weight:800;line-height:.95;letter-spacing:-.03em;
+  text-transform:uppercase;text-wrap:balance;max-width:16ch}
+.ev-asia-ly{font-size:clamp(8px,1.55vw,11px);font-weight:700;letter-spacing:.03em;opacity:.92;max-width:42ch;text-wrap:balance;line-height:1.25}
+
+/* ——— Eurovision 2026 postcard ——— */
+.ev-card.esc{background:#07060c;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+.ev-esc-bg{position:absolute;inset:0;background:
+  radial-gradient(ellipse 80% 50% at 50% 115%,#2a1a28 0%,transparent 60%),
+  radial-gradient(ellipse 50% 40% at 20% 80%,rgba(180,20,50,.35),transparent 70%),
+  radial-gradient(ellipse 50% 40% at 80% 80%,rgba(20,60,180,.4),transparent 70%),
+  linear-gradient(#0c0a14,#05040a)}
+.ev-esc-floor{position:absolute;left:8%;right:8%;bottom:-8%;height:38%;border-radius:50%;
+  background:radial-gradient(ellipse at 50% 40%,rgba(80,70,90,.35),transparent 70%);
+  box-shadow:0 0 40px rgba(255,40,70,.12)}
+.ev-card.esc .ev-beams i:nth-child(odd){background:linear-gradient(to bottom,rgba(255,30,60,0),rgba(255,40,70,.75) 45%,rgba(255,30,60,0));filter:blur(7px)}
+.ev-card.esc .ev-beams i:nth-child(even){background:linear-gradient(to bottom,rgba(40,80,255,0),rgba(50,110,255,.75) 45%,rgba(40,80,255,0));filter:blur(7px)}
+.ev-sparks{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.ev-spark{position:absolute;left:var(--x,50%);top:var(--y,50%);width:var(--z,3px);height:var(--z,3px);border-radius:50%;
+  background:#fff;box-shadow:0 0 6px 2px rgba(255,255,255,.85);opacity:.15;
+  animation:ev-twinkle 2.2s ease-in-out infinite;animation-delay:var(--d,0s);will-change:opacity,transform}
+@keyframes ev-twinkle{0%,100%{opacity:.1;transform:scale(.6)}40%{opacity:1;transform:scale(1.35)}70%{opacity:.25;transform:scale(.8)}}
+.ev-esc-copy{position:relative;z-index:2;width:100%;height:100%;display:grid;grid-template-rows:auto 1fr auto;padding:7% 6% 8%;text-align:center}
+.ev-esc-name{font-size:clamp(22px,7.2vw,64px);font-weight:800;letter-spacing:.06em;line-height:.95;text-transform:uppercase;
+  color:#fff;padding:.06em 0;-webkit-text-stroke:1.6px #ff2a4a;paint-order:stroke fill;
+  text-shadow:0 0 6px #ff3b5c,0 0 18px rgba(255,40,70,.85),0 0 36px rgba(255,40,70,.4);
+  animation:ev-neon 3.6s ease-in-out infinite;animation-delay:var(--d,.2s)}
+@keyframes ev-neon{
+  0%,100%{opacity:1;filter:brightness(1)}
+  47%{opacity:1}
+  49%{opacity:.55;filter:brightness(1.4)}
+  51%{opacity:1;filter:brightness(1)}
+  90%{opacity:1}
+  92%{opacity:.35}
+  94%{opacity:1}
+}
+.ev-esc-cols{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;align-items:end;text-align:left;padding:0 2% 2%}
+.ev-esc-cols .r{text-align:right}
+.ev-esc-k{font-size:clamp(8px,1.6vw,11px);font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.7;margin-bottom:3px}
+.ev-esc-song{font-size:clamp(14px,3.3vw,26px);font-weight:800;line-height:1.1}
+.ev-esc-art{font-size:clamp(11px,2.3vw,16px);font-weight:600;margin-top:2px;opacity:.92}
+.ev-esc-ly{font-size:clamp(10px,2vw,14px);font-weight:600;line-height:1.25;opacity:.92}
+
+/* ——— Junior Eurovision 2026 postcard ——— */
+.ev-card.jesc{background:#07102a;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+.ev-jesc-bg{position:absolute;inset:0;background:
+  radial-gradient(ellipse 70% 50% at 50% 110%,#1a2a60 0%,transparent 60%),
+  radial-gradient(ellipse 40% 30% at 80% 20%,rgba(80,40,140,.35),transparent 70%),
+  linear-gradient(#0a1433,#050918)}
+.ev-card.jesc .ev-beams i{background:linear-gradient(to bottom,rgba(160,200,255,0),rgba(140,180,255,.35) 50%,transparent);filter:blur(8px);opacity:.7}
+.ev-jesc-copy{position:relative;z-index:2;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6% 7% 8%}
+.ev-crown{width:min(58%,260px);height:auto;overflow:visible;margin-bottom:2%;filter:drop-shadow(0 0 8px rgba(255,150,220,.45))}
+.ev-crown path,.ev-crown circle,.ev-crown ellipse{fill:none;stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:1;stroke-dashoffset:1;animation:ev-draw 1.35s cubic-bezier(.4,0,.2,1) forwards;animation-delay:var(--d,.1s)}
+.ev-crown .gem{fill:currentColor;opacity:0;animation:ev-gem .5s ease forwards;animation-delay:1.15s}
+@keyframes ev-draw{to{stroke-dashoffset:0}}
+@keyframes ev-gem{to{opacity:1}}
+.ev-crown-shimmer{position:absolute;inset:-10% -20%;background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.55) 50%,transparent 60%);
+  mix-blend-mode:screen;animation:ev-shimmer 2.2s ease-in-out .9s both;pointer-events:none}
+@keyframes ev-shimmer{from{transform:translateX(-60%);opacity:0}30%{opacity:.85}to{transform:translateX(60%);opacity:0}}
+.ev-jesc-country{font-size:clamp(28px,8.4vw,72px);font-weight:800;letter-spacing:.02em;line-height:.95;text-transform:uppercase;
+  text-shadow:0 2px 18px rgba(0,0,0,.45);margin:.08em 0 .18em}
+.ev-jesc-song{font-size:clamp(11px,2.5vw,18px);font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.2em}
+.ev-jesc-ly{font-size:clamp(8px,1.7vw,12px);font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.9;max-width:40ch;text-wrap:balance}
+
+/* Replay overlay */
+.ev-replay{position:absolute;top:8px;right:8px;z-index:6;width:36px;height:36px;border:0;border-radius:50%;
+  background:rgba(0,0,0,.45);color:#fff;font-size:16px;cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.ev-replay:active{transform:scale(.94)}
+
+/* ——— Scoreboards ——— */
+.ev-board{padding:14px 10px 16px;display:flex;flex-direction:column;min-height:420px}
+.ev-board-hd{position:relative;z-index:2;display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:2px 6px 10px}
+.ev-board-title{font-size:15px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin:0;color:inherit}
+.ev-board h3.ev-board-title{color:inherit}
+.ev-board-style{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.7}
+.ev-rows{position:relative;z-index:2;display:grid;gap:6px;flex:1;align-content:start}
+.ev-rows.cols-2{grid-template-columns:1fr 1fr;gap:6px 8px;grid-auto-flow:column;grid-template-rows:repeat(var(--rows,8),auto)}
+.ev-row{display:flex;align-items:center;gap:6px;min-width:0;will-change:transform;animation:ev-bar .5s cubic-bezier(.2,.85,.2,1) both;animation-delay:calc(var(--i,0) * 55ms)}
+.ev-rows.cols-2 .ev-row:nth-child(odd){animation-name:ev-bar}
+.ev-rows.cols-2 .ev-row:nth-child(even){animation-name:ev-bar-r}
+@keyframes ev-bar{from{opacity:0;transform:translateX(-22px)}to{opacity:1;transform:none}}
+@keyframes ev-bar-r{from{opacity:0;transform:translateX(22px)}to{opacity:1;transform:none}}
+.ev-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:800}
+.ev-pts{flex:none;font-weight:800;font-variant-numeric:tabular-nums;min-width:2.2em;text-align:right}
+.ev-q{flex:none;font-size:9px;font-weight:800;letter-spacing:.06em;padding:2px 5px;border-radius:999px;background:#16c47a;color:#042;line-height:1}
+.ev-row.on{outline:2px solid #fff;outline-offset:1px}
+.ev-row.flash{animation:ev-flash .7s ease}
+@keyframes ev-flash{0%{filter:brightness(1.6)}100%{filter:none}}
+.ev-flag{position:relative;display:inline-flex;width:22px;height:16px;border-radius:2px;overflow:hidden;flex:none;
+  align-items:center;justify-content:center;background:#0a1020;box-shadow:0 0 0 1px rgba(255,255,255,.18)}
+.ev-flag img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
+.ev-flag-e{font-size:14px;line-height:1;transform:scale(1.45)}
+.ev-rank{flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;font-variant-numeric:tabular-nums}
+
+/* Asia board: royal blue, purple rank, white-to-yellow bar, navy type */
+.ev-board.asia{background:#1a3ec8;color:#0b1640}
+.ev-asia-bokeh,.ev-jesc-bokeh,.ev-esc-streaks{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.ev-asia-dot{position:absolute;width:var(--z,18px);height:var(--z,18px);border-radius:50%;background:var(--c,#fff);opacity:.22;
+  left:var(--x);top:var(--y);filter:blur(1px);animation:ev-drift 16s ease-in-out infinite;animation-delay:var(--d,0s);will-change:transform}
+@keyframes ev-drift{0%,100%{transform:translate(0,0)}50%{transform:translate(var(--dx,12px),var(--dy,-16px))}}
+.ev-board.asia .ev-board-hd,.ev-board.asia h3.ev-board-title{color:#fff}
+.ev-board.asia .ev-row{background:linear-gradient(90deg,#fff 0%,#ffe36a 100%);border-radius:999px;padding:5px 8px 5px 4px;
+  box-shadow:0 2px 0 rgba(0,0,0,.12)}
+.ev-board.asia .ev-rank{width:28px;height:22px;border-radius:999px;background:#6b3cc9;color:#fff;font-size:11px}
+.ev-board.asia .ev-row.lead .ev-rank{background:#ff4fa0}
+.ev-board.asia .ev-name{color:#0b1640;font-family:ui-rounded,"SF Pro Rounded",system-ui,sans-serif;font-size:12.5px;text-transform:none}
+.ev-board.asia .ev-pts{color:#0b1640;font-size:13px;padding-right:2px}
+.ev-board.asia .ev-flag{width:22px;height:16px;border-radius:2px}
+
+/* ESC 2026 board: dark, gold streaks, navy rank circle, white name pill, navy points pill */
+.ev-board.esc{background:#0a0c14;color:#0b1640}
+.ev-gold{position:absolute;left:-20%;top:var(--y,20%);width:140%;height:8px;background:linear-gradient(90deg,transparent,rgba(255,200,80,.0),rgba(255,210,110,.55),rgba(255,200,80,0),transparent);
+  transform:rotate(var(--r,-18deg));filter:blur(4px);opacity:.7;animation:ev-streak 10s linear infinite;animation-delay:var(--d,0s);will-change:transform}
+@keyframes ev-streak{from{transform:rotate(var(--r,-18deg)) translateX(-8%)}to{transform:rotate(var(--r,-18deg)) translateX(8%)}}
+.ev-board.esc .ev-board-hd,.ev-board.esc h3.ev-board-title,.ev-board.esc .ev-board-style{color:#f3e6c8}
+.ev-board.esc .ev-row{padding:2px 0;gap:4px}
+.ev-board.esc .ev-rank{position:relative;width:20px;height:20px;border-radius:50%;background:#142047;color:#e8eefc;font-size:9px}
+.ev-board.esc .ev-rows{padding-top:8px}
+.ev-board.esc .ev-rank .ev-q{position:absolute;top:-9px;left:50%;right:auto;transform:translateX(-50%);padding:1px 3px;font-size:7px;min-width:0;z-index:2}
+.ev-board.esc .ev-pill{flex:1;min-width:0;display:flex;align-items:center;gap:4px;background:#fff;border-radius:999px;padding:3px 3px 3px 7px}
+.ev-board.esc .ev-name{color:#0b1640;font-size:10px;letter-spacing:0;text-transform:uppercase}
+.ev-board.esc .ev-pts{background:#142047;color:#fff;border-radius:999px;min-width:2.15em;padding:3px 5px;font-size:10px;text-align:center}
+
+/* JESC board: navy, coloured bokeh, hot-pink bars, white caps */
+.ev-board.jesc{background:#0b1233;color:#fff}
+.ev-jesc-dot{position:absolute;width:var(--z,14px);height:var(--z,14px);border-radius:50%;background:var(--c,#ff4fa0);opacity:.55;
+  left:var(--x);top:var(--y);filter:blur(.4px);animation:ev-drift 14s ease-in-out infinite;animation-delay:var(--d,0s);will-change:transform}
+.ev-board.jesc .ev-board-hd,.ev-board.jesc h3.ev-board-title,.ev-board.jesc .ev-board-style{color:#fff}
+.ev-board.jesc .ev-row{background:linear-gradient(90deg,#ff2e8a,#ff4fb2);border-radius:8px;padding:6px 8px;box-shadow:0 2px 0 rgba(0,0,0,.2)}
+.ev-board.jesc .ev-name{color:#fff;font-size:10.5px;letter-spacing:.03em;text-transform:uppercase}
+.ev-board.jesc .ev-pts{color:#fff;font-size:13px}
+.ev-board.jesc .ev-rank{display:none}
+
+/* Editor lists */
+.ev-edit{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.ev-edit-row{display:grid;grid-template-columns:auto 1fr 72px auto;gap:6px;align-items:center}
+.ev-edit-row .nm{font-size:13px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-edit-row button.rm{width:36px;height:36px;padding:0;border-radius:10px}
+.ev-add{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center;margin-top:4px}
+.ev-reveal{margin:8px 0;padding:10px 12px;border-radius:14px;background:#111729;border:1px solid rgba(255,255,255,.1)}
+.ev-reveal p{margin:0 0 8px;font-size:12px;color:#a9b4d0;font-weight:600}
+.ev-pts-chip{min-width:42px}
+.ev-pts-chip.on{background:#ffd84a;color:#1a1400;-webkit-text-fill-color:#1a1400;border-color:#ffd84a}
+.ev-pts-chip.used{opacity:.35;pointer-events:none}
+
+/* Fullscreen */
+.gs-full .ev-stage{width:min(100vw,calc(100dvh * 16 / 9));max-height:100dvh;aspect-ratio:16/9;margin:0 auto;border-radius:0;box-shadow:none}
+.gs-full .ev-board-wrap{width:min(100vw,960px);max-height:100dvh;min-height:min(100dvh,640px);margin:0 auto;border-radius:0}
+.gs-full .ev-board{min-height:100%}
+.gs-full .ev-replay{top:calc(8px + env(safe-area-inset-top,0px));right:52px}
+
+/* Home tile */
+.gm-art.ev{background:radial-gradient(120% 140% at 50% 100%,#1a1030,#07060c);display:flex;align-items:center;justify-content:center}
+.gm-ev{position:relative;width:86%;height:70%;border-radius:10px;overflow:hidden;background:#0a0a10;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;letter-spacing:.08em;font-size:13px;text-transform:uppercase}
+.gm-ev i{position:absolute;width:16px;height:16px;border-radius:50% 50% 50% 0;background:var(--c);transform:rotate(-45deg);filter:blur(.2px);opacity:.9;
+  box-shadow:0 0 8px var(--c)}
+
+/* Reduced motion */
+@media (prefers-reduced-motion:reduce){
+  .ev-beams i,.ev-hearts,.ev-heart,.ev-spark,.ev-asia-dot,.ev-jesc-dot,.ev-gold,.ev-crown path,.ev-crown circle,.ev-crown ellipse,.ev-crown .gem,.ev-crown-shimmer,.ev-esc-name,.ev-in,.ev-row,.ev-row.flash{animation:none!important;transition:none!important;filter:none!important;opacity:1!important;transform:none!important;stroke-dashoffset:0!important}
+  .ev-heart{transform:translate(calc(cos(var(--a,0deg)) * 47cqw), calc(sin(var(--a,0deg)) * 44cqh))!important}
+  .ev-beams i{transform:translate(-50%,-30%) rotate(var(--r,0deg))!important}
+}
+
+/* Phone: no sideways scroll, compact two-col boards */
+@media (max-width:430px){
+  .ev-rows.cols-2{gap:5px 6px}
+  .ev-board{padding:10px 7px 12px}
+  .ev-board.esc .ev-name{font-size:9.5px;letter-spacing:0}
+  .ev-board.jesc .ev-name{font-size:10px}
+  .ev-board.asia .ev-name{font-size:11.5px}
+  .ev-edit-row{grid-template-columns:auto 1fr 64px auto}
+}
+button.ev-row{-webkit-appearance:none;appearance:none;border:0;margin:0;background:transparent;color:inherit;font:inherit;width:100%;text-align:left;cursor:pointer}
