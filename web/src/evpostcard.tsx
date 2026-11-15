@@ -4,11 +4,12 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { EvCard, EvStyle } from "./eurovision-data";
 import { TvFrame, StageCardTV, Ell, useFontsReady, fitSize } from "./evcards";
-import { BED_IMPACT } from "./evaudio";
+import { BED_IMPACT, pcLen } from "./evaudio";
+import type { Cutout } from "./evcutout";
 import "./evpostcard.css";
 
-export const PC_LEN = 15;           // postcard length (s); the stage card takes over here
-const CARD_MOUNT = 14.75;           // card mounts under the closing wipe
+export const PC_LEN = 15;           // postcard length (s) for ESC / JESC; the stage card takes over here
+export const PC_LEN_ASIA = 9;       // Eurovision Asia: a short fashion-shoot postcard (person on a glowing gradient)
 const W = 1600, H = 900;
 const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const clamp01 = (x: number) => x < 0 ? 0 : x > 1 ? 1 : x;
@@ -18,6 +19,7 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const win = (T: number, a: number, b: number, fi = .4, fo = .4) => Math.min(ease((T - a) / fi), 1 - ease((T - (b - fo)) / fo));
 
 export const SAMPLE_PHOTO = "/ev/sample-postcard.webp";
+export const SAMPLE_PORTRAIT = "/ev/sample-portrait.webp";   // generated model, no real person; used by the Asia style
 
 /* ───────────── photo storage (IndexedDB, never uploaded) ───────────── */
 const DB = "skyline-ev", ST = "photos", KEY = "postcard";
@@ -29,6 +31,15 @@ export async function loadPhoto(): Promise<string | null> {
 }
 export async function savePhoto(url: string | null) {
   try { const db = await idb(); await new Promise<void>(res => { const tx = db.transaction(ST, "readwrite"); const s = tx.objectStore(ST); if (url) s.put(url, KEY); else s.delete(KEY); tx.oncomplete = () => res(); tx.onerror = () => res(); }); } catch { /* storage off */ }
+}
+/** The person cut-out of the saved photo (PNG with alpha) — also stays on this device. `of` ties it to the photo. */
+export type SavedCut = { of: string; blob: Blob; box: [number, number, number, number] };
+export const photoTag = (u: string) => { let h = 0; for (let i = 0; i < u.length; i += 97) h = (h * 31 + u.charCodeAt(i)) | 0; return u.length + ":" + h; };
+export async function loadCut(): Promise<SavedCut | null> {
+  try { const db = await idb(); return await new Promise(res => { const q = db.transaction(ST).objectStore(ST).get(KEY + "-cut"); q.onsuccess = () => res((q.result as SavedCut) || null); q.onerror = () => res(null); }); } catch { return null; }
+}
+export async function saveCut(c: SavedCut | null) {
+  try { const db = await idb(); await new Promise<void>(res => { const tx = db.transaction(ST, "readwrite"); const s = tx.objectStore(ST); if (c) s.put(c, KEY + "-cut"); else s.delete(KEY + "-cut"); tx.oncomplete = () => res(); tx.onerror = () => res(); }); } catch { /* storage off */ }
 }
 /** Downscale a picked photo (≤1600 px long side, JPEG) so it stores small and decodes fast on a phone. */
 export function downscalePhoto(file: Blob, max = 1600): Promise<string> {
@@ -142,10 +153,12 @@ const DECO: Record<EvStyle, [number, number, number][]> = {
 
 type Anim = { el: HTMLElement; f: (T: number) => [string | null, number]; t?: string; o?: number };
 
+type Add = (f: Anim["f"]) => (el: HTMLElement | null) => void;
 export type PcInfo = { country: string; cc: string; artist: string; song: string; lyrics: string };
 
 /** The postcard player. `start` = performance.now() timestamp of Play (shared by inline + fullscreen views); null = poster. */
-export function PostcardTV({ style, info, photo, start, full, onPlay }: { style: EvStyle; info: PcInfo; photo: string; start: number | null; full?: boolean; onPlay?: () => void }) {
+export function PostcardTV({ style, info, photo, cut, start, full, onPlay }: { style: EvStyle; info: PcInfo; photo: string; cut?: Cutout | null; start: number | null; full?: boolean; onPlay?: () => void }) {
+  const LEN = pcLen(style), MOUNT = LEN - .25;
   const ok = useFontsReady();
   const [gr, setGr] = useState<Grades | null>(null);
   const [cols, setCols] = useState<string[]>(STYLE_ACCENT[style]);
@@ -162,9 +175,9 @@ export function PostcardTV({ style, info, photo, start, full, onPlay }: { style:
   useEffect(() => {
     let dead = false; setGr(null); setDim(null);
     const im = new Image(); im.onload = () => { if (!dead) setDim({ w: im.naturalWidth, h: im.naturalHeight }); }; im.src = photo;
-    gradePhoto(photo).then(g => { if (!dead) setGr(g); }, () => {});
+    if (style !== "asia") gradePhoto(photo).then(g => { if (!dead) setGr(g); }, () => {});   // the Asia shoot needs no graded variants
     return () => { dead = true; };
-  }, [photo]);
+  }, [photo, style]);
   useEffect(() => { let dead = false; flagColours(info.cc, style).then(c => { if (!dead) setCols(c); }); return () => { dead = true; }; }, [info.cc, style]);
 
   // cover size of the photo in the 1600×900 frame
@@ -175,8 +188,8 @@ export function PostcardTV({ style, info, photo, start, full, onPlay }: { style:
     let raf = 0; let lastPhase = "";
     const tick = () => {
       const fz = (window as any).__pcFreeze;
-      const T = typeof fz === "number" ? fz : start == null ? 11.9 : (performance.now() - start) / 1000;
-      const ph = start == null && typeof fz !== "number" ? "pc" : T >= PC_LEN + .6 ? "card" : T >= CARD_MOUNT ? "both" : "pc";
+      const T = typeof fz === "number" ? fz : start == null ? (style === "asia" ? 3.6 : 11.9) : (performance.now() - start) / 1000;
+      const ph = start == null && typeof fz !== "number" ? "pc" : T >= LEN + .6 ? "card" : T >= MOUNT ? "both" : "pc";
       if (ph !== lastPhase) { lastPhase = ph; setPhase(ph); }
       for (const A of anims.current.values()) {
         const [t, o] = A.f(T);
@@ -187,7 +200,7 @@ export function PostcardTV({ style, info, photo, start, full, onPlay }: { style:
     };
     tick();
     return () => cancelAnimationFrame(raf);
-  }, [start, gr, dim, cols, ok, style, info.country]);
+  }, [start, gr, dim, cols, ok, style, info.country, info.artist, cut, LEN]);
 
   const card: EvCard = { style, country: info.country || "Country", cc: info.cc, song: info.song, artist: info.artist, lyrics: info.lyrics };
   const [c1, c2, c3] = cols;
@@ -205,6 +218,7 @@ export function PostcardTV({ style, info, photo, start, full, onPlay }: { style:
       {!hide && (
         <div className={"pc-over" + (phase === "both" ? " closing" : "")}>
           <TvFrame full={full} ready={ok} className={"pc pc-" + style}>
+            {style === "asia" ? <AsiaShoot add={add} info={info} photo={photo} cut={cut ?? null} dim={dim ?? (photo === SAMPLE_PORTRAIT ? { w: 1280, h: 720 } : null)} ok={ok} still={still} /> : <>
             <div className="pc-black" />
             {!gr && !dim && <div className="pc-poster" style={{ backgroundImage: `url("${photo}")` }} />}
             {(gr || dim) && SHOTS.map((sh, i) => (
@@ -249,8 +263,8 @@ export function PostcardTV({ style, info, photo, start, full, onPlay }: { style:
             </div>
             <div className="pc-lt r" ref={add(T => [`translate3d(${((1 - outCubic((T - 7.5) / .7)) * 60 + ease((T - 9.6) / .4) * 40).toFixed(1)}px,0,0)`, win(T, 7.5, 9.95, .45, .35)])}>
               <i className="pc-bar" style={{ background: `linear-gradient(180deg,${c3},${c2},${c1})` }} />
-              <span className="k">{style === "asia" ? "Performing" : "PERFORMING"}</span>
-              <span className="v">{style === "asia" ? info.song || "Song" : `“${info.song || "Song"}”`}</span>
+              <span className="k">{(style as EvStyle) === "asia" ? "Performing" : "PERFORMING"}</span>
+              <span className="v">{(style as EvStyle) === "asia" ? info.song || "Song" : `“${info.song || "Song"}”`}</span>
             </div>
 
             {/* the country reveal */}
@@ -266,10 +280,10 @@ export function PostcardTV({ style, info, photo, start, full, onPlay }: { style:
                     const k = (T - at) / .26;
                     if (still) return ["none", ease((T - 10.6) / .5)];
                     const sc = style === "jesc" ? lerp(1.9, 1, outCubic(k)) : style === "esc" ? 1 : lerp(1.35, 1, outCubic(k));
-                    const y = style === "jesc" ? (1 - outCubic(k)) * -40 : style === "asia" ? (1 - outCubic(k)) * 26 : 0;
+                    const y = style === "jesc" ? (1 - outCubic(k)) * -40 : (style as EvStyle) === "asia" ? (1 - outCubic(k)) * 26 : 0;
                     const op = style === "esc" ? (k < 0 ? 0 : k < .3 ? (Math.floor(k * 20) % 2 ? .25 : 1) : 1) : clamp01(k * 2.5);
                     return [`translate3d(0,${y.toFixed(1)}px,0) scale(${sc.toFixed(3)})`, op];
-                  })}>{chr === "l" && style === "asia" ? <Ell w={11.5} /> : chr === " " ? "\u00a0" : chr}</span>;
+                  })}>{chr === "l" && (style as EvStyle) === "asia" ? <Ell w={11.5} /> : chr === " " ? "\u00a0" : chr}</span>;
                 })}
               </div>
               <div className="pc-sub" ref={add(T => [`translate3d(0,${((1 - outCubic((T - 11.5) / .6)) * 24).toFixed(1)}px,0)`, win(T, 11.5, 14.55, .5, .3)])}>
@@ -289,6 +303,7 @@ export function PostcardTV({ style, info, photo, start, full, onPlay }: { style:
             <div className="pc-wipe" ref={add(T => [`translate3d(${(-2400 + outCubic((T - 14.45) / .45) * 2400 + ease((T - 14.95) / .45) * 2700).toFixed(0)}px,0,0) skewX(-14deg)`, T > 14.4 && T < 15.5 ? 1 : 0])}>
               <b style={{ background: c3 }} /><b style={{ background: c2 }} /><b style={{ background: c1 }} /><b className="w" />
             </div>
+            </>}
             {start == null && onPlay && (
               <button type="button" className="pc-play" aria-label="Play postcard with sound" onClick={e => { e.stopPropagation(); onPlay(); }}>
                 <span>▶</span><em>Play postcard</em>
@@ -297,6 +312,90 @@ export function PostcardTV({ style, info, photo, start, full, onPlay }: { style:
           </TvFrame>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ───────────── Eurovision Asia: fashion-shoot postcard ─────────────
+ * The artist on a smooth magenta → royal-blue glowing backdrop, slow-motion drift, a few cuts (one bloom-flash cut),
+ * and the artist's name huge in heavy geometric caps with a sliding rainbow fill. With a cut-out the person sits on our
+ * animated gradient; without one the whole photo gets a gradient colour wash. */
+type AShot = { a: number; b: number; ph0: number; ph1: number; fx: number; fy: number; dx: number; flip?: boolean; nx: number; ny: number; fi: number };
+const ASHOTS: AShot[] = [
+  { a: 0, b: 1.75, ph0: 1.0, ph1: 1.06, fx: .42, fy: .05, dx: -26, nx: .3, ny: .6, fi: .35 },
+  { a: 1.75, b: 3.02, ph0: 1.1, ph1: 1.16, fx: .34, fy: .03, dx: 30, flip: true, nx: .64, ny: .6, fi: 0 },
+  { a: 3.02, b: 6.1, ph0: 1.78, ph1: 1.62, fx: .6, fy: -.09, dx: -34, nx: .3, ny: .64, fi: 0 },
+  { a: 6.1, b: 9.2, ph0: 1.02, ph1: 1.1, fx: .55, fy: .04, dx: 24, nx: .37, ny: .7, fi: 0 },
+];
+const RAINBOW = "linear-gradient(90deg,#FF9800,#FFEB3B 17%,#4CAF50 34%,#2196F3 52%,#E91E63 72%,#FF9800 100%)";
+
+function AsiaShoot({ add, info, photo, cut, dim, ok, still }: { add: Add; info: PcInfo; photo: string; cut: Cutout | null; dim: { w: number; h: number } | null; ok: boolean; still: boolean }) {
+  const name = (info.artist || "Artist").toUpperCase();
+  const size = fitSize(name, px => `800 ${px}px Outfit`, 760, 190, -.01, ok);
+  const iw = dim?.w || 1600, ih = dim?.h || 900;
+  const box: [number, number, number, number] = cut ? cut.box : [0, 0, 1, 1];
+  const bh = Math.max(.2, box[3] - box[1]);
+  // element at ph=1: person box height == frame height
+  const eh = H / bh, ew = eh * iw / ih;
+  const place = (sh: AShot, T: number) => {
+    const p = clamp01((T - sh.a) / (sh.b - sh.a)), e = still ? .5 : p;
+    let k = lerp(sh.ph0, sh.ph1, e) * (cut ? 1 : 1.04);
+    k = Math.min(k, 4 * H / eh);
+    if (!cut) k = Math.max(k, W / ew, H / eh);
+    const w = ew * k, h = eh * k;
+    const cx = (box[0] + box[2]) / 2;
+    let L = sh.fx * W - cx * w + (still ? 0 : sh.dx * (e - .5) * 2), Tp = sh.fy * H - box[1] * h;
+    if (cut) { if (box[3] > .95 && Tp + h < H) Tp = H - h; }
+    else { L = Math.max(W - w, Math.min(0, L)); Tp = Math.max(H - h, Math.min(0, Tp)); }
+    // slow-motion life: a gentle sway around the feet and a breathing scale
+    const sway = still ? 0 : Math.sin(T * .9 + sh.a) * 1.1, br = still ? 1 : 1 + Math.sin(T * 1.3 + sh.a * 2) * .008;
+    const ox = cx * ew, oy = eh * Math.min(1, box[3]);
+    const flip = sh.flip ? ` translate(${ox.toFixed(1)}px,0) scaleX(-1) translate(${(-ox).toFixed(1)}px,0)` : "";
+    return `translate3d(${L.toFixed(1)}px,${Tp.toFixed(1)}px,0) scale(${(k * br).toFixed(4)}) translate(${ox.toFixed(1)}px,${oy.toFixed(1)}px) rotate(${sway.toFixed(3)}deg) translate(${(-ox).toFixed(1)}px,${(-oy).toFixed(1)}px)${flip}`;
+  };
+  const shotOp = (sh: AShot, i: number, T: number) => {
+    if (T < sh.a || T >= sh.b + (i === 2 ? 0 : 0)) return 0;
+    const fin = sh.fi > 0 && i > 0 ? ease((T - sh.a) / sh.fi) : 1;
+    const fout = i === ASHOTS.length - 1 ? 1 - ease((T - 8.5) / .45) : 1;
+    return fin * fout;
+  };
+  const nameAt = (T: number): [string | null, number] => {
+    let sh = ASHOTS[0]; for (const s2 of ASHOTS) if (T >= s2.a) sh = s2;
+    const p = clamp01((T - sh.a) / (sh.b - sh.a));
+    const x = (sh.nx - .5) * W + (still ? 0 : (p - .5) * 22), y = sh.ny * H - size * .55;
+    const intro = still ? 1 : outCubic((T - .15) / .5);
+    return [`translate3d(${x.toFixed(1)}px,${(y + (1 - intro) * 24).toFixed(1)}px,0) scale(${(.96 + .04 * intro).toFixed(3)})`, intro * (1 - ease((T - 8.45) / .45))];
+  };
+  return (
+    <div className="pa">
+      <span className="pc-sr">{`${info.artist || "Artist"} for ${info.country || "Country"}`}</span>
+      {/* glowing studio backdrop */}
+      <div className="pa-bg" ref={add(T => [still ? null : `translate3d(${(Math.sin(T * .35) * 40).toFixed(1)}px,${(Math.cos(T * .3) * 22).toFixed(1)}px,0) scale(1.12)`, 1])} />
+      <div className="pa-glow" ref={add(T => [still ? null : `translate3d(${(Math.sin(T * .5) * 70).toFixed(1)}px,${(Math.cos(T * .42) * 40).toFixed(1)}px,0)`, .85 + .15 * Math.sin(T * 1.1)])} />
+      <div className="pa-band" ref={add(T => [`translate3d(${(still ? 0 : -120 + ((T * 38) % 260)).toFixed(1)}px,0,0) rotate(-24deg)`, .9])} />
+      {[0, 1, 2].map(i => (
+        <div key={i} className={"pa-streak s" + i} ref={add(T => [`translate3d(${(still ? 0 : ((T * (40 + i * 22) + i * 500) % 2200) - 600).toFixed(1)}px,${(i * 160 - 60).toFixed(0)}px,0) rotate(${-28 + i * 5}deg)`, (.35 + .25 * Math.sin(T * 1.4 + i * 2)) * (still ? .6 : 1)])} />
+      ))}
+      {/* the artist */}
+      {dim && ASHOTS.map((sh, i) => (
+        <div key={i} className="pa-shot" ref={add(T => [null, shotOp(sh, i, T)])}>
+          <div className={"pa-person" + (cut ? " cut" : " wash")} style={{ width: ew, height: eh, backgroundImage: `url("${cut ? cut.url : photo}")` }} ref={add(T => [place(sh, T), 1])} />
+          {!cut && <div className="pa-wash" />}
+        </div>
+      ))}
+      {!dim && <div className="pc-poster pa-poster" style={{ backgroundImage: `url("${cut ? cut.url : photo}")` }} />}
+      {/* a soft light streak drifting in front for depth */}
+      <div className="pa-streak front" ref={add(T => [`translate3d(${(still ? 200 : ((T * 120) % 2600) - 900).toFixed(1)}px,380px,0) rotate(-30deg)`, .4])} />
+      {/* the name: heavy geometric caps, sliding rainbow fill, soft shadow */}
+      <div className="pa-name" style={{ fontSize: size }} ref={add(nameAt)}>
+        <span className="pa-sh" aria-hidden="true">{name}</span>
+        <span className="pa-rb" style={{ backgroundImage: RAINBOW }}>{name}</span>
+      </div>
+      {/* bloom-flash cut and a softer flash on the dissolve */}
+      <div className="pa-flash" ref={add(T => [null, still ? 0 : Math.max(Math.max(0, 1 - Math.abs(T - 3.02) / (T < 3.02 ? .1 : .24)) * 1, Math.max(0, 1 - Math.abs(T - 6.1) / (T < 6.1 ? .08 : .3)) * .45)])} />
+      <div className="pc-vig pa-vig" />
+      <div className="pc-grain" style={{ backgroundImage: `url(${grain()})` }} ref={add(T => [still ? null : `translate3d(${((Math.floor(T * 24) * 37) % 160) - 80}px,${((Math.floor(T * 24) * 71) % 160) - 80}px,0)`, .05])} />
+      <div className="pa-black" ref={add(T => [null, ease((T - 8.6) / .4)])} />
     </div>
   );
 }

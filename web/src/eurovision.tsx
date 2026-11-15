@@ -21,7 +21,8 @@ import {
 import "./eurovision.css";
 import { JescBoard } from "./evjesc";
 import { StageCardTV } from "./evcards";
-import { PostcardTV, SAMPLE_PHOTO, loadPhoto, savePhoto, downscalePhoto, type PcInfo } from "./evpostcard";
+import { PostcardTV, SAMPLE_PHOTO, SAMPLE_PORTRAIT, loadPhoto, savePhoto, downscalePhoto, loadCut, saveCut, photoTag, type PcInfo } from "./evpostcard";
+import { cutoutPerson, SAMPLE_CUT, type Cutout } from "./evcutout";
 import { unlockAudio, playPostcard, playCardSting, stopAll, isMuted, setMuted, audioRunning } from "./evaudio";
 export { jescLayout } from "./evjesc";
 
@@ -211,6 +212,8 @@ export function EuroStudio() {
   const [muted, setMute] = useState(false);
   const [photoErr, setPhotoErr] = useState("");
   const [unlocked, setUnlocked] = useState(false);
+  // on-device person cut-out of "my photo" (Eurovision Asia postcard); null cut = colour-wash fallback
+  const [myCut, setMyCut] = useState<{ of: string; cut: Cutout | null; state: "busy" | "done" | "none" } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => { setMute(isMuted()); setPcs(loadPcs()); loadPhoto().then(u => { if (u) { setMyPhoto(u); setPhotoSrc("mine"); } }); }, []);
   useEffect(() => { if (ready.current) savePcs(pcs); }, [pcs]);
@@ -271,11 +274,28 @@ export function EuroStudio() {
     const on = () => { if (audioRunning()) stingRef.current("loop"); };
     addEventListener("ev-card-loop", on); return () => removeEventListener("ev-card-loop", on);
   }, [tab]);
-  const photo = photoSrc === "mine" && myPhoto ? myPhoto : SAMPLE_PHOTO;
+  const mine = photoSrc === "mine" && !!myPhoto;
+  const photo = mine ? myPhoto! : style === "asia" ? SAMPLE_PORTRAIT : SAMPLE_PHOTO;
+  // cut the person out of my photo when the Asia postcard needs it (cached on this device next to the photo)
+  useEffect(() => {
+    if (!(tab === "postcard" && style === "asia" && myPhoto && photoSrc === "mine")) return;
+    const tag = photoTag(myPhoto); if (myCut?.of === tag) return;
+    let dead = false; setMyCut({ of: tag, cut: null, state: "busy" });
+    (async () => {
+      const saved = await loadCut();
+      if (saved && saved.of === tag) { if (!dead) setMyCut({ of: tag, cut: { url: URL.createObjectURL(saved.blob), blob: saved.blob, box: saved.box }, state: "done" }); return; }
+      const c = await cutoutPerson(myPhoto);
+      if (dead) return;
+      setMyCut({ of: tag, cut: c, state: c ? "done" : "none" });
+      if (c?.blob) saveCut({ of: tag, blob: c.blob, box: c.box });
+    })();
+    return () => { dead = true; };
+  }, [tab, style, myPhoto, photoSrc]);
+  const cut = style !== "asia" ? null : mine ? (myCut?.of === photoTag(myPhoto!) ? myCut.cut : null) : SAMPLE_CUT;
   const soundBtn = <button type="button" className="ev-replay ev-mute" aria-label={muted ? "Turn sound on" : "Mute sound"} aria-pressed={muted} onClick={e => { e.stopPropagation(); toggleMute(); }}>{muted ? "🔇" : "🔊"}</button>;
 
   const preview = (isFull: boolean) => tab === "postcard"
-    ? <div className="ev-stage tv ev-pc"><PostcardTV style={style} info={pc} photo={photo} start={pcStart} full={isFull} onPlay={playPc} />
+    ? <div className="ev-stage tv ev-pc"><PostcardTV style={style} info={pc} photo={photo} cut={cut} start={pcStart} full={isFull} onPlay={playPc} />
         {pcStart != null && <button className="ev-replay" type="button" aria-label="Play postcard again" onClick={e => { e.stopPropagation(); playPc(); }}>↻</button>}{soundBtn}</div>
     : tab === "stage"
     ? <div className="ev-stage tv"><StageCard card={card} play={play} full={isFull} /><button className="ev-replay" type="button" aria-label="Replay with sound" onClick={e => { e.stopPropagation(); replayCard(); }}>↻</button>{soundBtn}
@@ -330,6 +350,7 @@ export function EuroStudio() {
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={e => { pickPhoto(e.target.files?.[0]); e.target.value = ""; }} />
           </div>
           {photoErr && <p className="ev-note">{photoErr}</p>}
+          {style === "asia" && mine && myCut && <p className="ev-note ev-cutnote" role="status">{myCut.state === "busy" ? "✂️ Cutting you out of the photo — on this phone…" : myCut.state === "done" ? "✂️ Cut-out ready: you're on the glowing backdrop." : "Couldn't find a person to cut out, so the whole photo gets the colour wash."}</p>}
           <label>Country
             <input list="ev-countries" value={pc.country} onChange={e => { const v = e.target.value; const hit = countryFromName(v); patchPc({ country: v, cc: hit.cc || pc.cc }); }} autoComplete="off" />
           </label>

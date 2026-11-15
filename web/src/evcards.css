@@ -147,3 +147,5 @@
   .sc-tv *{animation:none!important;transition:none!important}
   .sc-spark{display:none}
 }
+/* Asia arena truss lamps (light up as the hearts settle) */
+.sc-asia-rig{opacity:calc(var(--rig,0) * .9);mix-blend-mode:screen}

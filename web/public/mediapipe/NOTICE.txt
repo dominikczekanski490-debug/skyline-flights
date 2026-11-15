@@ -1,0 +1,4 @@
+On-device person segmentation for the Eurovision Asia postcard.
+vision_wasm_internal.js / .wasm: MediaPipe Tasks Vision (@mediapipe/tasks-vision 1.2.3), Apache License 2.0, (c) Google LLC.
+selfie_segmenter.tflite: MediaPipe Selfie Segmentation model (float16), Apache License 2.0, (c) Google LLC.
+Everything runs in the browser; photos are never uploaded. MediaPipe's usage-logging call is blocked by the app (src/evcutout.ts).

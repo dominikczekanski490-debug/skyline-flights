@@ -28,9 +28,20 @@ for (const style of ["asia", "esc", "jesc"]) {
   assert.ok(m.includes("Philippines"), style + " country (screen-reader text)");
   assert.ok(m.includes("CARMELLE"), style + " artist");
   assert.ok(m.includes("Play postcard"), style + " play button");
-  assert.ok(m.includes("/flags/4x3/ph.svg"), style + " flag");
+  if (style !== "asia") assert.ok(m.includes("/flags/4x3/ph.svg"), style + " flag");
+  else assert.ok(m.includes("pa-rb") && m.includes("pa-name"), "asia rainbow artist name");
   assert.ok(!/ebu|eurovision\.tv|official heart logo/i.test(m), "no official marks " + style);
 }
+// Eurovision Asia: 9 s fashion-shoot postcard with an on-device person cut-out (model + wasm bundled, nothing uploaded)
+assert.strictEqual(pc.PC_LEN_ASIA, 9);
+assert.strictEqual(pc.SAMPLE_PORTRAIT, "/ev/sample-portrait.webp");
+for (const f of ["ev/sample-portrait.webp", "ev/sample-portrait-cut.webp", "mediapipe/selfie_segmenter.tflite", "mediapipe/vision_wasm_internal.wasm", "mediapipe/vision_wasm_internal.js"])
+  assert.ok(fs.statSync(path.join(here, "../public/" + f)).size > 10000, "bundled " + f);
+const cutSrc = fs.readFileSync(path.join(here, "../src/evcutout.ts"), "utf8");
+assert.match(cutSrc, /const BASE = "\/mediapipe\/"/, "segmentation assets served from the app");
+assert.ok(!/XMLHttpRequest|sendBeacon|FormData|method: "POST"/.test(cutSrc), "cut-out never uploads the photo");
+assert.match(cutSrc, /odml\\.pa\\.googleapis/, "MediaPipe usage logging is blocked");
+assert.match(fs.readFileSync(path.join(here, "../src/evcards.tsx"), "utf8"), /= ASIA_T;/, "card + sound share one timeline");
 const studio = renderToStaticMarkup(h(ui.EuroStudio));
 assert.ok(studio.includes(">Postcard<"), "Postcard tab");
 

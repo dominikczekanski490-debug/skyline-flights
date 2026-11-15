@@ -78,3 +78,35 @@
   mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-10 -10 20 20'%3E%3Cpath d='M0-10C.7-2.2 2.2-.7 10 0 2.2.7.7 2.2 0 10-.7 2.2-2.2.7-10 0-2.2-.7-.7-2.2 0-10z'/%3E%3C/svg%3E") center/contain no-repeat;
   background:radial-gradient(circle,#fff 0%,#fff 20%,var(--c) 60%,#ffe566 100%);filter:drop-shadow(0 0 8px rgba(255,255,255,.8))}
 .pc-poster{position:absolute;inset:0;background:center/cover no-repeat}
+
+/* ── Eurovision Asia fashion-shoot postcard ── */
+.pa{position:absolute;inset:0;overflow:hidden;background:#1E1B90}
+.pa-bg{position:absolute;inset:-60px;will-change:transform;
+  background:radial-gradient(ellipse 55% 75% at 8% 40%,#B026FF 0%,rgba(176,38,255,.55) 40%,rgba(176,38,255,0) 75%),
+    radial-gradient(ellipse 60% 70% at 92% 35%,rgba(30,30,170,.9),rgba(30,30,170,0) 70%),
+    linear-gradient(115deg,#a12bf5 0%,#6f2ae2 28%,#3a26c8 52%,#2421a8 74%,#1E1B90 100%)}
+.pa-glow{position:absolute;left:-260px;top:420px;width:1100px;height:700px;border-radius:50%;mix-blend-mode:screen;will-change:transform,opacity;
+  background:radial-gradient(ellipse 50% 50% at 50% 50%,rgba(255,80,220,.75),rgba(230,40,200,.35) 45%,transparent 72%)}
+.pa-band{position:absolute;left:-400px;top:640px;width:1500px;height:200px;mix-blend-mode:screen;will-change:transform;
+  background:linear-gradient(180deg,transparent,rgba(255,110,230,.55) 45%,rgba(255,170,240,.7) 52%,rgba(255,90,220,.45) 60%,transparent);filter:blur(6px)}
+.pa-streak{position:absolute;left:0;top:0;width:1300px;height:90px;opacity:0;mix-blend-mode:screen;pointer-events:none;will-change:transform,opacity;
+  background:linear-gradient(180deg,transparent,rgba(255,200,255,.35) 40%,rgba(255,255,255,.55) 50%,rgba(200,170,255,.3) 60%,transparent)}
+.pa-streak.s1{height:50px}.pa-streak.s2{height:140px;background:linear-gradient(180deg,transparent,rgba(170,140,255,.3) 50%,transparent)}
+.pa-streak.front{height:60px;width:1600px;background:linear-gradient(180deg,transparent,rgba(255,220,255,.25) 50%,transparent)}
+.pa-shot{position:absolute;inset:0;opacity:0;will-change:opacity}
+.pa-person{position:absolute;left:0;top:0;transform-origin:0 0;background-size:100% 100%;background-repeat:no-repeat;will-change:transform;backface-visibility:hidden}
+.pa-person.cut{filter:saturate(1.08) contrast(1.05) drop-shadow(0 0 40px rgba(255,90,230,.35))}
+.pa-wash{position:absolute;inset:0;pointer-events:none;mix-blend-mode:color;opacity:.55;background:linear-gradient(115deg,#B026FF,#5a2ae0 50%,#1E1B90)}
+.pa-person.wash{filter:saturate(1.1) contrast(1.05)}
+.pa-shot:has(.wash)::after{content:"";position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;background:linear-gradient(90deg,rgba(176,38,255,.45),rgba(176,38,255,0) 45%),linear-gradient(0deg,rgba(255,80,220,.25),transparent 35%)}
+.pa-poster{filter:saturate(1.1)}
+.pa-name{position:absolute;left:0;top:0;width:1600px;text-align:center;white-space:nowrap;line-height:1;font-family:Outfit,system-ui,sans-serif;font-weight:800;letter-spacing:-.01em;opacity:0;will-change:transform,opacity;z-index:3}
+.pa-name span{display:inline-block}
+.pa-rb{position:relative;color:transparent;-webkit-text-fill-color:transparent;-webkit-background-clip:text;background-clip:text;background-size:150% 100%;background-position:0 0;
+  animation:pa-slide 6s linear infinite;filter:saturate(1.15) brightness(1.06)}
+.pa-sh{position:absolute;left:0;right:0;top:0;color:rgba(30,0,60,.42);-webkit-text-fill-color:rgba(30,0,60,.42);transform:translate(5px,7px);filter:blur(5px)}
+@keyframes pa-slide{from{background-position:0 0}to{background-position:-300% 0}}
+.pa-flash{position:absolute;inset:0;opacity:0;pointer-events:none;z-index:4;mix-blend-mode:screen;background:radial-gradient(ellipse 85% 120% at 22% 50%,#fffbe0 0%,#ffef7a 36%,rgba(255,214,40,.92) 66%,rgba(255,120,200,.35) 100%)}
+.pa-vig{background:radial-gradient(ellipse 80% 80% at 50% 50%,transparent 60%,rgba(10,0,40,.45) 100%)}
+.pa-black{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}
+@media (prefers-reduced-motion: reduce){.pa-rb{animation:none}}

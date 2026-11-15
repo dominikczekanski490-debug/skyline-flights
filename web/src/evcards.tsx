@@ -1,6 +1,7 @@
 /** Eurovision studio stage cards — fan-made broadcast-style postcards in a fixed 1600×900 frame.
  *  Original artwork only (no official marks). Motion is transform/opacity (plus a short blur-in on text). */
 import "@fontsource/baloo-2/700.css";
+import { ASIA_T } from "./evaudio";
 import "@fontsource/baloo-2/800.css";
 import "@fontsource-variable/fredoka";
 import "@fontsource/montserrat/600.css";
@@ -17,7 +18,7 @@ const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-r
 const css = (o: Record<string, string | number>) => o as CSSProperties;
 const rng = (seed: number) => { let s = seed; return () => ((s = (s * 16807) % 2147483647) / 2147483647); };
 
-const FONTS = ["800 100px 'Baloo 2'", "700 40px 'Baloo 2'", "700 100px 'Fredoka Variable'", "900 100px Montserrat", "700 40px Montserrat", "600 30px Montserrat", "700 100px Outfit"];
+const FONTS = ["800 100px 'Baloo 2'", "700 40px 'Baloo 2'", "700 100px 'Fredoka Variable'", "900 100px Montserrat", "700 40px Montserrat", "600 30px Montserrat", "700 100px Outfit", "800 100px Outfit"];
 let fontsPromise: Promise<unknown> | null = null;
 export function useFontsReady() {
   const [ok, setOk] = useState(typeof document === "undefined");
@@ -73,31 +74,50 @@ const Txt = ({ d, className, children, style }: { d: number; className: string; 
   <div className={"sc-txt " + className} style={{ ...style, "--d": d + "s" } as CSSProperties}>{children}</div>;
 
 /* ───────────────────────── 1. Eurovision Asia — thermal kaleidoscope ───────────────────────── */
-// Timeline (seconds): entry 0–1.2 · hold to 5.0 · exit 5.0–6.6 (matches the broadcast's 1.0–2.6s) · clean stage · loop.
-const A_HOLD = 5.0, A_END = 6.7, A_LOOP = 7.5;
+// Timeline (seconds), matched to the broadcast clip: dark 0–1.7 · hearts burst in from everywhere 1.7–2.9 and settle
+// into the ring · country types in purple → white from 2.0 · hold (palette cycling + breathing) to 8.0 ·
+// exit 8.0–9.6 · clean stage · loop at 10.4.
+const { burst: A_BURST, hold: A_HOLD, end: A_END, loop: A_LOOP } = ASIA_T;   // shared with the sound engine
 const clamp01 = (x: number) => x < 0 ? 0 : x > 1 ? 1 : x;
 const ease = (x: number) => { x = clamp01(x); return x * x * (3 - 2 * x); };
 const outCubic = (x: number) => 1 - Math.pow(1 - clamp01(x), 3);
 
-/** Ring state for timeline time T: expand factor, palette shift, scatter (few hearts left), overall fade. */
+/** Ring state for timeline time T: expand factor, palette shift, scatter (few hearts left), overall fade, size, burst, magenta mix. */
 function ringAt(T: number) {
+  const B = A_BURST;
+  // palette keyframes from the clip: burst yellow/red → blue/yellow as it settles → pink/red/yellow magenta for the hold
+  const pal = (t: number) => {
+    const b = t - B;
+    const sh = b < .8 ? -.28 : b < 1.25 ? lerp(-.28, .85, ease((b - .8) / .45)) : b < 1.9 ? .85 : b < 2.6 ? lerp(.85, .05, ease((b - 1.9) / .7)) : .05 + .22 * Math.sin((b - 2.6) * 1.3);
+    const mg = ease((b - 2.0) / .7) * (.85 + .15 * Math.sin(b * 1.7));
+    return { sh, mg };
+  };
   if (T < A_HOLD) {
-    const k = outCubic(T / 1.1);
-    return { ex: 2.4 - 1.4 * k, sh: .3 * (1 - k), sc: 0, fa: clamp01(T / .35), sz: 1.25 - .25 * k };
+    const b = T - B;
+    if (b < 0) return { ex: 2, sh: 0, sc: 0, fa: 0, sz: .2, bu: 0, mg: 0 };
+    // burst: hearts pop up all over the frame and swell, then pull back out into the ring
+    const grow = ease(b / .5), pull = outCubic((b - .5) / .75);
+    const hold = b - 1.25;
+    const breathe = hold > 0 ? Math.sin(hold * 2.2) * .045 * ease(hold / .6) : 0;
+    const { sh, mg } = pal(T);
+    return { ex: (2.05 - 1.05 * pull) * (1 + breathe), sh, sc: 0, fa: clamp01(b / .08), sz: (.25 + .9 * grow) * (1 - pull) + pull, bu: grow + pull, mg };
   }
-  const e = T - A_HOLD;
+  const e = T - A_HOLD; const hold = A_HOLD - B - 1.25;
+  const p0 = pal(A_HOLD);
   return {
-    ex: 1 + .06 * ease(e / .3) + .25 * ease((e - .45) / .35),
-    sh: .45 * ease(e / .22) * (1 - ease((e - .4) / .18)) - .2 * ease((e - .45) / .18) * (1 - ease((e - .85) / .2)),
+    ex: (1 + Math.sin(hold * 2.2) * .045) + .06 * ease(e / .3) + .25 * ease((e - .45) / .35),
+    sh: p0.sh * (1 - ease(e / .2)) + .45 * ease(e / .22) * (1 - ease((e - .4) / .18)) - .2 * ease((e - .45) / .18) * (1 - ease((e - .85) / .2)),
     sc: ease((e - .8) / .3),
     fa: 1 - ease((e - 1.25) / .4),
     sz: 1 - .3 * ease(e / .22) * (1 - ease((e - .4) / .25)) + .35 * ease((e - .45) / .3),
+    bu: 2, mg: p0.mg * (1 - ease(e / .25)),
   };
 }
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 const VS = "attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}";
 const FS = `precision highp float;
-uniform vec2 uRes;uniform float uT,uEx,uSh,uSc,uFa,uSz;
+uniform vec2 uRes;uniform float uT,uEx,uSh,uSc,uFa,uSz,uBu,uMg;
 float h1(float n){return fract(sin(n*91.345)*47453.5453);}
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
@@ -118,6 +138,16 @@ vec3 thermal(float x){x=clamp(x,0.,1.);
  c=mix(c,vec3(.12,.24,1.),smoothstep(.68,.8,x));
  c=mix(c,vec3(.25,.75,1.),smoothstep(.93,1.,x));
  return c;}
+vec3 magenta(float x){x=clamp(x,0.,1.);                 // the pink/red/yellow palette the ring cycles into
+ vec3 c=vec3(1.,.96,.55);
+ c=mix(c,vec3(1.,.66,.08),smoothstep(.0,.1,x));
+ c=mix(c,vec3(1.,.28,.62),smoothstep(.1,.22,x));
+ c=mix(c,vec3(.95,.06,.22),smoothstep(.22,.36,x));
+ c=mix(c,vec3(.82,.08,.7),smoothstep(.5,.64,x));
+ c=mix(c,vec3(.48,.14,.95),smoothstep(.68,.82,x));
+ c=mix(c,vec3(1.,.82,.2),smoothstep(.92,1.,x));
+ return c;}
+vec3 pal(float x){return mix(thermal(x),magenta(x),uMg);}
 void main(){
  vec2 fc=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y)/uRes*vec2(1600.,900.);
  vec2 p=fc-vec2(800.,452.);
@@ -142,6 +172,7 @@ void main(){
    float sc=1.;
    if(uSc>0.){float keep=step(r3,.5);sc=mix(1.,keep*.55,uSc);c*=1.+uSc*(.04+r1*.16);}
    float s=s0*(.8+.4*r2)*(1.+.07*sin(t*2.3+hid*2.1))*sc;
+   if(uBu<2.){float gr=clamp(uBu,0.,1.),pu=clamp(uBu-1.,0.,1.),st=r3*.3;s*=smoothstep(st,st+.45,gr);c*=mix(.28+r1*.95,1.,pu);}   // burst: hearts pop up staggered all over, then pull out to the ring
    if(s<1.)continue;
    if(length(q-c)>s*1.9){d=smin(d,length(q-c)-s*.75,14.);continue;}
    float ang=(r1-.5)*1.6+a*.6+.55*sin(t*.9+hid*1.3);
@@ -165,7 +196,7 @@ void main(){
  x+=smoothstep(.6,.8,fbm(lpk*1.7+vec2(id*7.3,-t*.4)))*.4*smoothstep(.15,.4,u);                    // cool spots
  x-=smoothstep(.12,.0,u)*.12*(.5+.5*sin(t*2.6+id*2.3+th*3.));          // glowing rims (cycle)
  x=mix(x,floor(x*14.)/14.,.3);
- vec3 bc=thermal(x);
+ vec3 bc=pal(x);
  bc*=mix(.55,1.,smoothstep(.0,.12,u));                                   // rim shade
  bc=mix(bc,vec3(.3,.04,.4),.4*smoothstep(.3,.0,u)*smoothstep(.3,-.3,lpk.y));   // purple underside
  if(uSc>.0){bc=mix(bc,mix(vec3(.9,.08,.15),vec3(1.,.5,.35),hl),uSc*.9);}
@@ -173,13 +204,13 @@ void main(){
  float m=fbm(q*.0042+vec2(t*.22,-t*.17)+id*.0);
  float m2=fbm(q*.009-vec2(t*.3,t*.12)+4.);
  float xm=.5+(m-.5)*1.1+.14*sin(t*1.6+th*3.)+uSh*.3;
- vec3 mc=thermal(xm);
+ vec3 mc=pal(xm);
  mc=mix(mc,vec3(.3,.85,1.),smoothstep(.62,.8,m2)*.55);
  mc=mix(mc,vec3(1.,.85,.1),smoothstep(.66,.82,m)*.45);
- float mw=smoothstep(1.12,1.55,e)*(1.-uSc);
+ float mw=smoothstep(1.12,1.55,e)*(1.-uSc)*clamp(uBu-1.,0.,1.);   // no colour mush until the ring has formed
  float sh=1.-.8*exp(-max(d,0.)/9.);                                  // shadow halo around blobs
  vec3 col=mc*sh;float al=mw*(.55+.45*sh);
- float gap=smoothstep(.98,1.12,e)*(1.-uSc)*.9;
+ float gap=smoothstep(.98,1.12,e)*(1.-uSc)*.9*clamp(uBu-1.,0.,1.);
  al=max(al,gap*(1.-mw)*.92);col=mix(vec3(0.),col,mw/max(al,.001)*.9);
  col=mix(col,bc,inside);al=max(al,inside);
  // outer blur ring brightness falloff
@@ -201,7 +232,7 @@ function useThermalGL(cv: { current: HTMLCanvasElement | null }) {
     const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     const loc = gl.getAttribLocation(pr, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
     const U = (n: string) => gl.getUniformLocation(pr, n);
-    const uRes = U("uRes"), uT = U("uT"), uEx = U("uEx"), uSh = U("uSh"), uSc = U("uSc"), uFa = U("uFa"), uSz = U("uSz");
+    const uRes = U("uRes"), uT = U("uT"), uEx = U("uEx"), uSh = U("uSh"), uSc = U("uSc"), uFa = U("uFa"), uSz = U("uSz"), uBu = U("uBu"), uMg = U("uMg");
     // resolution: device pixels of the on-screen frame, capped; drops further if the GPU can't hold ~60fps
     let cap = (window as any).__scGLCap || 1440, n = 0, slow = 0, last = 0;
     const size = () => {
@@ -218,7 +249,7 @@ function useThermalGL(cv: { current: HTMLCanvasElement | null }) {
       draw: (T: number) => {
         pace(); if (!c.width || c.width === 300) size(); const r = ringAt(T);
         gl.viewport(0, 0, c.width, c.height);
-        gl.uniform2f(uRes, c.width, c.height); gl.uniform1f(uT, T); gl.uniform1f(uEx, r.ex); gl.uniform1f(uSh, r.sh); gl.uniform1f(uSc, r.sc); gl.uniform1f(uFa, r.fa); gl.uniform1f(uSz, r.sz);
+        gl.uniform2f(uRes, c.width, c.height); gl.uniform1f(uT, T); gl.uniform1f(uEx, r.ex); gl.uniform1f(uSh, r.sh); gl.uniform1f(uSc, r.sc); gl.uniform1f(uFa, r.fa); gl.uniform1f(uSz, r.sz); gl.uniform1f(uBu, r.bu); gl.uniform1f(uMg, r.mg);
         gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
       },
     };
@@ -234,7 +265,7 @@ export const Ell = ({ w }: { w: number }) => (
   </svg>
 );
 
-type LetterPlan = { a: number; v: number; tin: string; tout: string; ld: number };
+type LetterPlan = { a: number; v: number; tin: string; tout: string; ld: number; pd?: number };
 /** One line split into letter spans; 'l' becomes the looped ℓ. Full text stays readable via aria-label. */
 function Letters({ text, className, plan, stroke, reg, style }: { text: string; className: string; plan: (i: number, n: number) => LetterPlan; stroke: number; reg: (el: HTMLElement | null, p: LetterPlan) => void; style?: CSSProperties }) {
   const chars = Array.from(text.replace(/"([^"]*)"/g, "\u201c$1\u201d"));
@@ -248,12 +279,13 @@ function Letters({ text, className, plan, stroke, reg, style }: { text: string; 
   );
 }
 
-const TINT_P = "#ff5f93", TINT_Y = "#ffd43a", TINT_R = "#ff3b4e", TINT_O = "#ffae2a";
+const TINT_P = "#ff5f93", TINT_Y = "#ffd43a", TINT_R = "#ff3b4e", TINT_O = "#ffae2a", TINT_V = "#9a4dff", TINT_L = "#c7a8ff";
 /** Letter style for time T: types in with a warm tint, sits white, tints then erases. */
 function letterStyle(p: LetterPlan, T: number): [number, string] {
   if (T < p.a) return [0, "#fff"];
   const ia = T - p.a;
-  if (ia < .16) return [clamp01(ia / .05), ia < .07 ? p.tin : ia < .12 ? TINT_P : "#fff"];
+  if (p.pd) { if (ia < p.pd) return [clamp01(ia / .05), p.tin]; }      // types in purple, then turns white
+  else if (ia < .16) return [clamp01(ia / .05), ia < .07 ? p.tin : ia < .12 ? TINT_P : "#fff"];
   if (T < p.v - p.ld) return [1, "#fff"];
   if (T < p.v) return [1, T < p.v - p.ld * .45 ? p.tout : TINT_Y];
   return [1 - clamp01((T - p.v) / .06), TINT_Y];
@@ -293,9 +325,18 @@ const AsiaStage = memo(function AsiaStage() {
       ))}
     </svg>
   );
+  // truss: an inverted-V row of small bright lamps across the top of the arena
+  const rig = useMemo(() => { const out: { x: number; y: number; r: number }[] = [];
+    for (let i = 0; i <= 44; i++) { const x = 60 + i * (1480 / 44); const y = 168 + Math.abs(x - 800) * .17; out.push({ x, y, r: i % 4 === 0 ? 4.2 : 2.6 }); out.push({ x, y: y + 22, r: 2 }); }
+    return out; }, []);
   return (
     <div className="sc-asia-stage" aria-hidden="true">
       <div className="sc-asia-haze" />
+      <svg viewBox={`0 0 ${W} ${H}`} className="sc-svgfill sc-asia-rig">
+        <defs><radialGradient id="scrigl"><stop offset="0" stopColor="#fff" /><stop offset=".35" stopColor="#dfe6ff" stopOpacity=".75" /><stop offset="1" stopColor="#9fb0ff" stopOpacity="0" /></radialGradient></defs>
+        <path d={`M60 ${168 + 740 * .17} L800 168 L1540 ${168 + 740 * .17}`} stroke="#4a4f66" strokeWidth="3" fill="none" opacity=".55" />
+        {rig.map((d, i) => <circle key={i} cx={d.x} cy={d.y} r={d.r * 3.2} fill="url(#scrigl)" />)}
+      </svg>
       <div className="sc-asia-pillars">
         {pillars.map((p, i) => <i key={i} style={css({ left: p.x, top: p.top, width: p.w, height: p.bot - p.top, "--d": -(i % 5) * .37 + "s" })} />)}
       </div>
@@ -332,10 +373,11 @@ function AsiaCard({ card, ok }: { card: EvCard; ok: boolean }) {
   const gl = useThermalGL(cv);
   const X = A_HOLD;
   // entry: lines type in from the left top→bottom; exit: country erases from the left, credits vanish bottom-up
-  const planCountry = (i: number) => ({ a: .42 + i * .045, v: X + (i < 3 ? .4 + .11 * i : .69 + .09 * (i - 3)), tin: TINT_Y, tout: TINT_P, ld: .17 });
+  const B = A_BURST;
+  const planCountry = (i: number) => ({ a: B + .2 + i * .085, v: X + (i < 3 ? .32 + .09 * i : .55 + .065 * (i - 3)), tin: TINT_V, tout: TINT_P, ld: .15, pd: .24 });
   // credit lines: patches of tint sweep through, then the whole line drops out right→left in ~0.1s
-  const linePlan = (a0: number, gone: number, tout: string, tin = TINT_Y) => (i: number, n: number) =>
-    ({ a: a0 + i * .018, v: X + gone + (n - 1 - i) / Math.max(1, n - 1) * -.1 + .1, tin, tout, ld: .1 + .2 * (.5 + .5 * Math.sin(i * .55 + n)) });
+  const linePlan = (a0: number, gone: number, tout: string) => (i: number, n: number) =>
+    ({ a: a0 + i * .018, v: X + gone + (n - 1 - i) / Math.max(1, n - 1) * -.1 + .1, tin: TINT_L, tout, ld: .1 + .2 * (.5 + .5 * Math.sin(i * .55 + n)), pd: .22 });
   useEffect(() => {
     if (!ok) return;
     const still = reduced();
@@ -343,7 +385,7 @@ function AsiaCard({ card, ok }: { card: EvCard; ok: boolean }) {
     const frame = () => {
       const fz = (window as any).__scFreeze;
       const raw = (performance.now() - t0) / 1000;
-      const T = still ? 3 : typeof fz === "number" ? fz : raw % A_LOOP;
+      const T = still ? A_BURST + 2.6 : typeof fz === "number" ? fz : raw % A_LOOP;
       // tell the studio each time the card loops back to its entry, so the sound can play again
       const lp = Math.floor(raw / A_LOOP); if (!still && typeof fz !== "number" && lp > loops) { loops = lp; dispatchEvent(new CustomEvent("ev-card-loop", { detail: "asia" })); }
       gl.current?.draw(T);
@@ -354,8 +396,9 @@ function AsiaCard({ card, ok }: { card: EvCard; ok: boolean }) {
         if (c !== L.c) { L.c = c; L.el.style.color = c; }
       }
       const z = T < X ? 1 : 1 + .3 * ease((T - X) / 1.7);
-      const lit = T < X ? .1 : .1 + .9 * ease((T - X - .1) / .35);
-      const s = stage.current; if (s) { s.style.transform = `scale(${z})`; s.style.setProperty("--lit", lit.toFixed(3)); s.style.setProperty("--wide", (T < X ? 0 : ease((T - X - .2) / .6)).toFixed(3)); s.style.opacity = String(T < X ? ease(T / .6) : T > A_END + .5 ? 1 - ease((T - A_END - .5) / .3) : 1); }
+      // dark until the burst; the rig lights up as the hearts settle, beams warm up through the hold
+      const lit = T < X ? .08 + .3 * ease((T - B - 2.6) / 2.2) : .38 + .62 * ease((T - X - .1) / .35);
+      const s = stage.current; if (s) { s.style.transform = `scale(${z})`; s.style.setProperty("--lit", lit.toFixed(3)); s.style.setProperty("--rig", (T < X ? ease((T - B - .9) / .6) : 1).toFixed(3)); s.style.setProperty("--wide", (T < X ? 0 : ease((T - X - .2) / .6)).toFixed(3)); s.style.opacity = String(T < X ? ease((T - B - .4) / .9) : T > A_END + .5 ? 1 - ease((T - A_END - .5) / .3) : 1); }
       if (!still) raf = requestAnimationFrame(frame);
     };
     frame();
@@ -368,13 +411,13 @@ function AsiaCard({ card, ok }: { card: EvCard; ok: boolean }) {
       <div className="sc-asia-zoom" ref={stage}><AsiaStage /></div>
       <canvas ref={cv} className="sc-asia-gl" aria-hidden="true" />
       <div className="sc-asia-copy">
-        <Letters text={card.song || "Song"} className="sc-asia-song" stroke={11} reg={reg} plan={linePlan(.3, 1.45, TINT_Y)} />
-        <Letters text={by} className="sc-asia-by" stroke={11} reg={reg} plan={linePlan(.38, .92, TINT_O, TINT_P)} />
+        <Letters text={card.song || "Song"} className="sc-asia-song" stroke={11} reg={reg} plan={linePlan(B + .38, 1.05, TINT_Y)} />
+        <Letters text={by} className="sc-asia-by" stroke={11} reg={reg} plan={linePlan(B + .55, .8, TINT_O)} />
         <Letters text={country} className="sc-asia-country" stroke={11.5} reg={reg} plan={planCountry} style={{ fontSize: big }} />
         <div className="sc-asia-credits">
-          <Letters text="Music & Lyrics" className="sc-asia-ml" stroke={11} reg={reg} plan={linePlan(.62, .9, TINT_Y)} />
+          <Letters text="Music & Lyrics" className="sc-asia-ml" stroke={11} reg={reg} plan={linePlan(B + 1.15, .8, TINT_Y)} />
           {lines.map((l, i) => <Letters key={i} text={l} className="sc-asia-ly" stroke={11} reg={reg}
-            plan={linePlan(.7 + i * .08, Math.max(.4, .7 - (i - (lines.length - 2)) * .22), i === lines.length - 1 ? TINT_R : TINT_P)} />)}
+            plan={linePlan(B + 1.5 + i * .22, Math.max(.4, .7 - (i - (lines.length - 2)) * .22), i === lines.length - 1 ? TINT_R : TINT_P)} />)}
         </div>
       </div>
     </>

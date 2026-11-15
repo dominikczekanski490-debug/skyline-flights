@@ -16,12 +16,20 @@ export function setMuted(m: boolean) {
   if (ctx && master) master.gain.setTargetAtTime(m ? 0 : LEVEL, ctx.currentTime, .04);
 }
 
-/** Main bus: per-play gains → master → compressor → speakers, with a generated-impulse reverb send. */
+/** Main bus: per-play gains → master → compressor → make-up gain → soft-clip limiter → speakers, plus a
+ *  generated-impulse reverb send. Tuned loud and bright like a phone video (~-9 dBFS RMS) without clipping. */
+function softClip(ac: BaseAudioContext) {
+  const ws = ac.createWaveShaper(); const n = 2048, c = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = .96 * Math.tanh(x * 1.6) / Math.tanh(1.6); }
+  ws.curve = c; ws.oversample = "2x"; return ws;
+}
 function buildBus(ac: BaseAudioContext) {
   const comp = ac.createDynamicsCompressor();
-  comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 4; comp.attack.value = .004; comp.release.value = .18;
+  comp.threshold.value = -20; comp.knee.value = 6; comp.ratio.value = 5; comp.attack.value = .003; comp.release.value = .14;
   const m = ac.createGain(); m.gain.value = isMuted() && ac instanceof AudioContext ? 0 : LEVEL;
-  m.connect(comp); comp.connect(ac.destination);
+  const mk = ac.createGain(); mk.gain.value = 1.45;
+  const lim = softClip(ac);
+  m.connect(comp); comp.connect(mk); mk.connect(lim); lim.connect(ac.destination);
   const verb = ac.createConvolver(); verb.buffer = impulse(ac, 2.3, 2.6);
   const send = ac.createGain(); send.gain.value = .28; const vr = ac.createGain(); vr.gain.value = 1;
   send.connect(verb); verb.connect(vr); vr.connect(m);
@@ -114,6 +122,9 @@ function whoosh(o: Out, t: number, dur = .7, v = 1) {
   const r = env(o, t + dur * .3, .01, .16 * v, .05, .6, o.fx); nsrc(o, t, t + dur + .7, filt(o, "bandpass", 1600, .8, r));
 }
 
+/** Postcard length per style (s): Eurovision Asia is a short 9 s fashion shoot, the others 15 s. */
+export const pcLen = (style: EvStyle) => style === "asia" ? 9 : 15;
+
 type Flavour = { chords: number[][]; roots: number[]; lead: number[]; pad: OscillatorType; padCut: number; arp: OscillatorType; bass: OscillatorType; bell?: boolean; four: boolean; hats16: boolean; clap: boolean; pump: number };
 const FLAV: Record<EvStyle, Flavour> = {
   // Eurovision Asia: warm "royal road" progression (IV–V–iii–vi), pentatonic plucks
@@ -127,69 +138,62 @@ const FLAV: Record<EvStyle, Flavour> = {
     lead: [79, 76, 79, 81, 79, 76, 74, 76, 77, 76, 74, 72, 74, 76, 79, 79], pad: "triangle", padCut: 2600, arp: "sine", bass: "square", bell: true, four: false, hats16: true, clap: true, pump: .35 },
 };
 
-/** The ~15 s postcard bed. Bars are 2 s (120 bpm). Impact at 11.0 s when the country lands; whoosh into the card at 15 s. */
-export const BED_LEN = 15, BED_IMPACT = 11, CARD_HIT: Record<EvStyle, number> = { asia: .55, esc: .75, jesc: 1.55 };
-function scheduleBed(o: Out, style: EvStyle, t0: number) {
-  const F = FLAV[style], B = .5, bar = 2;
-  const padBus = o.ac.createGain(); padBus.gain.value = 1; padBus.connect(o.out); o.n.count++;
-  const padLP = filt(o, "lowpass", F.padCut, .7, padBus);
-  padLP.frequency.setValueAtTime(F.padCut * .35, t0); padLP.frequency.exponentialRampToValueAtTime(F.padCut, t0 + 4);
-  padLP.frequency.setValueAtTime(F.padCut, t0 + 9); padLP.frequency.exponentialRampToValueAtTime(F.padCut * .5, t0 + 10.9); padLP.frequency.setValueAtTime(F.padCut * 1.15, t0 + 11);
-  const padSend = o.ac.createGain(); padSend.gain.value = .35; padSend.connect(o.fx); padLP.connect(padSend); o.n.count++;
-  const drumsOn = (t: number) => t >= 2 && !(t >= 10.5 && t < 11);
-  for (let b = 0; b < 8; b++) {
+/** Postcard bed: a continuous, steady-energy pop loop (drums, bass, chords, arp, hook) from the first beat, like the
+ *  TikTok edit it copies — no quiet intro. Bars are 2 s (120 bpm). ESC/JESC add an impact when the country lands at 11 s.
+ *  Fades out over the last ~0.6 s into the stage card. */
+export const BED_LEN = 15, BED_IMPACT = 11;
+/** Eurovision Asia stage-card timeline (s) — the visuals (evcards) use the same numbers. */
+export const ASIA_T = { burst: 1.7, hold: 8.0, end: 9.7, loop: 10.4 };
+export const CARD_HIT: Record<EvStyle, number> = { asia: ASIA_T.burst + .55, esc: .75, jesc: 1.55 };
+function scheduleBed(o: Out, style: EvStyle, t0: number, len = pcLen(style)) {
+  const F = FLAV[style], B = .5, bar = 2, impact = style === "asia" ? -1 : BED_IMPACT;
+  const bus = o.ac.createGain(); bus.gain.setValueAtTime(1, t0); bus.gain.setValueAtTime(1, t0 + len - .65); bus.gain.linearRampToValueAtTime(0, t0 + len); bus.connect(o.out); o.n.count++;
+  const B2: Out = { ...o, out: bus };
+  const padBus = o.ac.createGain(); padBus.gain.value = 1; padBus.connect(bus); o.n.count++;
+  const padLP = filt(o, "lowpass", F.padCut * 1.3, .7, padBus);
+  const padSend = o.ac.createGain(); padSend.gain.value = .3; padSend.connect(o.fx); padLP.connect(padSend); o.n.count++;
+  const bars = Math.ceil(len / bar);
+  for (let b = 0; b < bars; b++) {
     const tb = t0 + b * bar, ci = b % 4, ch = F.chords[ci];
-    // pad chord (two detuned voices per note); the last bar is cut short under the whoosh
-    const pd = b === 7 ? .7 : bar - .15;
-    const g = env(o, tb, .12, .055, pd, .35, padLP);
-    for (const m of ch) for (const d of [-9, 9]) osc(o, F.pad, mtof(m), tb, tb + pd + .5, g, d);
+    const g = env(o, tb, .05, .05, bar - .12, .3, padLP);
+    for (const m of ch) for (const d of [-10, 10]) osc(o, F.pad, mtof(m), tb, tb + bar + .4, g, d);
     for (let q = 0; q < 4; q++) {
       const tq = tb + q * B, rel = tq - t0;
-      if (rel >= BED_LEN) break;
-      // sidechain pump on the pad
-      if (drumsOn(rel) && (F.four || q % 2 === 0)) { padBus.gain.setValueAtTime(1 - F.pump, tq); padBus.gain.linearRampToValueAtTime(1, tq + .28); }
-      if (drumsOn(rel)) {
-        if (F.four || q === 0 || q === 2) kick(o, tq, rel < 4 ? .8 : 1);
-        if (!F.four && q === 1) kick(o, tq + B * .5, .7);
-        if (rel >= 4 && (q === 1 || q === 3)) snare(o, tq, rel >= 11 ? 1 : .85, F.clap);
-        const steps = F.hats16 && rel >= 4 ? 4 : 2;
-        for (let h = 0; h < steps; h++) { const th = tq + h * B / steps; if (steps === 2 && h === 0) continue; hat(o, th, steps === 4 && h % 2 ? .55 : .9, steps === 2 && q === 3 && rel >= 11); }
+      if (rel >= len - .3) break;
+      if (F.four || q % 2 === 0) { padBus.gain.setValueAtTime(1 - F.pump, tq); padBus.gain.linearRampToValueAtTime(1, tq + .26); }
+      if (F.four || q === 0 || q === 2) kick(B2, tq, 1);
+      if (!F.four && q === 1) kick(B2, tq + B * .5, .7);
+      if (q === 1 || q === 3) { snare(B2, tq, .95, true); if (F.clap) snare(B2, tq, .5, false); }
+      for (let h = 0; h < 4; h++) hat(B2, tq + h * B / 4, h === 2 ? 1.1 : h % 2 ? .6 : .8, h === 2 && q % 2 === 1);
+      // bass on 8ths
+      for (let e = 0; e < 2; e++) {
+        const te = tq + e * B / 2, r = F.roots[ci] + (e === 1 ? 12 : 0);
+        const bg = env(o, te, .004, style === "jesc" ? .13 : .16, .14, .07, filt(o, "lowpass", 900, 3, bus));
+        osc(o, F.bass, mtof(r), te, te + .28, bg); osc(o, "sine", mtof(r - 12), te, te + .28, bg);
       }
-      // bass on 8ths from bar 1
-      if (rel >= 2 && !(rel >= 10.5 && rel < 11)) for (let e = 0; e < 2; e++) {
-        const te = tq + e * B / 2, r = F.roots[ci] + (style === "esc" && e === 1 ? 12 : 0);
-        const g = env(o, te, .005, style === "jesc" ? .12 : .17, .14, .08, filt(o, "lowpass", style === "esc" ? 520 : 680, 4, o.out));
-        osc(o, F.bass, mtof(r), te, te + .3, g); osc(o, "sine", mtof(r - 12), te, te + .3, g);
-      }
-      // arp 16ths
-      for (let s = 0; s < 4; s++) {
-        const ts = tq + s * B / 4, rs = ts - t0; if (rs >= 14.6) break;
-        const step = (q * 4 + s), note = ch[step % ch.length] + 12 + (step % 8 >= 4 ? 12 : 0);
-        const v = (rs < 2 ? .4 + rs * .3 : 1) * (F.bell ? .07 : .045);
-        const cut = filt(o, "lowpass", rs < 4 ? 1400 + rs * 600 : 4200, 1.5, o.out);
-        const g = env(o, ts, .003, v, .02, F.bell ? .32 : .11, cut);
-        osc(o, F.arp, mtof(note), ts, ts + .45, g);
+      // bright arp 16ths
+      for (let s2 = 0; s2 < 4; s2++) {
+        const ts = tq + s2 * B / 4; if (ts - t0 >= len - .2) break;
+        const step = q * 4 + s2, note = ch[step % ch.length] + 12 + (step % 8 >= 4 ? 12 : 0);
+        const ag = env(o, ts, .003, F.bell ? .075 : .055, .02, F.bell ? .3 : .12, filt(o, "lowpass", 5200, 1.2, bus));
+        osc(o, F.arp, mtof(note), ts, ts + .4, ag);
         if (F.bell) { const m = o.ac.createOscillator(); const mg = o.ac.createGain(); m.frequency.value = mtof(note) * 3.5; mg.gain.value = mtof(note) * 1.2; m.connect(mg); o.n.count += 2;
-          const car = osc(o, "sine", mtof(note), ts, ts + .45, g); mg.connect(car.frequency); m.start(ts); m.stop(ts + .45); }
-        if (s === 2 && q % 2 === 1) { const e = env(o, ts, .003, v * .6, .02, .25, o.fx); osc(o, F.arp, mtof(note), ts, ts + .4, e); }
+          const car = osc(o, "sine", mtof(note), ts, ts + .4, ag); mg.connect(car.frequency); m.start(ts); m.stop(ts + .4); }
       }
     }
+    // the hook: a bright lead on every other bar from bar 1 (call), answered by a shimmer
+    if (b >= 1 && b % 2 === 1) for (let i = 0; i < 8; i++) {
+      const t = tb + i * .25; if (t - t0 > len - .5) break;
+      const m = F.lead[(i + (b % 4 === 3 ? 8 : 0)) % F.lead.length];
+      const lg = env(o, t, .008, .052, .15, .14, filt(o, "lowpass", 4600, 1, bus));
+      osc(o, style === "jesc" ? "triangle" : "square", mtof(m), t, t + .38, lg); osc(o, "sawtooth", mtof(m), t, t + .38, lg, 8);
+      const e2 = env(o, t, .01, .045, .15, .3, o.fx); osc(o, "triangle", mtof(m + 12), t, t + .5, e2);
+    }
   }
-  // build: snare roll 8.5–10.5, riser into the impact, drop, impact at 11
-  for (let t = 8.5; t < 10.45;) { const p = (t - 8.5) / 2; snare(o, t0 + t, .25 + p * .6, false); t += p < .4 ? .25 : p < .75 ? .125 : .0625; }
-  riser(o, t0 + 8.7, 2.25);
-  boom(o, t0 + BED_IMPACT, 1);
-  // chorus lead 11–14.6
-  for (let i = 0; i < 16; i++) {
-    const t = t0 + 11 + i * .25; if (t - t0 > 14.6) break;
-    const m = F.lead[i % F.lead.length];
-    const g = env(o, t, .01, F.bell ? .06 : .05, .16, .14, filt(o, "lowpass", 3800, 1, o.out));
-    osc(o, style === "jesc" ? "triangle" : "square", mtof(m), t, t + .4, g, 0); osc(o, "sawtooth", mtof(m), t, t + .4, g, 7);
-    const e = env(o, t, .01, .05, .16, .3, o.fx); osc(o, "triangle", mtof(m), t, t + .5, e);
-  }
-  riser(o, t0 + 13.4, 1.45, .9);
-  whoosh(o, t0 + 14.55, .8, 1.1);
-  return t0 + BED_LEN;
+  if (impact > 0) { riser(B2, t0 + impact - 1.6, 1.6, .8); boom(B2, t0 + impact, .9); }
+  crash(B2, t0, .7);
+  whoosh(o, t0 + len - .45, .8, 1.1);
+  return t0 + len;
 }
 
 /** Whoosh + hit for a stage card. `t` = when the card starts. */
@@ -223,6 +227,60 @@ function scheduleCardBed(o: Out, style: EvStyle, t: number, len: number) {
   }
 }
 
+/** Eurovision Asia stage card sound, following the clip's loudness arc: silence → a swelling crowd → a shimmer whoosh
+ *  as the hearts burst in → a bright impact as they settle and the country types in → a warm pad/arp/drum bed → a rising
+ *  harmonic riser into the exit → the bed rides out over the clean stage. `t` = card time 0. */
+function scheduleAsiaCardArc(o: Out, t: number, len = ASIA_T.loop) {
+  const F = FLAV.asia, Bt = t + ASIA_T.burst, hit = Bt + .55, X = t + ASIA_T.hold;
+  // crowd: two band-passed noise layers with a fluttering, cheer-like gain; swells until the burst, then sits under the bed
+  const crowd = o.ac.createGain(); crowd.connect(o.out); o.n.count++;
+  crowd.gain.setValueAtTime(0, t); crowd.gain.setValueAtTime(0, t + .3); crowd.gain.linearRampToValueAtTime(.09, t + .55); crowd.gain.linearRampToValueAtTime(.14, Bt - .2);
+  crowd.gain.linearRampToValueAtTime(.3, hit + .2); crowd.gain.linearRampToValueAtTime(.12, hit + 1.6); crowd.gain.setValueAtTime(.12, X - 1); crowd.gain.linearRampToValueAtTime(.3, X + .3); crowd.gain.linearRampToValueAtTime(.1, t + len - .4); crowd.gain.linearRampToValueAtTime(0, t + len);
+  const flutter = o.ac.createGain(); flutter.connect(crowd); o.n.count++;
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let k = t + .3; k < t + len; k += .09) flutter.gain.linearRampToValueAtTime(.55 + rnd() * .45, k);
+  nsrc(o, t + .3, t + len, filt(o, "bandpass", 1100, .7, flutter));
+  nsrc(o, t + .3, t + len, filt(o, "bandpass", 2900, 1.1, flutter));
+  const low = env(o, t + .3, .4, .08, len - 1.1, .4, filt(o, "lowpass", 380, .5, o.out)); nsrc(o, t + .3, t + len, low);
+  // a few whistles in the crowd before the burst
+  for (const [w, f] of [[.8, 2300], [1.15, 2650], [1.45, 2100]]) { const wt = t + w; const g = env(o, wt, .03, .02, .25, .15, o.out); const s = osc(o, "sine", f, wt, wt + .5, g); s.frequency.linearRampToValueAtTime(f * 1.18, wt + .3); }
+  // shimmer whoosh into the burst: noise sweeping up + a fast bright glissando
+  const sw = filt(o, "bandpass", 700, 1.3, o.out); sw.frequency.setValueAtTime(700, Bt - .1); sw.frequency.exponentialRampToValueAtTime(9000, hit);
+  const swg = o.ac.createGain(); swg.gain.setValueAtTime(0, Bt - .1); swg.gain.linearRampToValueAtTime(.4, hit - .05); swg.gain.linearRampToValueAtTime(0, hit + .1); swg.connect(sw); o.n.count++; nsrc(o, Bt - .1, hit + .15, swg);
+  [0, 4, 7, 12, 16, 19, 24, 28].forEach((iv, i) => { const ts = Bt + .05 + i * .06; const g = env(o, ts, .003, .04, .03, .45, o.out); osc(o, "sine", mtof(72 + iv), ts, ts + .6, g); const e = env(o, ts, .003, .05, .03, .9, o.fx); osc(o, "triangle", mtof(84 + iv), ts, ts + 1, e); });
+  // bright impact as the hearts settle (sub + mid body + crack + crash + chord stab)
+  boom(o, hit, .8);
+  const bd = env(o, hit, .002, .5, .03, .3, o.out); const bo = osc(o, "triangle", 280, hit, hit + .4, bd); bo.frequency.exponentialRampToValueAtTime(120, hit + .25);
+  const k = env(o, hit, .001, .5, .01, .14, filt(o, "bandpass", 2800, .9, o.out)); nsrc(o, hit, hit + .2, k);
+  const st = env(o, hit, .004, .09, .4, 1.2, filt(o, "lowpass", 5000, .6, o.out)); for (const m of F.chords[0]) { osc(o, "sawtooth", mtof(m + 12), hit, hit + 1.8, st, -7); osc(o, "sawtooth", mtof(m + 12), hit, hit + 1.8, st, 7); }
+  // bed: pad + arp + four-on-the-floor from the impact to the end, ducking out over the last 0.6 s
+  const bus = o.ac.createGain(); bus.gain.setValueAtTime(0, hit); bus.gain.linearRampToValueAtTime(.8, hit + .15);
+  // a one-beat break after the name lands (as in the clip), and a lift into the exit
+  bus.gain.setValueAtTime(.8, Bt + 2.0); bus.gain.linearRampToValueAtTime(.15, Bt + 2.1); bus.gain.setValueAtTime(.15, Bt + 2.35); bus.gain.linearRampToValueAtTime(.8, Bt + 2.45);
+  bus.gain.setValueAtTime(.8, X - 1); bus.gain.linearRampToValueAtTime(1.8, X); bus.gain.linearRampToValueAtTime(.9, X + .8); bus.gain.setValueAtTime(.9, t + len - .6); bus.gain.linearRampToValueAtTime(0, t + len); bus.connect(o.out); o.n.count++;
+  const B2: Out = { ...o, out: bus };
+  const lp = filt(o, "lowpass", 2600, .6, bus); const send = o.ac.createGain(); send.gain.value = .4; lp.connect(send); send.connect(o.fx); o.n.count++;
+  for (let tb = hit, b = 0; tb < t + len - .3; tb += 2, b++) {
+    const ch = F.chords[b % 4];
+    const g = env(o, tb, .2, .05, 1.8, .4, lp); for (const m of ch) for (const d of [-9, 9]) osc(o, F.pad, mtof(m), tb, tb + 2.5, g, d);
+    for (let q = 0; q < 4; q++) {
+      const tq = tb + q * .5; if (tq > t + len - .4) break;
+      kick(B2, tq, .9); if (q % 2) snare(B2, tq, .7, true);
+      for (let h = 0; h < 2; h++) hat(B2, tq + .25 * h + .125, .7);
+      const r = F.roots[b % 4]; const bg = env(o, tq + .25, .004, .14, .12, .06, filt(o, "lowpass", 900, 3, bus)); osc(o, F.bass, mtof(r), tq + .25, tq + .5, bg); osc(o, "sine", mtof(r - 12), tq + .25, tq + .5, bg);
+      for (let s2 = 0; s2 < 4; s2++) { const ts = tq + s2 * .125; const ag = env(o, ts, .003, .045, .02, .14, filt(o, "lowpass", 5200, 1.2, bus)); osc(o, F.arp, mtof(ch[(q * 4 + s2) % ch.length] + 12 + ((q * 4 + s2) % 8 >= 4 ? 12 : 0)), ts, ts + .3, ag); }
+    }
+  }
+  // a second sparkle as the full country name lands
+  [0, 7, 12, 16].forEach((iv, i) => { const ts = hit + .75 + i * .08; const g = env(o, ts, .003, .05, .03, .6, o.fx); osc(o, "sine", mtof(84 + iv), ts, ts + .8, g); });
+  // the lift into the exit: rising harmonic tones + noise riser, then crash as the hearts blow out
+  const rs = X - 1.1;
+  riser(o, rs, 1.1, 1.5);
+  const rg = o.ac.createGain(); rg.gain.setValueAtTime(0, rs); rg.gain.linearRampToValueAtTime(.3, X); rg.gain.linearRampToValueAtTime(0, X + .25); rg.connect(o.out); o.n.count++;
+  for (const h of [1, 1.5, 2, 3]) { const s = osc(o, h === 1.5 ? "sawtooth" : "triangle", 330 * h, rs, X + .3, rg); s.frequency.exponentialRampToValueAtTime(330 * h * 2.4, X); }
+  crash(o, X, .9); const xs = env(o, X, .002, .4, .02, .12, filt(o, "bandpass", 3000, .8, o.out)); nsrc(o, X, X + .2, xs);
+}
+
 function startOn(build: (o: Out, t: number) => void, lead = .06) {
   if (!ctx || !master || !fxIn) return null;
   const g = ctx.createGain(); g.gain.value = 1; g.connect(master); live.push(g);
@@ -237,25 +295,34 @@ function startOn(build: (o: Out, t: number) => void, lead = .06) {
 /** Postcard bed (+ the card sting at 15 s). Returns the audio start time so visuals can sync. */
 export function playPostcard(style: EvStyle) {
   stopAll(.12);
-  return startOn((o, t) => { scheduleBed(o, style, t); scheduleSting({ ...o }, style, t + BED_LEN); });
+  const len = pcLen(style);
+  return startOn((o, t) => { scheduleBed(o, style, t, len); if (style === "asia") scheduleAsiaCardArc(o, t + len - .25); else scheduleSting(o, style, t + len); });
 }
 /** Stage-card Replay: whoosh + impact. */
-export function playCardSting(style: EvStyle, bedLen = 7.4) { stopAll(.08); return startOn((o, t) => { scheduleSting(o, style, t + .1); if (bedLen > 0) scheduleCardBed(o, style, t + .1, bedLen); }); }
+export function playCardSting(style: EvStyle, bedLen = 7.4) {
+  stopAll(.08);
+  return startOn((o, t) => { if (style === "asia") scheduleAsiaCardArc(o, t); else { scheduleSting(o, style, t + .1); if (bedLen > 0) scheduleCardBed(o, style, t + .1, bedLen); } });
+}
 /** True once a tap has unlocked the shared context and it's playing (so auto-plays may make sound). */
 export const audioRunning = () => !!ctx && ctx.state === "running";
 
-/** Offline render for checks: returns peak/RMS and node count (no speakers involved). */
+/** Offline render for checks: peak/RMS, node count and loudness per second and per 0.25 s (dBFS) — no speakers involved.
+ *  "bed" = the postcard (+ what follows it), "sting" = one play of the stage card. */
 export async function renderOffline(style: EvStyle, what: "bed" | "sting" = "bed") {
   const OAC = (window as any).OfflineAudioContext || (window as any).webkitOfflineAudioContext;
-  const len = what === "bed" ? BED_LEN + 3 : 3.5;
+  const pl = pcLen(style);
+  const len = what === "bed" ? pl + 3 : style === "asia" ? ASIA_T.loop : 3.5;
   const ac: OfflineAudioContext = new OAC(2, Math.ceil(44100 * len), 44100);
   const bus = buildBus(ac); const o: Out = { ac, out: bus.master, fx: bus.fx, n: { count: 0 } };
-  if (what === "bed") { scheduleBed(o, style, .05); scheduleSting(o, style, .05 + BED_LEN); } else { scheduleSting(o, style, .1); scheduleCardBed(o, style, .1, 3.3); }
+  if (what === "bed") { scheduleBed(o, style, 0, pl); if (style === "asia") scheduleAsiaCardArc(o, pl - .25); else scheduleSting(o, style, pl); }
+  else if (style === "asia") scheduleAsiaCardArc(o, 0);
+  else { scheduleSting(o, style, .1); scheduleCardBed(o, style, .1, 3.3); }
   const buf = await ac.startRendering(); const d = buf.getChannelData(0);
   let peak = 0, sum = 0; for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > peak) peak = v; sum += d[i] * d[i]; }
-  // loudness per second, to see the arrangement (intro quiet → impact → card)
-  const per: number[] = []; const sr = buf.sampleRate;
-  for (let s = 0; s < Math.floor(len); s++) { let q = 0; for (let i = s * sr; i < (s + 1) * sr; i++) q += d[i] * d[i]; per.push(+Math.sqrt(q / sr).toFixed(3)); }
-  return { nodes: o.n.count, peak: +peak.toFixed(3), rms: +Math.sqrt(sum / d.length).toFixed(4), perSecond: per };
+  const sr = buf.sampleRate; const win = (a: number, b: number) => { let q = 0; for (let i = a; i < b; i++) q += d[i] * d[i]; return Math.sqrt(q / Math.max(1, b - a)); };
+  const per: number[] = []; for (let s = 0; s < Math.floor(len); s++) per.push(+win(s * sr, (s + 1) * sr).toFixed(3));
+  const db = (x: number) => x > 1e-6 ? Math.round(20 * Math.log10(x)) : -120;
+  const q: number[] = []; for (let s = 0; s + .25 <= len + 1e-9; s += .25) q.push(db(win(Math.round(s * sr), Math.round((s + .25) * sr))));
+  return { nodes: o.n.count, peak: +peak.toFixed(3), rms: +Math.sqrt(sum / d.length).toFixed(4), rmsDb: db(Math.sqrt(sum / d.length)), perSecond: per, dbQuarter: q };
 }
 if (typeof window !== "undefined") (window as any).__evAudio = { renderOffline };
