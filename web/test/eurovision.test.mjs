@@ -37,14 +37,18 @@ const jesc = d.DEFAULT_CARDS.jesc;
 assert.strictEqual(jesc.country, "France");
 assert.match(jesc.song, /Comment tu vas/);
 assert.match(jesc.artist, /ALEC/i);
-assert.match(jesc.lyrics, /Burette/);
+assert.match(jesc.lyrics, /MALO/i);
 
 assert.strictEqual(d.sortRows(d.ASIA_BOARD)[0].cc, "PH");
 assert.strictEqual(d.sortRows(d.ASIA_BOARD)[0].points, 211);
 assert.strictEqual(d.sortRows(d.ASIA_BOARD).length, 11);
 assert.strictEqual(d.DEFAULT_BOARDS.asia.round, "gf");
-assert.strictEqual(d.sortRows(d.ESC_BOARD).find(r => r.cc === "CH").points, 108);
-assert.strictEqual(d.DEFAULT_BOARDS.esc.round, "sf2");
+assert.strictEqual(d.sortRows(d.ESC_BOARD)[0].cc, "BG");
+assert.strictEqual(d.sortRows(d.ESC_BOARD)[0].points, 516);
+assert.strictEqual(d.sortRows(d.ESC_BOARD).length, 25);
+assert.strictEqual(d.sortRows(d.ESC_BOARD).at(-1).cc, "GB");
+assert.strictEqual(d.DEFAULT_BOARDS.esc.round, "gf");
+assert.ok(d.ASIA_BOARD.some(r => r.name === "Rep. of Korea" && r.points === 113));
 assert.strictEqual(d.sortRows(d.JESC_BOARD)[0].cc, "AM");
 assert.strictEqual(d.sortRows(d.JESC_BOARD)[0].points, 202);
 assert.strictEqual(d.sortRows(d.JESC_BOARD).length, 16);
@@ -79,13 +83,13 @@ for (const style of d.EV_STYLES) {
   assert.ok(card.includes("Fan-made recreation"), style + " note");
   assert.ok(!/ebu|eurovision\.tv|official heart logo/i.test(card), "no official marks " + style);
   if (style === "asia") { assert.ok(card.includes("PHILIPPINES") || card.includes("Philippines")); assert.ok(card.includes("Sobra-Sobra")); assert.ok(card.includes("CARMELLE")); }
-  if (style === "esc") { assert.ok(card.includes("Switzerland")); assert.ok(card.includes("Alice")); assert.ok(card.includes("Veronica Fusaro")); }
+  if (style === "esc") { assert.ok(/SWITZERLAND/i.test(card)); assert.ok(/ALICE/i.test(card)); assert.ok(/VERONICA FUSARO/i.test(card)); }
   if (style === "jesc") { assert.ok(card.includes("FRANCE") || card.includes("France")); assert.ok(/COMMENT TU VAS/i.test(card)); assert.ok(/ALEC/i.test(card)); assert.ok(card.includes("ev-crown")); }
   const board = renderToStaticMarkup(h(ui.ScoreBoard, { board: d.DEFAULT_BOARDS[style], wide: false }));
   assert.ok(board.includes("Fan-made recreation"), style + " board note");
   assert.ok(board.includes("/flags/4x3/"), style + " flags");
   if (style === "asia") { assert.ok(board.includes("Philippines") && board.includes("211") && board.includes("Grand Final")); }
-  if (style === "esc") { assert.ok(board.includes("Switzerland") && board.includes("108") && board.includes("Semi-final 2") && board.includes(">Q<")); }
+  if (style === "esc") { assert.ok(board.includes("Bulgaria") && board.includes("516") && board.includes("Grand Final") && board.includes("United Kingdom")); }
   if (style === "jesc") { assert.ok(board.includes("Armenia") && board.includes("202") && board.includes("France")); }
 }
 
@@ -99,5 +103,5 @@ const src = fs.readFileSync(path.join(here, "../src/games.tsx"), "utf8");
 assert.ok(src.includes('"eurovision"'));
 assert.ok(src.includes("EuroStudio"));
 const sw = fs.readFileSync(path.join(here, "../public/sw.js"), "utf8");
-assert.match(sw, /skyline-v35/);
+assert.match(sw, /skyline-v36/);
 console.log("eurovision ok");

@@ -1,3 +1,15 @@
+import "@fontsource/baloo-2/700.css";
+import "@fontsource/baloo-2/800.css";
+import "@fontsource-variable/fredoka";
+import "@fontsource/nunito/700.css";
+import "@fontsource/nunito/800.css";
+import "@fontsource/outfit/700.css";
+import "@fontsource/outfit/800.css";
+import "@fontsource/outfit/900.css";
+import "@fontsource/montserrat/600.css";
+import "@fontsource/montserrat/700.css";
+import "@fontsource/montserrat/800.css";
+import "@fontsource/montserrat/900.css";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { FullScreen } from "./gate";
 import {
@@ -59,62 +71,130 @@ function useFlip(dep: string) {
   return ref;
 }
 
-export function EvFlag({ cc }: { cc: string }) {
+
+export function EvFlag({ cc, variant = "rect" }: { cc: string; variant?: "rect" | "framed" | "round" }) {
   const c = (cc || "").toLowerCase();
   const [img, setImg] = useState(!!c);
   return (
-    <span className="ev-flag" title={COUNTRY_BY_CC[cc.toUpperCase()] || cc}>
+    <span className={"ev-flag ev-flag-" + variant} title={COUNTRY_BY_CC[cc.toUpperCase()] || cc}>
       {img && <img src={`/flags/4x3/${c}.svg`} alt="" aria-hidden="true" onError={() => setImg(false)} />}
       <span className="ev-flag-e" aria-hidden="true">{evFlag(cc)}</span>
     </span>
   );
 }
 
-const HEARTS = [
-  { a: 8, c: "#ff3355", s: 46, rad: "-47%", d: "0s" },
-  { a: 32, c: "#3b7bff", s: 40, rad: "-45%", d: ".2s" },
-  { a: 55, c: "#ffe14a", s: 48, rad: "-48%", d: ".4s" },
-  { a: 78, c: "#ff8a2a", s: 38, rad: "-44%", d: ".1s" },
-  { a: 102, c: "#b14bff", s: 50, rad: "-47%", d: ".3s" },
-  { a: 125, c: "#ff3355", s: 36, rad: "-45%", d: ".5s" },
-  { a: 148, c: "#3b7bff", s: 44, rad: "-48%", d: ".15s" },
-  { a: 170, c: "#ffe14a", s: 40, rad: "-44%", d: ".35s" },
-  { a: 192, c: "#ff8a2a", s: 48, rad: "-47%", d: ".25s" },
-  { a: 215, c: "#b14bff", s: 38, rad: "-45%", d: ".45s" },
-  { a: 238, c: "#ff3355", s: 44, rad: "-48%", d: ".05s" },
-  { a: 260, c: "#3b7bff", s: 50, rad: "-44%", d: ".3s" },
-  { a: 282, c: "#ffe14a", s: 36, rad: "-46%", d: ".2s" },
-  { a: 305, c: "#ff8a2a", s: 46, rad: "-47%", d: ".4s" },
-  { a: 328, c: "#b14bff", s: 40, rad: "-45%", d: ".1s" },
-  { a: 350, c: "#ff3355", s: 42, rad: "-48%", d: ".35s" },
+const lyricLines = (s: string) => (s || "").split(/\s*(?:\n|&|\/)\s*/).map(x => x.trim()).filter(Boolean);
+
+/* Large thermal hearts packed into the left and right thirds, plus top/bottom corners. Size is % of card width. */
+const HEARTS: { x: number; y: number; s: number; r: number; d: string; spin: number; g: number }[] = [
+  { x: 1, y: 10, s: 36, r: -22, d: "0s", spin: 6, g: 0 },
+  { x: 18, y: 2, s: 30, r: 14, d: ".18s", spin: -5, g: 1 },
+  { x: -4, y: 30, s: 40, r: -30, d: ".36s", spin: 7, g: 2 },
+  { x: 16, y: 26, s: 28, r: 18, d: ".08s", spin: -6, g: 0 },
+  { x: 6, y: 48, s: 34, r: -8, d: ".28s", spin: 5, g: 1 },
+  { x: 22, y: 50, s: 24, r: 24, d: ".48s", spin: -4, g: 2 },
+  { x: -2, y: 68, s: 38, r: 16, d: ".12s", spin: 6, g: 0 },
+  { x: 18, y: 72, s: 30, r: -16, d: ".32s", spin: -5, g: 1 },
+  { x: 4, y: 90, s: 34, r: 10, d: ".22s", spin: 4, g: 2 },
+  { x: 22, y: 92, s: 26, r: -24, d: ".42s", spin: -7, g: 0 },
+  { x: 28, y: 14, s: 22, r: 28, d: ".16s", spin: 5, g: 1 },
+  { x: 27, y: 36, s: 20, r: -12, d: ".4s", spin: -4, g: 2 },
+  { x: 26, y: 66, s: 22, r: 8, d: ".06s", spin: 6, g: 0 },
+  { x: 99, y: 8, s: 36, r: 20, d: ".1s", spin: -6, g: 1 },
+  { x: 82, y: 0, s: 30, r: -14, d: ".3s", spin: 5, g: 2 },
+  { x: 104, y: 28, s: 40, r: 26, d: ".05s", spin: -7, g: 0 },
+  { x: 84, y: 24, s: 28, r: -20, d: ".25s", spin: 4, g: 1 },
+  { x: 96, y: 48, s: 34, r: 10, d: ".45s", spin: -5, g: 2 },
+  { x: 78, y: 48, s: 24, r: -26, d: ".15s", spin: 6, g: 0 },
+  { x: 103, y: 70, s: 38, r: -18, d: ".35s", spin: -4, g: 1 },
+  { x: 82, y: 70, s: 30, r: 16, d: ".02s", spin: 7, g: 2 },
+  { x: 96, y: 90, s: 34, r: -10, d: ".22s", spin: -6, g: 0 },
+  { x: 78, y: 92, s: 26, r: 22, d: ".38s", spin: 5, g: 1 },
+  { x: 72, y: 12, s: 22, r: -28, d: ".28s", spin: -5, g: 2 },
+  { x: 73, y: 36, s: 20, r: 12, d: ".18s", spin: 4, g: 0 },
+  { x: 74, y: 64, s: 22, r: -8, d: ".48s", spin: -6, g: 1 },
 ];
 
-function PuffyHeart() {
+function ThermalHeart({ g, id }: { g: number; id: string }) {
+  const gid = id;
   return (
     <svg viewBox="0 0 64 64" aria-hidden="true">
-      <path fill="currentColor" d="M32 56C12 40 2 28 8 16 13 6 24 6 32 16 40 6 51 6 56 16 62 28 52 40 32 56z" />
-      <path fill="#fff" opacity=".42" d="M22 18c5-7 14-5 12 5 2-9 13-9 9 2C40 16 28 14 22 18z" />
+      <defs>
+        <radialGradient id={gid} cx="36%" cy="30%" r="72%">
+          <stop offset="0" stopColor={g === 1 ? "#f07aff" : g === 2 ? "#d44cff" : "#e04cff"} />
+          <stop offset=".16" stopColor="#c026d3" />
+          <stop offset=".32" stopColor="#ffe14a" />
+          <stop offset=".5" stopColor="#ff8c1a" />
+          <stop offset=".72" stopColor="#e0222a" />
+          <stop offset=".9" stopColor="#1a3ad8" />
+          <stop offset="1" stopColor="#1528a0" />
+        </radialGradient>
+      </defs>
+      <path fill={`url(#${gid})`} d="M32 58C10 42 1 30 6 16 10 5 23 4 32 16 41 4 54 5 58 16 63 30 54 42 32 58z" />
+      <path fill="#fff" opacity=".38" d="M20 16c6-8 14-6 13 6 2-10 14-10 10 2C38 14 26 10 20 16z" />
     </svg>
   );
 }
 
-function Beams({ n, swing }: { n: number; swing?: number }) {
+function ThinBeams({ n = 15 }: { n?: number }) {
+  const start = -58, span = 116;
   return (
-    <div className="ev-beams" aria-hidden="true">
+    <div className="ev-thin" aria-hidden="true">
       {Array.from({ length: n }, (_, i) => (
-        <i key={i} style={{ "--r": `${-40 + (i * 80) / Math.max(1, n - 1)}deg`, "--d": `${(i % 5) * -0.7}s`, "--swing": `${swing ?? 24}deg` } as CSSProperties} />
+        <i key={i} style={{ "--r": `${start + (i * span) / (n - 1)}deg`, "--d": `${(i % 6) * -0.4}s` } as CSSProperties} />
       ))}
     </div>
   );
 }
 
-function Sparks({ n = 22 }: { n?: number }) {
+function Star() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path fill="currentColor" d="M8 0l1.15 6.35L16 8l-6.85 1.15L8 16l-1.15-6.85L0 8l6.85-1.15z" />
+    </svg>
+  );
+}
+
+function Stars({ n = 28 }: { n?: number }) {
   const pts = useMemo(() => Array.from({ length: n }, (_, i) => ({
-    x: `${(i * 37 + 11) % 100}%`, y: `${(i * 53 + 7) % 100}%`, z: `${2 + (i % 4)}px`, d: `${(i * 0.17) % 2.2}s`,
+    x: `${(i * 37 + 8) % 100}%`, y: `${(i * 53 + 5) % 100}%`, z: `${5 + (i % 5) * 2.4}px`, d: `${(i * 0.13) % 2}s`,
   })), [n]);
   return (
-    <div className="ev-sparks" aria-hidden="true">
-      {pts.map((p, i) => <i key={i} className="ev-spark" style={{ "--x": p.x, "--y": p.y, "--z": p.z, "--d": p.d } as CSSProperties} />)}
+    <div className="ev-stars" aria-hidden="true">
+      {pts.map((p, i) => <span key={i} className="ev-star" style={{ "--x": p.x, "--y": p.y, "--z": p.z, "--d": p.d } as CSSProperties}><Star /></span>)}
+    </div>
+  );
+}
+
+function Rays() {
+  const items = [
+    { r: -48, c: "red", d: "0s", s: 18 },
+    { r: -32, c: "mag", d: "-.8s", s: 14 },
+    { r: -16, c: "blue", d: "-.3s", s: 20 },
+    { r: 2, c: "red", d: "-1.1s", s: 16 },
+    { r: 18, c: "blue", d: "-.5s", s: 18 },
+    { r: 34, c: "mag", d: "-1.4s", s: 14 },
+    { r: 50, c: "red", d: "-.2s", s: 20 },
+    { r: -60, c: "blue", d: "-.9s", s: 12 },
+  ];
+  return (
+    <div className="ev-rays" aria-hidden="true">
+      {items.map((x, i) => <i key={i} className={"ev-ray " + x.c} style={{ "--r": `${x.r}deg`, "--d": x.d, "--swing": `${x.s}deg` } as CSSProperties} />)}
+    </div>
+  );
+}
+
+function Lasers() {
+  const lines = [
+    { x: "-20%", y: "28%", r: 18, d: "0s" },
+    { x: "-10%", y: "58%", r: -22, d: "-.7s" },
+    { x: "-30%", y: "42%", r: 8, d: "-1.2s" },
+    { x: "-5%", y: "72%", r: -12, d: "-.4s" },
+    { x: "-25%", y: "18%", r: 32, d: "-1.6s" },
+  ];
+  return (
+    <div className="ev-lasers" aria-hidden="true">
+      {lines.map((l, i) => <i key={i} style={{ "--x": l.x, "--y": l.y, "--r": `${l.r}deg`, "--d": l.d } as CSSProperties} />)}
     </div>
   );
 }
@@ -122,31 +202,27 @@ function Sparks({ n = 22 }: { n?: number }) {
 /** Original line-art tiara — not the official JESC mark. */
 function Crown() {
   return (
-    <div style={{ position: "relative" }}>
-      <svg className="ev-crown" viewBox="0 0 200 118" fill="none" aria-hidden="true">
-        <path pathLength="1" d="M100 4c-5-8-18-6-16 6-2-12-18-10-16 6 0 12 24 26 32 34 8-8 32-22 32-34 2-16-14-18-16-6 2-12-11-14-16-6z" stroke="#ff7ad9" strokeWidth="2.4" style={{ "--d": ".05s" } as CSSProperties} />
-        <path pathLength="1" d="M18 88c22-12 142-12 164 0" stroke="#ffe566" strokeWidth="2.3" style={{ "--d": ".12s" } as CSSProperties} />
-        <path pathLength="1" d="M24 88c10 14 142 14 152 0" stroke="#7ecbff" strokeWidth="2.1" style={{ "--d": ".22s" } as CSSProperties} />
-        <path pathLength="1" d="M30 88c8 6 132 6 140 0" stroke="#ff7ad9" strokeWidth="1.5" style={{ "--d": ".3s" } as CSSProperties} />
-        <path pathLength="1" d="M70 54c10-32 50-32 60 0" stroke="#ffe566" strokeWidth="2.3" style={{ "--d": ".1s" } as CSSProperties} />
-        <path pathLength="1" d="M34 78c8-36 28-42 42-20" stroke="#ff7ad9" strokeWidth="2.1" style={{ "--d": ".18s" } as CSSProperties} />
-        <path pathLength="1" d="M166 78c-8-36-28-42-42-20" stroke="#ff7ad9" strokeWidth="2.1" style={{ "--d": ".18s" } as CSSProperties} />
-        <path pathLength="1" d="M16 86c8-38 22-48 34-22" stroke="#7ecbff" strokeWidth="2" style={{ "--d": ".26s" } as CSSProperties} />
-        <path pathLength="1" d="M184 86c-8-38-22-48-34-22" stroke="#7ecbff" strokeWidth="2" style={{ "--d": ".26s" } as CSSProperties} />
-        <path pathLength="1" d="M48 46c-10-16-4-24 8-16 4-10 14-6 10 6" stroke="#ffe566" strokeWidth="1.8" style={{ "--d": ".34s" } as CSSProperties} />
-        <path pathLength="1" d="M152 46c10-16 4-24-8-16-4-10-14-6-10 6" stroke="#ffe566" strokeWidth="1.8" style={{ "--d": ".34s" } as CSSProperties} />
-        <path pathLength="1" d="M28 62c-8-8-14-4-8 6" stroke="#ff7ad9" strokeWidth="1.7" style={{ "--d": ".4s" } as CSSProperties} />
-        <path pathLength="1" d="M172 62c8-8 14-4 8 6" stroke="#ff7ad9" strokeWidth="1.7" style={{ "--d": ".4s" } as CSSProperties} />
-        <circle pathLength="1" cx="100" cy="22" r="4.6" stroke="#7ecbff" strokeWidth="2" style={{ "--d": ".42s" } as CSSProperties} />
-        <circle pathLength="1" cx="58" cy="42" r="3.4" stroke="#ff7ad9" strokeWidth="1.8" style={{ "--d": ".48s" } as CSSProperties} />
-        <circle pathLength="1" cx="142" cy="42" r="3.4" stroke="#ff7ad9" strokeWidth="1.8" style={{ "--d": ".48s" } as CSSProperties} />
-        <circle pathLength="1" cx="30" cy="70" r="3.1" stroke="#7ecbff" strokeWidth="1.8" style={{ "--d": ".54s" } as CSSProperties} />
-        <circle pathLength="1" cx="170" cy="70" r="3.1" stroke="#7ecbff" strokeWidth="1.8" style={{ "--d": ".54s" } as CSSProperties} />
-        <circle pathLength="1" cx="100" cy="54" r="3.2" stroke="#ffe566" strokeWidth="1.8" style={{ "--d": ".5s" } as CSSProperties} />
-        <circle className="gem" cx="100" cy="22" r="2.2" color="#7ecbff" />
-        <circle className="gem" cx="58" cy="42" r="1.6" color="#ff7ad9" />
-        <circle className="gem" cx="142" cy="42" r="1.6" color="#ff7ad9" />
-        <circle className="gem" cx="100" cy="54" r="1.5" color="#ffe566" />
+    <div className="ev-crown-wrap">
+      <svg className="ev-crown" viewBox="0 0 200 120" fill="none" aria-hidden="true">
+        <polygon pathLength="1" points="100,4 110,22 90,22" stroke="#ff7ad9" strokeWidth="2.1" style={{ "--d": "0s" } as CSSProperties} />
+        <circle pathLength="1" cx="100" cy="40" r="15.5" stroke="#ff7ad9" strokeWidth="2.1" style={{ "--d": ".08s" } as CSSProperties} />
+        <path pathLength="1" d="M100 50c-7-6-10-12-6-16 3-3 6 0 6 0s3-3 6 0c4 4 1 10-6 16z" stroke="#ff7ad9" strokeWidth="2" style={{ "--d": ".16s" } as CSSProperties} />
+        <path pathLength="1" d="M88 50c-16 0-26-18-12-26 8-5 14 4 8 10-5 5 0 12 14 12" stroke="#ffe566" strokeWidth="2" style={{ "--d": ".2s" } as CSSProperties} />
+        <path pathLength="1" d="M112 50c16 0 26-18 12-26-8-5-14 4-8 10 5 5 0 12-14 12" stroke="#ffe566" strokeWidth="2" style={{ "--d": ".2s" } as CSSProperties} />
+        <path pathLength="1" d="M82 54c-28 4-42-18-24-32 10-8 20 4 10 12-8 6-4 20 22 20" stroke="#ff7ad9" strokeWidth="2.15" style={{ "--d": ".12s" } as CSSProperties} />
+        <path pathLength="1" d="M118 54c28 4 42-18 24-32-10-8-20 4-10 12 8 6 4 20-22 20" stroke="#ff7ad9" strokeWidth="2.15" style={{ "--d": ".12s" } as CSSProperties} />
+        <path pathLength="1" d="M70 40c-12-16-6-26 8-18 4-10 14-6 10 6" stroke="#ffe566" strokeWidth="1.8" style={{ "--d": ".28s" } as CSSProperties} />
+        <path pathLength="1" d="M130 40c12-16 6-26-8-18-4-10-14-6-10 6" stroke="#ffe566" strokeWidth="1.8" style={{ "--d": ".28s" } as CSSProperties} />
+        <path pathLength="1" d="M48 68c-10-8-16-2-8 8" stroke="#ff7ad9" strokeWidth="1.8" style={{ "--d": ".34s" } as CSSProperties} />
+        <path pathLength="1" d="M152 68c10-8 16-2 8 8" stroke="#ff7ad9" strokeWidth="1.8" style={{ "--d": ".34s" } as CSSProperties} />
+        <path pathLength="1" d="M36 78c26-14 102-14 128 0" stroke="#7ecbff" strokeWidth="2" style={{ "--d": ".22s" } as CSSProperties} />
+        <path pathLength="1" d="M40 78c8 12 112 12 120 0" stroke="#7ecbff" strokeWidth="1.9" style={{ "--d": ".3s" } as CSSProperties} />
+        <path pathLength="1" d="M48 78c8 6 96 6 104 0" stroke="#ff7ad9" strokeWidth="1.5" style={{ "--d": ".38s" } as CSSProperties} />
+        <circle pathLength="1" cx="36" cy="78" r="2.6" stroke="#7ecbff" strokeWidth="1.6" style={{ "--d": ".44s" } as CSSProperties} />
+        <circle pathLength="1" cx="164" cy="78" r="2.6" stroke="#7ecbff" strokeWidth="1.6" style={{ "--d": ".44s" } as CSSProperties} />
+        <circle pathLength="1" cx="58" cy="46" r="2.4" stroke="#ffe566" strokeWidth="1.5" style={{ "--d": ".4s" } as CSSProperties} />
+        <circle pathLength="1" cx="142" cy="46" r="2.4" stroke="#ffe566" strokeWidth="1.5" style={{ "--d": ".4s" } as CSSProperties} />
+        <circle pathLength="1" cx="100" cy="40" r="2.2" stroke="#7ecbff" strokeWidth="1.4" style={{ "--d": ".48s" } as CSSProperties} />
       </svg>
       <i className="ev-crown-shimmer" aria-hidden="true" />
     </div>
@@ -160,15 +236,18 @@ function FanNote() {
 export function StageCard({ card, play }: { card: EvCard; play: number }) {
   const { style, country, song, artist, lyrics } = card;
   const key = `${style}-${play}`;
+  const ly = lyricLines(lyrics);
   if (style === "asia") {
     return (
       <div className="ev-card asia" key={key}>
         <div className="ev-asia-bg" />
-        <Beams n={7} swing={22} />
+        <div className="ev-asia-arena" />
+        <ThinBeams />
+        <div className="ev-asia-spot" />
         <div className="ev-hearts" aria-hidden="true">
           {HEARTS.map((h, i) => (
-            <span key={i} className="ev-heart" style={{ "--a": `${h.a}deg`, "--c": h.c, "--s": `${h.s}px`, "--rad": h.rad, "--d": h.d } as CSSProperties}>
-              <PuffyHeart />
+            <span key={i} className="ev-theart" style={{ "--x": h.x + "%", "--y": h.y + "%", "--s": h.s + "cqw", "--r": h.r + "deg", "--d": h.d, "--spin": h.spin + "deg" } as CSSProperties}>
+              <ThermalHeart g={h.g} id={'th'+i} />
             </span>
           ))}
         </div>
@@ -176,7 +255,8 @@ export function StageCard({ card, play }: { card: EvCard; play: number }) {
           <div className="ev-asia-song ev-in" style={{ "--d": ".15s" } as CSSProperties}>{song || "Song"}</div>
           <div className="ev-asia-by ev-in" style={{ "--d": ".28s" } as CSSProperties}>{artist ? `By ${artist}` : "By artist"}</div>
           <div className="ev-asia-country ev-in" style={{ "--d": ".42s" } as CSSProperties}>{country || "Country"}</div>
-          {lyrics ? <div className="ev-asia-ly ev-in" style={{ "--d": ".6s" } as CSSProperties}><span style={{ opacity: .7 }}>Music &amp; Lyrics </span>{lyrics}</div> : null}
+          <div className="ev-asia-ml ev-in" style={{ "--d": ".58s" } as CSSProperties}>Music &amp; Lyrics</div>
+          {lyrics ? <div className="ev-asia-ly ev-in" style={{ "--d": ".68s" } as CSSProperties}>{lyrics}</div> : null}
         </div>
         <FanNote />
       </div>
@@ -187,20 +267,19 @@ export function StageCard({ card, play }: { card: EvCard; play: number }) {
       <div className="ev-card esc" key={key}>
         <div className="ev-esc-bg" />
         <div className="ev-esc-floor" />
-        <Beams n={8} swing={32} />
-        <Sparks />
+        <Rays />
+        <Lasers />
+        <Stars />
         <div className="ev-esc-copy">
-          <div className="ev-esc-name ev-in" style={{ "--d": ".2s" } as CSSProperties}>{country || "Country"}</div>
-          <div />
+          <div className="ev-neon ev-in" data-text={(country || "Country").toUpperCase()} style={{ "--d": ".15s" } as CSSProperties}>{(country || "Country").toUpperCase()}</div>
           <div className="ev-esc-cols">
             <div className="ev-in" style={{ "--d": ".4s" } as CSSProperties}>
-              <div className="ev-esc-k">Song</div>
-              <div className="ev-esc-song">{song || "Song"}</div>
-              <div className="ev-esc-art">{artist}</div>
+              <div className="ev-esc-song">{(song || "Song").toUpperCase()}</div>
+              <div className="ev-esc-art">{artist ? `BY ${artist.toUpperCase()}` : ""}</div>
             </div>
             <div className="r ev-in" style={{ "--d": ".55s" } as CSSProperties}>
               <div className="ev-esc-k">Music &amp; Lyrics</div>
-              <div className="ev-esc-ly">{lyrics}</div>
+              {ly.map((line, i) => <div key={i} className="ev-esc-ly">{line.toUpperCase()}</div>)}
             </div>
           </div>
         </div>
@@ -211,11 +290,11 @@ export function StageCard({ card, play }: { card: EvCard; play: number }) {
   return (
     <div className="ev-card jesc" key={key}>
       <div className="ev-jesc-bg" />
-      <Beams n={5} swing={16} />
+      <div className="ev-jesc-rig" />
       <div className="ev-jesc-copy">
-        <div className="ev-in" style={{ "--d": "0s", position: "relative" } as CSSProperties}><Crown /></div>
-        <div className="ev-jesc-country ev-in" style={{ "--d": ".55s" } as CSSProperties}>{country || "Country"}</div>
-        <div className="ev-jesc-song ev-in" style={{ "--d": ".7s" } as CSSProperties}>{(song || "Song").toUpperCase()}{artist ? ` – ${artist.toUpperCase()}` : ""}</div>
+        <div className="ev-in" style={{ "--d": "0s" } as CSSProperties}><Crown /></div>
+        <div className="ev-jesc-country ev-in" style={{ "--d": ".55s" } as CSSProperties}>{(country || "Country").toUpperCase()}</div>
+        <div className="ev-jesc-song ev-in" style={{ "--d": ".7s" } as CSSProperties}>{(song || "Song").toUpperCase()}{artist ? ` - ${artist.toUpperCase()}` : ""}</div>
         {lyrics ? <div className="ev-jesc-ly ev-in" style={{ "--d": ".85s" } as CSSProperties}>MUSIC &amp; LYRICS: {lyrics.toUpperCase()}</div> : null}
       </div>
       <FanNote />
@@ -242,8 +321,8 @@ function Dots({ kind }: { kind: "asia" | "jesc" }) {
 function GoldStreaks() {
   return (
     <div className="ev-esc-streaks" aria-hidden="true">
-      {[18, 42, 68, 88].map((y, i) => (
-        <i key={i} className="ev-gold" style={{ "--y": `${y}%`, "--r": `${-22 + i * 4}deg`, "--d": `${-i}s` } as CSSProperties} />
+      {[16, 38, 62, 86].map((y, i) => (
+        <i key={i} className="ev-gold" style={{ "--y": `${y}%`, "--r": `${-24 + i * 5}deg`, "--d": `${-i}s` } as CSSProperties} />
       ))}
     </div>
   );
@@ -259,6 +338,7 @@ export function ScoreBoard({ board, wide, highlight, onPick }: { board: EvBoard;
   const cols = boardColumns(board.style, ranked.length, wide);
   const rows = Math.ceil(ranked.length / cols);
   const flip = useFlip(ranked.map(r => r.id + ":" + r.points).join("|"));
+  const flagVar = board.style === "esc" ? "round" : board.style === "jesc" ? "framed" : "rect";
   return (
     <div className={"ev-board " + board.style}>
       {board.style === "asia" && <Dots kind="asia" />}
@@ -272,11 +352,11 @@ export function ScoreBoard({ board, wide, highlight, onPick }: { board: EvBoard;
         {ranked.map((r, i) => {
           const q = qualifies(board.round, r.rank);
           const rowCls = "ev-row" + (r.rank === 1 ? " lead" : "") + (highlight === r.id ? " on flash" : "");
-          const label = cols > 1 && r.name === "North Macedonia" ? "N. Macedonia" : r.name;
+          const label = cols > 1 && (r.name === "North Macedonia" || r.cc === "MK") ? "N. Macedonia" : r.name;
           const inner = board.style === "esc" ? (
             <>
               <span className="ev-rank">{r.rank}{q && <span className="ev-q">Q</span>}</span>
-              <EvFlag cc={r.cc} />
+              <EvFlag cc={r.cc} variant={flagVar} />
               <span className="ev-pill">
                 <span className="ev-name">{label}</span>
                 <Pts n={r.points} />
@@ -285,7 +365,7 @@ export function ScoreBoard({ board, wide, highlight, onPick }: { board: EvBoard;
           ) : (
             <>
               {board.style === "asia" && <span className="ev-rank">{padRank(r.rank)}</span>}
-              <EvFlag cc={r.cc} />
+              <EvFlag cc={r.cc} variant={flagVar} />
               <span className="ev-name">{label}</span>
               {q && <span className="ev-q">Q</span>}
               <Pts n={r.points} />

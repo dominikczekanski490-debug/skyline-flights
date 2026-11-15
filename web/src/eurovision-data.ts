@@ -21,7 +21,7 @@ export const EV_ROUND_LABEL: Record<EvRound, string> = {
   gf: "Grand Final",
 };
 export const EV_REVEAL_VALUES = [12, 10, 8, 7, 6, 5, 4, 3, 2, 1] as const;
-export const EV_KEY = "sk.games.euro";
+export const EV_KEY = "sk.games.euro.v2";
 export const EV_QUALIFY = 10;
 
 /** ISO 3166-1 alpha-2 list with short English names, plus Kosovo (XK) used at Eurovision. */
@@ -109,30 +109,32 @@ export const countryFromName = (name: string) => {
   return hit ? { ...hit } : { cc: "", name: n };
 };
 
-const row = (cc: string, points: number): EvRow => ({
+const row = (cc: string, points: number, name?: string): EvRow => ({
   id: cc.toLowerCase(),
   cc,
-  name: COUNTRY_BY_CC[cc] || cc,
+  name: name || COUNTRY_BY_CC[cc] || cc,
   points,
 });
 
 export const DEFAULT_CARDS: Record<EvStyle, EvCard> = {
   asia: { style: "asia", country: "Philippines", cc: "PH", song: "Sobra-Sobra", artist: "CARMELLE", lyrics: "Gianina Camille del Rosario & Mart Sam Emmanuel Olavides" },
-  esc: { style: "esc", country: "Switzerland", cc: "CH", song: "Alice", artist: "Veronica Fusaro", lyrics: "Charlie McClean & Veronica Fusaro" },
-  jesc: { style: "jesc", country: "France", cc: "FR", song: "Comment tu vas ?", artist: "ALEC", lyrics: "Alec Burette & Malory Legardinier" },
+  esc: { style: "esc", country: "Switzerland", cc: "CH", song: "Alice", artist: "Veronica Fusaro", lyrics: "Veronica Fusaro & Charlie McClean" },
+  jesc: { style: "jesc", country: "France", cc: "FR", song: "Comment tu vas ?", artist: "ALEC", lyrics: "ALEC & MALO" },
 };
 
 /** Asia Grand Final, Bangkok 14 Nov 2026 (combined totals). */
 export const ASIA_BOARD: EvRow[] = [
   row("PH", 211), row("TH", 170), row("VN", 164), row("MY", 152), row("LA", 139),
-  row("BT", 126), row("KR", 113), row("MN", 94), row("NP", 69), row("KH", 61), row("BD", 35),
+  row("BT", 126), row("KR", 113, "Rep. of Korea"), row("MN", 94), row("NP", 69), row("KH", 61), row("BD", 35),
 ];
 
-/** Eurovision 2026 Semi-final 2, Vienna, including Switzerland. */
+/** Eurovision 2026 Grand Final, Vienna. */
 export const ESC_BOARD: EvRow[] = [
-  row("BG", 278), row("RO", 234), row("AU", 222), row("NO", 206), row("DK", 199),
-  row("UA", 174), row("AL", 158), row("MT", 143), row("CZ", 142), row("CY", 122),
-  row("CH", 108), row("LU", 60), row("AM", 49), row("LV", 49), row("AZ", 2),
+  row("BG", 516), row("IL", 343), row("RO", 296), row("AU", 287), row("IT", 281),
+  row("FI", 279), row("DK", 243), row("MD", 226), row("UA", 221), row("GR", 220),
+  row("FR", 158), row("PL", 150), row("AL", 145), row("NO", 134), row("HR", 124),
+  row("CZ", 113), row("RS", 90), row("MT", 89), row("CY", 75), row("SE", 51),
+  row("BE", 36), row("LT", 22), row("DE", 12), row("AT", 6), row("GB", 1),
 ];
 
 /** Junior Eurovision 2026 Grand Final, Malta. */
@@ -144,7 +146,7 @@ export const JESC_BOARD: EvRow[] = [
 
 export const DEFAULT_BOARDS: Record<EvStyle, EvBoard> = {
   asia: { style: "asia", round: "gf", rows: ASIA_BOARD },
-  esc: { style: "esc", round: "sf2", rows: ESC_BOARD },
+  esc: { style: "esc", round: "gf", rows: ESC_BOARD },
   jesc: { style: "jesc", round: "gf", rows: JESC_BOARD },
 };
 
