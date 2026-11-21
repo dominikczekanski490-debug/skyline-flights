@@ -10,42 +10,55 @@ import { AirlineTile } from "./brand";
 import { CC, flag } from "./countries";
 import { fTemp, wxSvg } from "./more";
 import { wxText } from "./lib";
+import { dotOf, clampDay } from "./days";
+import { DayChips, DayEmpty, DotLegend } from "./daychips";
 import "./radar.css";
 
 const J = (k: string, d: any) => { try { return JSON.parse(localStorage.getItem(k) || "") ?? d; } catch { return d; } };
 const tOf = (t: any) => +new Date(t?.actual || t?.estimated || t?.scheduled || 0);
 const cmp = (d: number) => ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(((d % 360) + 360) % 360 / 45) % 8];
-// Dot colour rule (same as the reference): green 0–15 min late, yellow 15–45, red 45+ or cancelled; grey when there's no time info yet.
-export const dotOf = (f: any, dir: string) => { if (f.status === "cancelled") return "r"; const d = delay(dir === "dep" ? f.dep : f.arr); return d == null ? "g0" : d >= 45 ? "r" : d >= 15 ? "y" : "g"; };
+// Dot colours: shared rule in days.ts (feed-reported check-in / boarding / final call / departed first, then delay colours).
+export { dotOf };
 const stLine = (f: any, dir: string, tz?: string) => { const t = dir === "dep" ? f.dep : f.arr;
   if (f.status === "cancelled") return "Cancelled";
   if (dir === "dep" && (t.actual || f.status === "departed" || f.status === "landed")) return t.actual ? "Departed " + fmtT(t.actual, tz) : "Departed";
   if (dir === "arr" && (t.actual || f.status === "landed")) return t.actual ? "Landed " + fmtT(t.actual, tz) : "Landed";
   if (t.estimated && t.estimated !== t.scheduled) return "Estimated " + fmtT(t.estimated, tz);
   return f.statusText && !/^scheduled$/i.test(f.statusText) ? String(f.statusText) : "Scheduled"; };
-const airborne = (f: any, dir: string) => f.status !== "cancelled" && (dir === "dep" ? (f.status === "departed" && !f.arr?.actual) : (f.dep?.actual || f.status === "departed" || f.status === "enroute") && !f.arr?.actual && f.status !== "landed");
+// LIVE only for flights that are plausibly in the air right now (never on past days): departed, not landed, and before the
+// scheduled arrival + 1 h (or within 5 h of departure when the feed gives no arrival time).
+const airborne = (f: any, dir: string) => { if (f.status === "cancelled" || f.arr?.actual || f.status === "landed" || f.staleInferred) return false; const now = Date.now();
+  const dt = +new Date(f.dep?.actual || f.dep?.estimated || f.dep?.scheduled || 0); const at = +new Date(f.arr?.estimated || f.arr?.scheduled || 0);
+  const gone = dir === "dep" ? f.status === "departed" || !!f.dep?.actual : !!f.dep?.actual || f.status === "departed" || f.status === "enroute";
+  return gone && dt > 0 && dt <= now && (at ? now < at + 60 * 60e3 : now - dt < 5 * 3600e3); };
 
-function useBoard(iata: string, dir: string) { const [d, setD] = useState<any>(null); const date = today();
-  const poll = usePoll(() => api(`/board/${iata}?dir=${dir}&date=${date}`).then(r => withKtw(iata, dir, date, r)).then(setD).catch(e => setD((p: any) => p && !p.error ? p : { error: e.message })), [iata, dir, date]);
-  return { d, poll }; }
+function useBoard(iata: string, dir: string, date: string, on = true) { const [d, setD] = useState<any>(null);
+  useEffect(() => setD(null), [iata, dir, date]);
+  const poll = usePoll(() => on ? api(`/board/${iata}?dir=${dir}&date=${date}`).then(r => withKtw(iata, dir, date, r)).then(setD).catch(e => setD((p: any) => p && !p.error ? p : { error: e.message })) : undefined, [iata, dir, date, on]);
+  return { d: on ? d : null, poll }; }
 
 function Row({ f, dir, tz, onOpen }: any) { const t = dir === "dep" ? f.dep : f.arr; const o = dir === "dep" ? f.destination : f.origin; const dot = dotOf(f, dir); const ty = f.aircraft?.type || f.aircraft?.model || "";
   return <button className="rd-row" onClick={onOpen}>
-    <div className="rd-tm"><b>{f.liveOnly ? "Live" : fmtT(t.scheduled, tz)}</b><span><i className={"rd-dot " + dot} />{f.liveOnly ? f.statusText || "Live" : stLine(f, dir, tz)}</span></div>
+    <div className="rd-tm"><b>{f.liveOnly ? "Live" : fmtT(t.scheduled, tz)}</b><span><i className={"rd-dot kdot sd-" + dot} />{f.liveOnly ? f.statusText || "Live" : stLine(f, dir, tz)}</span></div>
     <span className="rd-al"><AirlineTile a={f.airline || { iata: (f.number || "").slice(0, 2) }} mode="colour" /></span>
     <div className="rd-mid"><div className="rd-city">{o?.city || o?.name || "Unknown"}{o?.iata && <em>{o.iata}</em>}</div>
       <div className="rd-fn">{f.number}{ty && <em>{ty}</em>}{airborne(f, dir) && <span className="rd-live">LIVE</span>}</div></div>
     <span className="rd-chev" aria-hidden>›</span></button>; }
 
-function FlightList({ iata, dir, tz, push, B }: any) { const [early, setEarly] = useState(false); const now = Date.now();
+const PAGE = 120;
+function FlightList({ iata, dir, tz, push, B, day, setDay }: any) { const [early, setEarly] = useState(false); const [lim, setLim] = useState(PAGE); const now = Date.now(); const isToday = day === today();
+  useEffect(() => { setLim(PAGE); setEarly(false); }, [day, dir]);
   const all = ((B.d?.flights || []) as any[]).slice().sort((a, b) => a.liveOnly ? 0 : +new Date((dir === "dep" ? a.dep : a.arr).scheduled) - +new Date((dir === "dep" ? b.dep : b.arr).scheduled));
-  const cut = now - 60 * 60e3; const old = all.filter(f => !f.liveOnly && tOf(dir === "dep" ? f.dep : f.arr) < cut); const L = early ? all : all.filter(f => !old.includes(f));
-  if (!B.d) return <div className="rd-pad"><div className="rd-skel" /><div className="rd-skel" /><div className="rd-skel" /></div>;
-  if (B.d.error && !all.length) return <div className="rd-pad rd-note">{dir === "dep" ? "Departures" : "Arrivals"} for {iata} aren't available right now ({B.d.error}).</div>;
-  return <div className="rd-list">{old.length > 0 && <button className="rd-earlier" onClick={() => setEarly(v => !v)}>{early ? "Hide earlier flights" : `Earlier flights (${old.length})`}</button>}
-    {L.map((f, i) => <Row key={f.id + ":" + i} f={f} dir={dir} tz={tz} onOpen={() => push({ t: "flight", f: { ...f, date: today() } })} />)}
+  const cut = now - 60 * 60e3; const old = isToday ? all.filter(f => !f.liveOnly && tOf(dir === "dep" ? f.dep : f.arr) < cut) : []; const L0 = early ? all : all.filter(f => !old.includes(f)); const L = L0.slice(0, lim);
+  const head = <><DayChips v={day} set={setDay} /><DotLegend dir={dir} /></>;
+  if (!B.d) return <>{head}<div className="rd-pad"><div className="rd-skel" /><div className="rd-skel" /><div className="rd-skel" /></div></>;
+  if (B.d.error && !all.length) return <>{head}<div className="rd-pad rd-note">{dir === "dep" ? "Departures" : "Arrivals"} for {iata} aren't available right now ({B.d.error}).</div></>;
+  if (!all.length && (!isToday || B.d.dayNote)) return <>{head}<DayEmpty d={B.d} date={day} /></>;
+  return <>{head}<div className="rd-list">{old.length > 0 && <button className="rd-earlier" onClick={() => setEarly(v => !v)}>{early ? "Hide earlier flights" : `Earlier flights (${old.length})`}</button>}
+    {L.map((f, i) => <Row key={f.id + ":" + i} f={f} dir={dir} tz={tz} onOpen={() => push({ t: "flight", f: { ...f, date: day } })} />)}
+    {L0.length > lim && <button className="rd-earlier" onClick={() => setLim(n => n + PAGE)}>Show more ({L0.length - lim} left)</button>}
     {!L.length && <div className="rd-note">No more {dir === "dep" ? "departures" : "arrivals"} listed today.</div>}
-    <div className="rd-src">{B.d.sourceKind === "derived" ? "Times estimated from destination boards" : B.d.liveOnly ? "Live ADS-B only: this airport has no public timetable feed" : "Airport timetable feed"} · refreshes every 4 min</div></div>; }
+    <div className="rd-src">{all.length} {dir === "dep" ? "departures" : "arrivals"} · {B.d.sourceKind === "derived" ? "times estimated from destination boards" : B.d.liveOnly ? "live ADS-B only: this airport has no public timetable feed" : "airport timetable feed"}{B.d.keptNote ? ` · ${B.d.keptNote}` : ""}{isToday ? " · refreshes every 4 min" : ""}</div></div></>; }
 
 function Ground({ iata, info }: { iata: string; info: any }) { const [d, setD] = useState<any>(null); const [e, setE] = useState(""); const [slow, setSlow] = useState(false);
   useEffect(() => { const t = setTimeout(() => setSlow(true), 20e3); return () => clearTimeout(t); }, [iata]);
@@ -101,7 +114,9 @@ function General({ iata, info, facts, ap, wx, dep, arr, tz, go, push }: any) {
 
 export default function RadarAirport({ iata, onClose, push, onClassic }: { iata: string; onClose: () => void; push: (o: any) => void; onClassic: () => void }) {
   const [tab, setTab] = useState<"gen" | "dep" | "arr" | "gnd">(() => /[#&]dir=arr\b/.test(location.hash) ? "arr" : "gen");
-  const dep = useBoard(iata, "dep"), arr = useBoard(iata, "arr");
+  const t0 = today(); const [day, setDay] = useState(() => clampDay(location.hash.match(/[#&]date=(\d{4}-\d\d-\d\d)/)?.[1], t0));
+  const dep = useBoard(iata, "dep", t0), arr = useBoard(iata, "arr", t0); const lst = tab === "arr" ? "arr" : "dep"; const other = useBoard(iata, lst, day, day !== t0 && (tab === "dep" || tab === "arr"));
+  const LB = (k: string) => day === t0 ? (k === "dep" ? dep : arr) : other;
   const [info, setInfo] = useState<any>(null); const [facts, setFacts] = useState<any>(null); const [ai, setAi] = useState<any>(null); const [wx, setWx] = useState<any>(null);
   useEffect(() => { api(`/airport/${iata}/info`).then(setInfo).catch(() => setInfo({})); api(`/airport/${iata}/facts`).then(setFacts).catch(() => setFacts({})); api(`/apinfo/${iata}`).then(setAi).catch(() => setAi({})); api(`/wx/${iata}`).then(setWx).catch(() => setWx({})); }, [iata]);
   const ap = { ...(dep.d?.airport || {}), ...(info?.airport || {}), elev: ai?.elev }; const tz = ap.tz || "Europe/London";
@@ -116,8 +131,8 @@ export default function RadarAirport({ iata, onClose, push, onClassic }: { iata:
       <div className="rd-btns"><button aria-label={fav ? "Unpin airport" : "Pin airport"} className={fav ? "on" : ""} onClick={star}>{fav ? "★" : "☆"}</button><button aria-label="Share" onClick={() => navigator.share?.({ url: location.href, title: `${iata} airport` }).catch(() => {})}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></svg></button><button aria-label="Close" onClick={onClose}>✕</button></div></header>
     <div className="rd-body">
       {tab === "gen" && <General iata={iata} info={info} facts={facts} ap={ap} wx={wx} dep={dep} arr={arr} tz={tz} go={setTab} push={push} />}
-      {tab === "dep" && <FlightList iata={iata} dir="dep" tz={tz} push={push} B={dep} />}
-      {tab === "arr" && <FlightList iata={iata} dir="arr" tz={tz} push={push} B={arr} />}
+      {tab === "dep" && <FlightList iata={iata} dir="dep" tz={tz} push={push} B={LB("dep")} day={day} setDay={setDay} />}
+      {tab === "arr" && <FlightList iata={iata} dir="arr" tz={tz} push={push} B={LB("arr")} day={day} setDay={setDay} />}
       {tab === "gnd" && <Ground iata={iata} info={info} />}
       <div className="rd-foot"><button className="rd-link" onClick={onClassic}>Switch to the classic board</button><span>Radar style · Skyline</span></div></div>
     <nav className="rd-tabs" role="tablist">{([["gen", "General", "M4 5h16M4 12h16M4 19h10"], ["dep", "Departures", "M3 17h18M5 13l14-6-2 6H7l-3-3"], ["arr", "Arrivals", "M3 19h18M4 9l3 6h12l1-3-14-5"], ["gnd", "On ground", "M3 18h18M6 14h12l2-4H4z"]] as const).map(([k, n, d]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg><span>{n}</span></button>)}</nav>

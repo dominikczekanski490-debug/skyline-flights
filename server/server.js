@@ -294,8 +294,13 @@ const ukCache = (k, ymd, fn) => cached(`uk:${k}:${ymd}`, ymd < todayLondon() ? 6
 const dayOk = ymd => ymd === todayLondon();
 async function daaBoard(apt, dir, ymd) { return ukCache(apt + dir, ymd, async () => {
   const base = apt === "DUB" ? "https://api.dublinairport.com/dap/flight-listing/" : "https://www.corkairport.com/api/flight-listing/";
-  const site = apt === "DUB" ? "https://www.dublinairport.com" : "https://www.corkairport.com"; const out = []; const seen = new Set(); let url = `${base}${dir === "dep" ? "departures" : "arrivals"}?date=${ymd}&limit=200`;
-  const r = await getJSON(url, { headers: { origin: site, referer: site + "/" } }); for (const x of r.content || []) { if (seen.has(x.internalFlightId)) continue; seen.add(x.internalFlightId);
+  const site = apt === "DUB" ? "https://www.dublinairport.com" : "https://www.corkairport.com"; const out = []; const seen = new Set(); const url = `${base}${dir === "dep" ? "departures" : "arrivals"}?date=${ymd}&limit=200`;
+  // v43: the listing is paged (200 rows, and today's first page starts "now"). Walk back with before=<earliest> and forward with
+  // after=<latest> (timestamps; boundaries repeat, deduped by internalFlightId) so the whole day is listed.
+  const get = q => getJSON(url + q, { headers: { origin: site, referer: site + "/" } }); const first = await get(""); const pages = [first];
+  for (let r = first, n = 0; r?.pagination?.hasPrevious && r.pagination.earliestTimestamp && n < 6; n++) { const nx = await get("&before=" + encodeURIComponent(r.pagination.earliestTimestamp)).catch(() => null); if (!nx?.content?.length || nx.pagination?.earliestTimestamp === r.pagination.earliestTimestamp) break; pages.push(nx); r = nx; }
+  for (let r = first, n = 0; r?.pagination?.hasNext && r.pagination.latestTimestamp && n < 6; n++) { const nx = await get("&after=" + encodeURIComponent(r.pagination.latestTimestamp)).catch(() => null); if (!nx?.content?.length || nx.pagination?.latestTimestamp === r.pagination.latestTimestamp) break; pages.push(nx); r = nx; }
+  for (const x of pages.flatMap(p => p.content || [])) { if (seen.has(x.internalFlightId)) continue; seen.add(x.internalFlightId);
     const sm = titleCase(x.statusMessage || ""); const done = /landed|arrived|departed|airborne/i.test(sm);
     out.push(ukRow(apt, dir, ymd, { num: x.flightIdentity, airline: x.carrierName, place: x.originAirportName || x.destinationAirportName, placeIataHint: x.airportCode, st: sm, gate: x.gate, belt: x.baggageBelt, term: x.terminalName, codeshares: x.codeShares,
       sched: x.scheduledDateTime, est: done ? undefined : x.estimatedDateTime !== x.scheduledDateTime ? x.estimatedDateTime : undefined, act: done ? (ukTimes(ymd, "00:00", sm).act || x.estimatedDateTime) : undefined })); }
@@ -686,9 +691,8 @@ function resolveCity(raw) { if (!raw) return null; const m = raw.match(/\(([A-Z]
 const ceStatus = s => { s = fold(s); if (/CANCEL|ODWOL|ZRUS|ANUL|TOROLV|ODPOV/.test(s)) return "cancelled"; if (/DIVERT|PRZEKIER|ODKLON/.test(s)) return "diverted";
   if (/LANDED|WYLADOW|PRISTAL|PRILET|LANDOL|ARRIVED/.test(s)) return "landed"; if (/DEPART|WYSTART|ODLET|ODL |AIRBORNE|FELSZALL|ODLETELO/.test(s)) return "departed";
   if (/BOARD|NASTUP/.test(s)) return "boarding"; if (/GATE|BRAMKA|ZAMKN|CLOSED/.test(s)) return "gate"; if (/DELAY|OPOZN|ZPOZD|MESKAS|KESIK/.test(s)) return "delayed"; return "scheduled"; };
-const CE_KEEP = (list, ymd) => { if (list.length <= 400 || ymd !== todayLondon()) return list.slice(0, 400); // v23: whole day when it fits
-  const lo = Date.now() - 3 * 3600e3, hi = Date.now() + 12 * 3600e3;
-  return list.filter(f => { const t = +new Date(f.dep.scheduled || f.arr.scheduled); return t >= lo && t <= hi; }).slice(0, 400); };
+// v43: whole day (was a 400-row cap that cut FRA/MUC-size days and a -3 h…+12 h window for today). 1000 rows is a safety net only.
+const CE_KEEP = (list, ymd) => list.length <= 1000 ? list : list.slice(0, 1000);
 const ceGet = (url, opt = {}) => getText(url, { ...opt, headers: { accept: "*/*", ...(opt.headers || {}) } });
 const htmlDec = s => s.replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#039;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
 // Gdańsk: the airport's own board page embeds the full JSON schedule in a React props attribute.
@@ -788,7 +792,25 @@ function oooiMark(apt, dir, L) { if (dir !== "dep" || !Array.isArray(L)) return 
   const ev = cs && t0 ? obsEvent(apt, "dep", cs, t0 - 5 * 60e3, t0 + 60 * 60e3) : null; const dep = { ...d, actualKind: "offblock", offBlock: d.actual };
   if (ev) { dep.takeoff = new Date(ev.t).toISOString(); dep.takeoffSource = "ADS-B observed take-off" + (ev.approx ? " (approx.)" : ""); } else if (AIRBORNE_TXT.test(f.statusText || "")) dep.airborneText = true;
   return { ...f, dep }; }); }
-const officialBoard = async (apt, dir, ymd) => oooiMark(apt, dir, await OFFICIAL[apt].fn(apt, dir, ymd));
+// v43 day store: every official board fetch for a day (today or earlier) is merged per airport+direction+day, so flights that
+// roll out of a feed's moving window (LBA ~5 h back, EDI, ABZ, DUB "from now" pages…) stay on today's board with their last
+// reported status, and past days stay available after the feed drops them. Slim rows only; LRU of 60 keys in memory, plus a
+// copy in Upstash KV (5-day expiry, written at most every 20 min per key) so a restart doesn't lose earlier days.
+const DAYS = new Map(); const DAY_MAX = 60; const DAY_KV_EVERY = 20 * 60e3; const dayKey = (a, d, y) => `skyline_day:${a}:${d}:${y}`;
+const slimRow = f => { const o = { ...f }; delete o.pred; delete o.live; delete o.observed; if (o.origin) o.origin = slimAp(o.origin); if (o.destination) o.destination = slimAp(o.destination); return o; };
+const rowKey = f => (f.number || "").replace(/\s+/g, "").toUpperCase() + "|" + (f.dep?.scheduled || f.arr?.scheduled || "");
+function dayTouch(k, v) { DAYS.delete(k); DAYS.set(k, v); while (DAYS.size > DAY_MAX) DAYS.delete(DAYS.keys().next().value); }
+async function dayLoad(apt, dir, ymd) { const k = dayKey(apt, dir, ymd); let e = DAYS.get(k);
+  if (!e) { const kv = await kvGet(k).catch(() => null); if (kv?.rows?.length) { e = { rows: new Map(kv.rows.map(r => [rowKey(r), r])), kvAt: Date.now(), first: kv.first, at: kv.at }; dayTouch(k, e); } }
+  return e || null; }
+async function dayMerge(apt, dir, ymd, list) { if (ymd > todayLondon()) return list; const k = dayKey(apt, dir, ymd); const e = (await dayLoad(apt, dir, ymd)) || { rows: new Map(), kvAt: 0, first: Date.now() };
+  const live = new Set(); for (const f of list) { const rk = rowKey(f); live.add(rk); e.rows.set(rk, slimRow(f)); } e.at = Date.now(); dayTouch(k, e);
+  if (KV_URL && Date.now() - e.kvAt > DAY_KV_EVERY && e.rows.size) { e.kvAt = Date.now(); kvSet(k, { at: e.at, first: e.first, rows: [...e.rows.values()] }, 5 * 86400); }
+  const kept = [...e.rows.entries()].filter(([rk]) => !live.has(rk)).map(([, r]) => ({ ...r, kept: true }));
+  return kept.length ? list.concat(kept).sort((a, b) => ((a.dep?.scheduled || a.arr?.scheduled || "") < (b.dep?.scheduled || b.arr?.scheduled || "") ? -1 : 1)) : list; }
+const officialBoard = async (apt, dir, ymd) => { let L; try { L = oooiMark(apt, dir, await OFFICIAL[apt].fn(apt, dir, ymd)); }
+  catch (e) { const s = ymd <= todayLondon() ? await dayLoad(apt, dir, ymd) : null; if (s?.rows.size) return [...s.rows.values()].map(r => ({ ...r, kept: true })); throw e; }
+  return dayMerge(apt, dir, ymd, L); };
 
 // ---------- AeroDataBox (optional key, RapidAPI) ----------
 const ADB = process.env.ADB_BASE || "https://aerodatabox.p.rapidapi.com"; // ADB_BASE only for local mock tests
@@ -830,7 +852,7 @@ function record(list) { for (const f of list) { if (!["landed", "departed", "can
   const k = f.number; HIST[k] = HIST[k] || {}; HIST[k][f.id] = { d: delayMin(f), s: f.status, o: f.origin?.iata, t: f.destination?.iata }; } }
 async function collect() {
   const y = new Date(Date.now() - 86400e3).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
-  for (const apt of Object.keys(MAG_SITES)) for (const dir of ["dep", "arr"]) for (const d of [y, todayLondon()]) { try { record(await magBoard(apt, dir, d)); } catch {} }
+  for (const apt of Object.keys(MAG_SITES)) for (const dir of ["dep", "arr"]) for (const d of [y, todayLondon()]) { try { record(await officialBoard(apt, dir, d)); } catch {} }
   const cutoff = new Date(Date.now() - 60 * 86400e3).toISOString().slice(0, 10);
   for (const k in HIST) for (const id in HIST[k]) if (id.slice(-10) < cutoff) delete HIST[k][id];
   try { fs.writeFileSync(HIST_FILE, JSON.stringify(HIST)); } catch {}
@@ -927,7 +949,7 @@ const ADB_BUDGET = +process.env.ADB_BUDGET || 350, ADB_UNITS = +process.env.ADB_
 const adbMonth = () => new Date().toISOString().slice(0, 7);
 let ADBU = { month: adbMonth(), units: 0, calls: 0, last: null, blocked: null }; const ADBC = {}; const ADB_INF = {};
 const kvGet = async k => { if (!KV_URL) return null; try { const r = await getJSON(KV_URL.replace(/\/$/, "") + "/get/" + k, { headers: { authorization: "Bearer " + KV_TOK } }); return r.result ? JSON.parse(r.result) : null; } catch { return null; } };
-const kvSet = (k, v) => { if (!KV_URL) return; fetch(KV_URL.replace(/\/$/, "") + "/set/" + k, { method: "POST", headers: { authorization: "Bearer " + KV_TOK }, body: JSON.stringify(v) }).catch(() => {}); };
+const kvSet = (k, v, ex) => { if (!KV_URL) return; fetch(KV_URL.replace(/\/$/, "") + "/set/" + k + (ex ? "?EX=" + ex : ""), { method: "POST", headers: { authorization: "Bearer " + KV_TOK }, body: JSON.stringify(v) }).catch(() => {}); };
 let adbReadyP = null; const adbReadyF = () => adbReadyP || (adbReadyP = (async () => { const u = await kvGet("skyline_adb_usage"); if (u && u.month === adbMonth()) ADBU = { ...ADBU, ...u }; })());
 const adbLeft = () => { if (ADBU.month !== adbMonth()) ADBU = { month: adbMonth(), units: 0, calls: 0, last: null, blocked: null }; return ADB_BUDGET - ADBU.units; };
 const ADB_GAP = () => Object.values(UKI).flat().filter(c => AP[c] && !OFFICIAL[c]);
@@ -993,7 +1015,9 @@ function staleFix(L, dir) { const now = Date.now(); return L.map(f => { const st
 api.get("/board/:iata", wrap(async (req, res) => { const iata = req.params.iata.toUpperCase(); const dir = req.query.dir === "arr" ? "arr" : "dep";
   let b; try { b = await Promise.race([board(iata, dir, String(req.query.date || todayLondon())), new Promise((_, rj) => setTimeout(() => rj(Object.assign(new Error("Board source timed out"), { status: 504 })), 25000))]); }
   catch (e) { return res.status(e.status === 504 ? 504 : 502).json({ error: e.status === 504 ? "The airport's timetable took too long to respond. Try again in a minute." : "The airport's timetable is unavailable right now.", detail: String(e.message || e).slice(0, 200), airport: airportOut(AP[iata]) }); }
-  const a = AP[iata];
+  const a = AP[iata]; const ymdQ = String(req.query.date || todayLondon()), td = todayLondon(); b.date = ymdQ;
+  const nKept = b.flights.filter(f => f.kept).length; if (nKept) b.keptNote = `${nKept} earlier flight${nKept === 1 ? "" : "s"} no longer in the airport's live feed, shown with the last status Skyline saw`;
+  if (ymdQ !== td && !b.flights.length) { b.dayNote = ymdQ > td ? "No schedule data for this day yet" : "No saved data for this day"; b.dayWhy = ymdQ > td ? (OFFICIAL[iata] ? "This airport's feed doesn't publish this day yet." : "There's no timetable feed for this airport; only live aircraft today.") : (OFFICIAL[iata] ? "The airport's feed no longer lists this day and Skyline didn't save it." : "There's no timetable feed for this airport, so past days can't be shown."); }
   const [wx, st] = await Promise.all([a ? wxCached(a.lat, a.lon).catch(() => null) : null, dir === "dep" ? boardStats(iata) : null]);
   for (const f of b.flights) { if (["landed", "departed", "cancelled"].includes(f.status)) continue; const t = dir === "dep" ? f.dep.scheduled : f.arr.scheduled;
     const p = predictCore(f, dir === "dep" ? { wxDep: wxAt(wx, t), aptStats: st } : { wxArr: wxAt(wx, t) }); f.pred = { d: p.predictedDelay, on: p.probs.onTime, c: p.confidence, top: p.top, summary: p.summary, factors: p.factors.slice(0, 4) }; }

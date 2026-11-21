@@ -482,7 +482,7 @@ function BoardRow({ f, dir, onClick }: { f: any; dir: string; onClick: () => voi
 }
 function Board({ iata, x, push, term0 }: any) { const cw = useCw();
   const [info, setInfo] = useState(() => /[#&]info\b/.test(location.hash)); const [term, setTerm] = useState(() => !!term0 || /term=1/.test(location.hash));
-  const [dir, setDir] = useState(() => /[#&]dir=arr\b/.test(location.hash) ? "arr" : "dep"); const [date, setDate] = useState(() => location.hash.match(/[#&]date=(\d{4}-\d\d-\d\d)/)?.[1] || today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState(""); const [earlier, setEarlier] = useState(false); const [qf, setQf] = useState("");
+  const [dir, setDir] = useState(() => /[#&]dir=arr\b/.test(location.hash) ? "arr" : "dep"); const [date, setDate] = useState(() => clampDay(location.hash.match(/[#&]date=(\d{4}-\d\d-\d\d)/)?.[1], today())); const [lim, setLim] = useState(150); useEffect(() => setLim(150), [date, dir]); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState(""); const [earlier, setEarlier] = useState(false); const [qf, setQf] = useState("");
   const isGr = FRAPORT_GR.has(iata); const [gr, setGr] = useState(() => localStorage.getItem("sk.grboard") !== "off");
   useEffect(() => setD(null), [iata, dir, date]);
   const poll = usePoll(() => api(`/board/${iata}?dir=${dir}&date=${date}`).then(r => withKtw(iata, dir, date, r)).then(setD).catch(e => setD((p: any) => p && !p.error ? p : { error: e.message, needsKey: e.needsKey, airport: e.airport || p?.airport })), [iata, dir, date]);
@@ -502,13 +502,16 @@ function Board({ iata, x, push, term0 }: any) { const cw = useCw();
     api(`/flight/${want}?date=${date}`).then(r => { if (!r?.flight) return; const g = { ...r.flight, date: r.flight.date || date }; push({ t: "flight", f: g }); if (gt) push({ t: "gate", f: g }); }).catch(() => toast(`${want} isn't on this board`)); }, [d]); // #board=MAN&open=FR2131 opens that flight (deep link / screenshot checks)
   return <>{iata && <Apt3DBtn iata={iata} name={ap?.city || iata} />}{iata === "MAN" && <WalkBtn />}<div className="head"><div><div className="row g6 bh-tags">{[iata, ap?.icao, new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: ap?.tz || "Europe/London" }) + " " + (ap?.tz === "Europe/London" ? "GMT" : "local")].map(t => <span key={t} className="tag">{t}</span>)}</div><h1 className="h1s">{ap?.city || iata}</h1><div className="muted sm">{ap ? [ap.name, ap.country].filter(Boolean).join(", ").toUpperCase() : d?.error ? "" : "Loading airport…"}</div></div>{x}</div>
     <div className="chips bh-chips">{d?.flights?.length > 0 && !d.liveOnly && <button className="sk-pill" onClick={() => push({ t: "gatewall", iata })}><span>🚪 Gate screens</span></button>}<div className="sk-seg mini"><button className={!term ? "on" : ""}>{Ic.list}<span>List</span></button><button onClick={() => setTerm(true)}>{Ic.board}<span>FIDS</span></button></div>{isGr && <button className={"sk-pill " + (gr ? "on" : "")} onClick={() => { localStorage.setItem("sk.grboard", gr ? "off" : "on"); setGr(!gr); }}><span>🇬🇷 Airport style</span></button>}<button className={"sk-pill " + (info ? "on" : "")} onClick={() => setInfo(v => !v)}>{info ? Ic.list : Ic.info}<span>{info ? "Board" : "Info"}</span></button><button className="sk-pill" onClick={() => navigator.share?.({ url: location.href, title: `${iata} board` })}>{Ic.share}<span>Share</span></button>
-      <select className="chip" value={date} onChange={e => setDate(e.target.value)}>{[-1, 0, 1, 2].map(o => { const v = new Date(Date.now() + o * 864e5).toLocaleDateString("en-CA", { timeZone: "Europe/London" }); return <option key={v} value={v}>{["Yesterday", "Today", "Tomorrow", fmtD(v)][o + 1]}</option>; })}</select>
+
             <select className="chip" value={airline} onChange={e => setAirline(e.target.value)}><option value="">Airline: All</option>{airlines.sort().map(a => <option key={a}>{a}</option>)}</select></div>
+    <DayChips v={date} set={setDate} />
     <div className="px"><div className="sk-seg big">{([["dep", "Departures", Ic.plane], ["arr", "Arrivals", Ic.land]] as const).map(([k, l, ic]) => <button key={k} className={dir === k ? "on" : ""} onClick={() => setDir(k)}>{ic}<span>{l}</span></button>)}</div></div>
     {term && <TerminalBoard iata={iata} dir={dir} date={date} onDir={setDir} onClose={() => setTerm(false)} onOpen={f => { setTerm(false); if (history.state?.tb) history.back(); push({ t: "flight", f: { ...f, date } }); }} />}
     {info ? <><AirportLive iata={iata} /><AirportInfo iata={iata} /></> : <>
     <div className="px"><label className="sk-field"><span>{Ic.search}</span><input placeholder="Filter city or flight" value={q} onChange={e => setQ(e.target.value)} /></label></div>
     {d?.flights?.length > 0 && !d.liveOnly && <div className="px row g6 mt8 qf">{([["", "All"], ...(dir === "dep" ? [["board", "Boarding now"]] : []), ["late", "Delayed 15+"], ["cx", "Cancelled"]] as [string, string][]).map(([k, l]) => <button key={k} className={"chip" + (qf === k ? " blue" : "")} onClick={() => setQf(k)}>{l}{k ? ` · ${(d.flights as any[]).filter((f: any) => k === "board" ? (!f.dep?.actual && f.status !== "departed" && f.status !== "cancelled" && Math.abs(+new Date(f.dep?.estimated || f.dep?.scheduled) - Date.now()) < 90 * 60e3 && /board|final|gate open|go to gate/i.test(String(f.dep?.gateAction || f.statusText || ""))) : k === "late" ? (delay(dir === "dep" ? f.dep : f.arr) ?? 0) >= 15 : f.status === "cancelled").length}` : ""}</button>)}</div>}
+    {d && !d.error && !d.flights?.length && date !== today() && <DayEmpty d={d} date={date} />}
+    {d?.keptNote && <div className="faint sm px">{d.keptNote}.</div>}
     {!d && <div>{[0,1,2,3,4,5,6].map(i => <div key={i} className="sk-row"><div className="skel" style={{ width: 52 }} /><div className="grow"><div className="skel" style={{ width: (60 + (i * 37) % 30) + "%" }} /><div className="skel" style={{ width: "35%", height: 10, marginTop: 8 }} /></div><div className="skel" style={{ width: 54 }} /></div>)}</div>}
     {d && !d.error && d.sourceKind && d.sourceKind !== "live" && <div className="px"><span className={"srcb " + (d.sourceKind === "official" ? "off" : "")}>{d.sourceKind === "official" ? "OFFICIAL AIRPORT FEED" : d.sourceKind === "derived" ? "FROM DESTINATION BOARDS" : "AERODATABOX"}</span> <span className="faint sm">{d.source}{d.site ? ` · ${d.site}` : ""}{d.sourceKind === "derived" ? "" : " · real scheduled, estimated & actual times"}</span></div>}
     {d?.error && <div className="note warn">{d.needsKey ? `Free real-time boards are available for MAN, STN, EMA, FRA, SYD and 45 Norwegian (Avinor) airports. For ${iata}, add a free AeroDataBox key in Settings.` : d.error}</div>}
@@ -519,14 +522,15 @@ function Board({ iata, x, push, term0 }: any) { const cw = useCw();
     <Refreshed {...poll} note={d?.sourceKind === "aerodatabox" ? "schedule refreshes every 20 min (limited by free data plan)" : undefined} />
     {d?.flights && <div className="faint sm px">Source: {d.source}{d.attribution ? <> • <a href="https://aerodatabox.com" target="_blank" rel="noreferrer">{d.attribution}</a></> : null} • AI badges are predictions</div>}
     {(() => { const tOf = (f: any) => +new Date(best(dir === "dep" ? f.dep : f.arr) || (dir === "dep" ? f.dep : f.arr).scheduled || 0);
-      const cut = Date.now() - 150 * 60e3; const old = date === today() && !q ? list.filter((f: any) => !f.liveOnly && tOf(f) < cut) : []; const L = earlier ? list : list.filter((f: any) => !old.includes(f));
+      const cut = Date.now() - 150 * 60e3; const old = date === today() && !q ? list.filter((f: any) => !f.liveOnly && tOf(f) < cut) : []; const L0 = earlier ? list : list.filter((f: any) => !old.includes(f)); const L = L0.slice(0, lim); const more = L0.length > lim ? <button className="dmore" onClick={() => setLim(n => n + 150)}>Show more ({L0.length - lim} left)</button> : null;
       let lastH = ""; const tz = ap?.tz || "Europe/London";
       const eb = old.length > 0 ? <button className="chip b2earlier" onClick={() => setEarlier(v => !v)}>{earlier ? "Hide earlier flights" : `Show ${old.length} earlier flights`}</button> : null;
-      if (cw && d?.flights) return <BoardList list={L} dir={dir} date={date} tz={tz} extra={eb} open={f => push({ t: "flight", f: { ...f, date } })} />;
-      if (isGr && gr && d?.flights) return <>{old.length > 0 && <button className="chip b2earlier" onClick={() => setEarlier(v => !v)}>{earlier ? "Hide earlier flights" : `Show ${old.length} earlier flights`}</button>}<GreekBoard ap={ap} dir={dir} list={L} onOpen={f => push({ t: "flight", f: { ...f, date } })} /></>;
+      if (d?.flights && !d.flights.length && date !== today()) return null;
+      if (cw && d?.flights) return <><BoardList list={L} dir={dir} date={date} tz={tz} extra={eb} open={f => push({ t: "flight", f: { ...f, date } })} />{more}</>;
+      if (isGr && gr && d?.flights) return <>{old.length > 0 && <button className="chip b2earlier" onClick={() => setEarlier(v => !v)}>{earlier ? "Hide earlier flights" : `Show ${old.length} earlier flights`}</button>}<GreekBoard ap={ap} dir={dir} list={L} onOpen={f => push({ t: "flight", f: { ...f, date } })} />{more}</>;
       return <div className="board b2">{old.length > 0 && <button className="chip b2earlier" onClick={() => setEarlier(v => !v)}>{earlier ? "Hide earlier flights" : `Show ${old.length} earlier flights`}</button>}
         {L.map((f: any, i: number) => { const h = f.liveOnly ? "Live" : new Date((dir === "dep" ? f.dep : f.arr).scheduled || tOf(f)).toLocaleTimeString("en-GB", { hour: "2-digit", timeZone: tz }) + ":00"; const hd = h !== lastH; lastH = h;
-          return <div key={f.id + i} id={i === nowIdx ? "brow-now" : undefined}>{hd && <div className="b2h">{h}</div>}<BoardRow f={f} dir={dir} onClick={() => push({ t: "flight", f: { ...f, date } })} /></div>; })}</div>; })()}</>}</>;
+          return <div key={f.id + i} id={i === nowIdx ? "brow-now" : undefined}>{hd && <div className="b2h">{h}</div>}<BoardRow f={f} dir={dir} onClick={() => push({ t: "flight", f: { ...f, date } })} /></div>; })}{more}</div>; })()}</>}</>;
 }
 
 function Airports({ x, push, flights, initial }: any) {
@@ -663,6 +667,8 @@ const Man3D = lazy(() => import("./v35"));
 import { Apt3DBtn, WhatMatters } from "./v63b";
 import { GatePreview, GateWall } from "./gate";
 import { withKtw } from "./fids";
+import { clampDay } from "./days";
+import { DayChips, DayEmpty } from "./daychips";
 import { GamesView } from "./games";
 import { useCw, TopBar, BoardList, FlightTop, DestPage, warmDest, loadLqip, loadDest, ThemeFeature, type CwNav } from "./clearway";
 const Welcome = lazy(() => import("./v53"));

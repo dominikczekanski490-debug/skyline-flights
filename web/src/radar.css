@@ -49,3 +49,4 @@
 .rd-body{padding-bottom:calc(6vh + 8px)}
 .rd .al-tile img{width:100%;height:100%;object-fit:contain}
 .rd-wx b.nc{text-transform:none}
+.rd .dchips button{background:#fff;border-color:#e2e3e7;color:#16171a}.rd .dchips button.on{background:#1e1f22;color:#ffc21a}.rd .dlegend{color:#4a4d55}.rd .dempty{background:#fff}
