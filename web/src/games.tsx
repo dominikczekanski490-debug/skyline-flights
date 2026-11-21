@@ -15,6 +15,8 @@ import { CodeQuiz, LaterGame, NatoTrainer } from "./v59";
 import { SignStudio, SignView, DEFAULTS as SIGN_DEFAULTS } from "./signs";
 import { AnnounceStudio } from "./announce";
 import { EuroStudio, EuroTileArt } from "./eurovision";
+import { GateBuilder } from "./gategame";
+import { AirportManager } from "./manager";
 import "./games.css";
 
 // ---------- helpers ----------
@@ -179,6 +181,8 @@ export const GAMES: Def[] = [
   { id: "flap", name: "Flapdle", sub: "Split-flap word game, 6 tries", ic: "🔠", col: "#ca8a04", C: Flapdle, lower: true, unit: "/6" },
   { id: "memory", name: "Logo Match", sub: "Memory pairs with airline logos", ic: "🃏", col: "#0891b2", C: LogoMemory, lower: true, unit: "moves" },
   { id: "rush", name: "Gate Rush", sub: "Send passengers to the right gate", ic: "🏃", col: "#dc2626", C: GateRush, unit: "boarded" },
+  { id: "gatebuild", name: "Gate Builder", sub: "Build the gate screen from the brief", ic: "🖥️", col: "#1d4ed8", C: GateBuilder, unit: "pts" },
+  { id: "manager", name: "Airport Manager", sub: "Design and run your own airport", ic: "🏗️", col: "#0f766e", C: AirportManager, unit: "rep" },
   { id: "atc", name: "Approach Control", sub: "Hold and land traffic safely", ic: "📡", col: "#059669", C: AtcGame, unit: "landed" },
 ];
 const CLASSIC: Def[] = [
@@ -208,7 +212,7 @@ export function GamesView({ x, tab0, init, inTab }: { x?: ReactNode; tab0?: stri
     {t === "home" ? <div className="gm-body">
       <h2 className="gm-h">Studios</h2>
       <div className="gm-studios">
-        <button className="gm-studio" onClick={() => setT("gate")}><div className="gm-art gates">{[...PRESETS].sort((a, b) => (a.s.style === "lhr" ? 1 : 0) - (b.s.style === "lhr" ? 1 : 0)).map((p, i) => <div key={i} className={"gm-mini " + p.s.style}><Fit w={DIM[p.s.style][0]} h={DIM[p.s.style][1]}><GateScreen s={{ ...p.s, anim: "none" }} /></Fit></div>)}</div><div className="gm-txt"><b>Gate studio</b><small>Animated gate screens in Manchester, Kraków (EN/PL), Heathrow or Gran Canaria style. Share or go fullscreen.</small></div></button>
+        <button className="gm-studio" onClick={() => setT("gate")}><div className="gm-art gates">{PRESETS.filter(p => !p.s.idle && p.s.style !== "spot").sort((a, b) => (a.s.style === "lhr" ? 1 : 0) - (b.s.style === "lhr" ? 1 : 0)).map((p, i) => <div key={i} className={"gm-mini " + p.s.style}><Fit w={DIM[p.s.style][0]} h={DIM[p.s.style][1]}><GateScreen s={{ ...p.s, anim: "none" }} /></Fit></div>)}</div><div className="gm-txt"><b>Gate studio</b><small>Animated gate screens in Manchester, Kraków (EN/PL), Heathrow or Gran Canaria style. Share or go fullscreen.</small></div></button>
         <button className="gm-studio" onClick={() => setT("board")}><div className="gm-art board"><div className="gm-flap">{"DEPARTURES".split("").map((c, i) => <i key={i} style={{ animationDelay: i * 90 + "ms" }}>{c}</i>)}</div></div><div className="gm-txt"><b>Board studio</b><small>Build your own departures or arrivals board in 40+ airport styles, with flips and live status changes.</small></div></button>
         <button className="gm-studio" onClick={() => setT("signs")}><div className="gm-art signs">{(["krk", "man", "lhr", "lpa", "fgr"] as const).map(k => <div key={k} className="gm-sg"><SignView s={SIGN_DEFAULTS[k]} /></div>)}</div><div className="gm-txt"><b>Sign studio</b><small>Design hanging airport signs in Kraków, Manchester, Heathrow, Gran Canaria or Fraport Greece style: arrows, pictograms, several languages, share links.</small></div></button>
         <button className="gm-studio" onClick={() => setT("announce")}><div className="gm-art ann"><div className="gm-ann"><b>LAST CALL</b><small>FR 2134  ·  GATE 32</small></div></div><div className="gm-txt"><b>Announcement maker</b><small>Write and play boarding calls, final calls and more, in the style of Manchester, Kraków, Gran Canaria, Fraport Greece and other airports. Voices come from your iPhone.</small></div></button>

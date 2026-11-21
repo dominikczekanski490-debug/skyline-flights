@@ -151,3 +151,43 @@ html[data-skin="clearway"] .gp-seg button.on{background:#0b1f3f;color:#fff}
 .lpa-w{display:flex;flex-direction:column;line-height:1.02;font-family:"Frutiger","Segoe UI","Helvetica Neue",Arial,sans-serif}
 .lpa-w span{color:#fff;font-size:36px;font-weight:400}.lpa-w b{color:#f7c600;font-size:40px;font-weight:700}
 .gs-lpa>*{flex:none}.gs-lpa .gc-top{height:140px}
+/* Manchester idle gate ("Gate Closed" when no flight): neutral blue band with a plain airport name (no operator logo). */
+.gs-mag.idle{background:radial-gradient(130% 90% at 50% 0%,#0d1322,#04060b)}
+.gs-mag.idle .gm-top{position:relative}.gm-acc{margin-left:auto;width:34px;height:34px;border:2px solid #e6f0ff;border-radius:3px;display:grid;place-items:center;color:#e6f0ff;opacity:.9}.gm-acc .pi{width:24px;height:24px}
+.gs-mag.idle .gm-ban.gm-neutral{margin:0;height:118px;border-radius:0;background:linear-gradient(180deg,#2079e0,#1a6fd6 55%,#1663c4);justify-content:flex-start;padding-left:34px;box-shadow:none}
+.gm-lock{display:flex;align-items:center;gap:12px;color:#fff}.gm-arc{width:58px;height:48px;flex:none}
+.gm-lw{display:flex;flex-direction:column;line-height:1}.gm-lw b{font-size:40px;font-weight:700;letter-spacing:-.3px}.gm-lw i{font-style:normal;font-size:30px;font-weight:300;margin-top:2px}
+.gm-idle{flex:1;display:flex;align-items:center;justify-content:center;color:#f4f8ff;font-size:40px;font-weight:500;letter-spacing:.3px}
+/* Planespotting gate */
+.gs-spot{background:radial-gradient(120% 100% at 0% 0%,#1d2a40,#0a0f18 60%);border:10px solid #15181d;border-radius:6px;color:#eef3ff;display:flex;flex-direction:column;padding:16px 20px 14px;gap:10px;box-shadow:0 0 0 2px #2a2d33,0 14px 30px rgba(0,0,0,.55);font-family:-apple-system,"SF Pro Display","Helvetica Neue",Arial,sans-serif}
+.sp-top{display:flex;align-items:center;gap:12px}.sp-gate{background:#ffd200;color:#111;font-size:30px;font-weight:800;padding:2px 12px;border-radius:6px;min-width:52px;text-align:center}
+.sp-k{font-size:15px;font-weight:700;letter-spacing:3px;color:#8fb3ff}.sp-top em{margin-left:auto;font-style:normal;font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:#cfe0ff}
+.sp-main{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.sp-ac small{display:block;font-size:13px;letter-spacing:2px;color:#8fa3c4;font-weight:700}
+.sp-ac b{display:block;font-size:58px;font-weight:800;line-height:1.05;letter-spacing:-.5px;max-width:430px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp-reg{margin-top:6px;display:flex;align-items:center;gap:10px;font-size:20px}.sp-mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-weight:700;background:#fff;color:#0a0f18;padding:1px 10px;border-radius:4px;letter-spacing:1px}
+.sp-reg i{font-style:normal;color:#c9d6ee;font-size:17px}.sp-dim{color:#7f8da6;font-size:16px}
+.sp-badge{flex:none;font-size:15px;font-weight:800;letter-spacing:1.5px;color:#1a1200;background:linear-gradient(135deg,#ffe27a,#ffb300);padding:7px 12px;border-radius:999px}
+.sp-badge.glow{animation:spGlow 1.8s ease-in-out infinite}.sp-badge.reg{background:#24324a;color:#9fb4d6}
+@keyframes spGlow{50%{box-shadow:0 0 18px rgba(255,200,40,.75)}}
+.sp-facts{display:flex;gap:30px;font-size:26px;font-weight:700;margin-top:auto;padding:10px 0 4px;border-top:1px solid rgba(255,255,255,.1)}.sp-facts small{display:block;font-size:11px;letter-spacing:2px;color:#8fa3c4;font-weight:700}
+.sp-fl{display:grid;grid-template-columns:96px auto 1fr auto auto;align-items:center;gap:12px;background:#121a28;border-radius:10px;padding:8px 10px;font-size:22px;font-weight:700;border-left:6px solid var(--al)}
+.sp-dest{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sp-st{padding:4px 10px;border-radius:6px;color:#fff;font-size:17px;transition:background .6s}
+.gs .sp-logo.al-tile{width:96px;height:36px;aspect-ratio:auto;background:#fff!important;border-radius:6px;padding:3px 6px}
+.gs .sp-logo.al-tile b{font-size:16px;color:#fff}
+.gp-stage.spot,.gsx .gp-stage.spot{height:auto;aspect-ratio:640/400}.gw-grid.spot .gw-it{aspect-ratio:640/400}
+/* Gate scene: wall letter, screen on a post, white desk with a black diagonal stripe */
+.gsc{position:relative;width:900px;height:760px;background:linear-gradient(180deg,#d9dde3 0%,#c9ced6 62%,#9aa0a8 62.2%,#b8bdc4 100%);overflow:hidden;font-family:"Helvetica Neue",Arial,sans-serif;border-radius:8px}
+.gsc-wall{position:absolute;right:46px;top:30px;font-size:210px;font-weight:700;color:#1b1f26;letter-spacing:-4px;line-height:1}
+.gsc-scr{position:absolute;left:46px;top:60px;width:560px;height:330px}
+.gsc-scr::after{content:"";position:absolute;left:50%;top:100%;width:16px;height:80px;margin-left:-8px;background:linear-gradient(90deg,#6c727b,#9aa0a8,#6c727b)}
+.gsc-desk{position:absolute;left:120px;right:120px;bottom:70px;height:210px;background:linear-gradient(180deg,#fff,#eceef1);border-radius:10px 10px 4px 4px;box-shadow:0 18px 30px rgba(0,0,0,.25);overflow:hidden}
+.gsc-desk i{position:absolute;left:-10%;width:120%;top:46%;height:44px;background:#111;transform:rotate(-9deg)}
+.gsc-floor{position:absolute;left:0;right:0;bottom:0;height:70px;background:linear-gradient(180deg,#8d939b,#6d737b)}
+.gp-stage.scene,.gsx .gp-stage.scene{height:auto;aspect-ratio:900/760}
+.gw-it.idle{opacity:.92}
+/* Kiosk */
+.kq{position:relative;width:100%;height:100%;display:flex;flex-direction:column}.kq-scr{flex:1;min-height:0;animation:kqIn .6s ease}
+@keyframes kqIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.kq-bar{display:flex;align-items:center;gap:10px;justify-content:space-between;color:rgba(255,255,255,.75);font-size:12px;padding:8px 46px 0 4px}
+.kq-dots{display:flex;gap:5px;flex-wrap:wrap;justify-content:center}.kq-dots button{width:7px;height:7px;border-radius:50%;border:0;padding:0;background:rgba(255,255,255,.3)}.kq-dots button.on{background:#fff}
+@media (prefers-reduced-motion:reduce){.kq-scr,.sp-badge.glow{animation:none}}

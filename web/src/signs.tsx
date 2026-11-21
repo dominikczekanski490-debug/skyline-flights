@@ -8,9 +8,10 @@ import { AirlineTile } from "./brand";
 import { LOGOS } from "./logoset";
 import { AL_NAMES } from "./alnames";
 import { enc, dec, FullScreen } from "./gate";
+import "@fontsource-variable/fredoka";
 import "./signs.css";
 
-export type SThemeK = "krk" | "man" | "lhr" | "lpa" | "fgr";
+export type SThemeK = "krk" | "man" | "lhr" | "lpa" | "fgr" | "ktw";
 /** One line of text. Multilingual looks keep each language in its own field: Kraków t=Polish en=English; Gran Canaria t=German en=English es=Spanish; Fraport Greece t=Greek en=English. */
 export type SLine = { t: string; en?: string; es?: string; al?: string[]; cross?: boolean };
 /** Gran Canaria gate-range chips: "C19 to/a C21" (connector words editable in English and Spanish). */
@@ -18,8 +19,8 @@ export type SGates = { a: string; b?: string; en?: string; es?: string };
 /** Gran Canaria walking-time chips: small "10min." over a coloured letter square. */
 export type SChip = { m: string; l: string; c: string };
 export type SRow = { arrow: Arrow; ics: string[]; lines: SLine[]; gates?: SGates; chips?: SChip[] };
-export type SignSpec = { v: 1; theme: SThemeK; rows: SRow[]; corner?: string[]; cap?: { on: boolean; arrow: Arrow } };
-export const STHEMES: [SThemeK, string][] = [["krk", "Kraków"], ["man", "Manchester"], ["lhr", "Heathrow"], ["lpa", "Gran Canaria"], ["fgr", "Fraport Greece"]];
+export type SignSpec = { v: 1; theme: SThemeK; rows: SRow[]; corner?: string[]; cap?: { on: boolean; arrow: Arrow }; /** Katowice: terminal letter in the green outlined box. */ term?: string };
+export const STHEMES: [SThemeK, string][] = [["krk", "Kraków"], ["man", "Manchester"], ["lhr", "Heathrow"], ["lpa", "Gran Canaria"], ["fgr", "Fraport Greece"], ["ktw", "Katowice"]];
 const THEME_KEYS = STHEMES.map(t => t[0]);
 export const CHIP_COLS: [string, string][] = [["blue", "Blue"], ["red", "Red"], ["green", "Green"], ["yellow", "Yellow"]];
 /** Which text fields each look has (label shown in the editor). */
@@ -28,8 +29,9 @@ export const LANGS: Record<SThemeK, [keyof SLine, string, string][]> = {
   man: [["t", "Text", "e.g. Departures"]], lhr: [["t", "Text", "e.g. Gates A1-A10"]],
   lpa: [["t", "Deutsch", "z. B. Flugsteige"], ["en", "English", "e.g. Gates"], ["es", "Español", "p. ej. Puertas"]],
   fgr: [["t", "Ελληνικά (Greek)", "π.χ. Αναχωρήσεις"], ["en", "English", "e.g. Departures"]],
+  ktw: [["t", "Polski", "np. przyloty"], ["en", "English", "e.g. arrivals"]],
 };
-const MULTI = (t: SThemeK) => t === "krk" || t === "lpa" || t === "fgr";
+const MULTI = (t: SThemeK) => t === "krk" || t === "lpa" || t === "fgr" || t === "ktw";
 const ARROW_KEYS = ARROWS.map(a => a[0]);
 
 /** Defaults reproduce the three reference photos. Kraków rule: `t` = Polish (white), `en` = English (yellow) — one language per field. */
@@ -51,6 +53,9 @@ export const DEFAULTS: Record<SThemeK, SignSpec> = {
     { arrow: "left", ics: ["screening"], lines: [{ t: "Έλεγχος Ασφαλείας", en: "Security control" }] },
     { arrow: "none", ics: ["officer"], lines: [{ t: "Έλεγχος Διαβατηρίων", en: "Passport control" }] },
     { arrow: "none", ics: ["boarding"], lines: [{ t: "Χώρος Επιβίβασης", en: "Boarding Area" }] }] },
+  ktw: { v: 1, theme: "ktw", term: "C", rows: [
+    { arrow: "left", ics: ["arrivals"], lines: [{ t: "przyloty", en: "arrivals" }] },
+    { arrow: "right", ics: ["taxi", "bus"], lines: [{ t: "taxi, autobusy", en: "taxi, buses" }] }] },
 };
 // Common messages, written once in Polish, English, German, Spanish and Greek ([pl, en, de, es, el]) and adapted to each look.
 type L5 = [string, string, string, string, string];
@@ -64,24 +69,24 @@ const COMMON: Record<string, { n: string; rows: G[] }> = {
   security: { n: "Security", rows: [{ a: "up", i: ["security"], l: [["Kontrola bezpieczeństwa", "Security", "Sicherheitskontrolle", "Control de seguridad", "Έλεγχος Ασφαλείας"], ["Wszystkie wyjścia", "All gates", "Alle Flugsteige", "Todas las puertas", "Όλες οι Πύλες"]] }, { a: "right", i: ["passport"], l: [["Kontrola paszportowa", "Passport control", "Passkontrolle", "Control de pasaportes", "Έλεγχος Διαβατηρίων"]] }] },
   reclaim: { n: "Baggage reclaim", rows: [{ a: "down", i: ["reclaim"], l: [["Odbiór bagażu", "Baggage reclaim", "Gepäckausgabe", "Recogida de equipajes", "Παραλαβή Αποσκευών"]] }, { a: "right", i: ["info"], l: [["Informacja", "Information", "Information", "Información", "Πληροφορίες"]] }, { a: "left", i: ["money"], l: [["Kantor", "Currency exchange", "Geldwechsel", "Cambio de moneda", "Συνάλλαγμα"]] }] },
 };
-const lineFor = (theme: SThemeK, [pl, en, de, es, el]: L5): SLine => theme === "krk" ? { t: pl, en } : theme === "lpa" ? { t: de, en, es } : theme === "fgr" ? { t: el, en } : { t: en };
+const lineFor = (theme: SThemeK, [pl, en, de, es, el]: L5): SLine => theme === "krk" || theme === "ktw" ? { t: pl, en } : theme === "lpa" ? { t: de, en, es } : theme === "fgr" ? { t: el, en } : { t: en };
 export const PRESET_KEYS = Object.keys(COMMON);
 export function presetFor(theme: SThemeK, key: string): SignSpec {
   if (key === "default" || !COMMON[key]) return clone(DEFAULTS[theme]);
   // Gran Canaria bars and Fraport Greece rows carry one message each, so multi-line messages become separate bars/rows.
   const split = theme === "lpa" || theme === "fgr";
   const rows: SRow[] = COMMON[key].rows.flatMap(g => (split ? g.l.map((l, j) => ({ g, l: [l], j })) : [{ g, l: g.l, j: 0 }]).map(({ g, l, j }) => ({
-    arrow: theme === "man" && g.a === "up" ? "upright" as Arrow : theme === "fgr" && j ? "none" as Arrow : g.a, ics: theme === "man" || theme === "lpa" ? g.i.slice(0, 2) : theme === "fgr" ? g.i.slice(0, 1) : g.i, lines: l.map(x => lineFor(theme, x)) })));
-  return { v: 1, theme, rows, ...(theme === "krk" ? { corner: ["wheelchair", "lift"] } : theme === "fgr" ? { cap: { on: true, arrow: "right" as Arrow } } : {}) };
+    arrow: theme === "man" && g.a === "up" ? "upright" as Arrow : theme === "fgr" && j ? "none" as Arrow : g.a, ics: theme === "man" || theme === "lpa" || theme === "ktw" ? g.i.slice(0, 2) : theme === "fgr" ? g.i.slice(0, 1) : g.i, lines: l.map(x => lineFor(theme, x)) })));
+  return { v: 1, theme, rows, ...(theme === "krk" ? { corner: ["wheelchair", "lift"] } : theme === "fgr" ? { cap: { on: true, arrow: "right" as Arrow } } : theme === "ktw" ? { term: "C" } : {}) };
 }
 const clone = <T,>(o: T): T => JSON.parse(JSON.stringify(o));
-export const isDefault = (s: SignSpec) => JSON.stringify({ r: s.rows, c: s.corner || [], k: s.cap || null }) === JSON.stringify({ r: DEFAULTS[s.theme].rows, c: DEFAULTS[s.theme].corner || [], k: DEFAULTS[s.theme].cap || null });
+export const isDefault = (s: SignSpec) => JSON.stringify({ r: s.rows, c: s.corner || [], k: s.cap || null, t: s.term || "" }) === JSON.stringify({ r: DEFAULTS[s.theme].rows, c: DEFAULTS[s.theme].corner || [], k: DEFAULTS[s.theme].cap || null, t: DEFAULTS[s.theme].term || "" });
 /** Restyle a sign in another look, keeping the user's rows (Kraków keeps languages in separate fields). */
 export function convert(s: SignSpec, theme: SThemeK): SignSpec {
   if (s.theme === theme) return s;
   // English is the shared language: multilingual looks keep it in `en`, single-language looks in `t`. Other languages are not guessed.
   const rows = s.rows.map(r => ({ ...r, ics: theme === "man" ? r.ics.slice(0, 3) : r.ics, lines: r.lines.map(l => { const E = MULTI(s.theme) ? (l.en || l.t) : l.t; const { es: _es, en: _en, ...rest } = l; void _es; void _en; return MULTI(theme) ? { ...rest, t: "", en: E } : { ...rest, t: E }; }) }));
-  return { v: 1, theme, rows, ...(theme === "krk" ? { corner: s.corner || [] } : theme === "fgr" ? { cap: s.cap || { on: true, arrow: "right" as Arrow } } : {}) };
+  return { v: 1, theme, rows, ...(theme === "krk" ? { corner: s.corner || [] } : theme === "fgr" ? { cap: s.cap || { on: true, arrow: "right" as Arrow } } : theme === "ktw" ? { term: s.term ?? "C" } : {}) };
 }
 /** Validate a sign decoded from a share link / storage: unknown pictograms, arrows and logos are dropped, sizes capped. */
 export function sanitize(o: any): SignSpec | null {
@@ -92,6 +97,7 @@ export function sanitize(o: any): SignSpec | null {
     ...(r?.gates && typeof r.gates === "object" && str(r.gates.a, 8) ? { gates: { a: str(r.gates.a, 8), ...(r.gates.b ? { b: str(r.gates.b, 8) } : {}), en: str(r.gates.en, 6), es: str(r.gates.es, 6) } } : {}),
     ...(Array.isArray(r?.chips) && r.chips.length ? { chips: r.chips.slice(0, 4).map((c: any) => ({ m: str(c?.m, 8), l: str(c?.l, 3), c: CHIP_COLS.some(x => x[0] === c?.c) ? c.c : "blue" })) } : {}) }));
   return { v: 1, theme: o.theme, rows, ...(o.theme === "krk" ? { corner: (Array.isArray(o.corner) ? o.corner : []).filter((k: any) => PICTOS[k]).slice(0, 4) } : {}),
+    ...(o.theme === "ktw" && typeof o.term === "string" ? { term: o.term.slice(0, 3) } : {}),
     ...(o.theme === "fgr" ? { cap: { on: o.cap ? !!o.cap.on : true, arrow: ARROW_KEYS.includes(o.cap?.arrow) ? o.cap.arrow : "right" } } : {}) };
 }
 export const signLink = (s: SignSpec, origin = "") => `${origin}/#games=signs&s=${enc(s)}`;
@@ -122,6 +128,10 @@ export function SignView({ s }: { s: SignSpec }) {
       <div className="sf-rows">{rows.map((r, i) => <div key={i} className="sf-row"><span className="sf-ar"><ArrowSvg a={r.arrow} w={2.2} /></span><span className="sf-ic">{r.ics.map(k => <span key={k} className="sf-c"><Picto k={k} /></span>)}</span>
         <div className="sf-lines">{r.lines.map((l, j) => <div key={j} className="sf-l">{l.t && <span className="el">{l.t}</span>}{(l.en || l.cross || !!l.al?.length) && <span className="en">{l.en}{l.cross && <Cross />}{l.al?.map(k => <Al key={k} k={k} />)}</span>}</div>)}</div></div>)}</div>
       {cap && <div className="sf-cap"><span className="sf-exit"><Picto k="exit" /></span><span className="sf-car"><ArrowSvg a={s.cap?.arrow || "right"} w={2.2} /></span></div>}</div></div>; }
+  if (s.theme === "ktw") return <div className="sg-wrap"><div className="sg-hang ktw"><i /><i /></div><div className="sg sg-ktw" role="img" aria-label={[s.term ? "terminal " + s.term : "", ...rows.map(r => r.lines.map(l => [l.t, l.en].filter(Boolean).join(" / ")).join(", "))].filter(Boolean).join(", ")}>
+    {s.term && <div className="sk-term"><span>terminal</span><b>{s.term}</b></div>}
+    {rows.map((r, i) => <div key={i} className="sk-row"><span className="sk-ar"><ArrowSvg a={r.arrow} w={1.8} /></span><span className="sk-ic">{r.ics.map(k => <span key={k} className="sk-c"><Picto k={k} /></span>)}</span>
+      <div className="sk-lines">{r.lines.map((l, j) => <div key={j} className="sk-l">{l.t && <span className="pl">{l.t}</span>}{l.t && l.en && <span className="sl"> / </span>}{l.en && <span className="en">{l.en}</span>}{l.cross && <Cross />}{l.al?.map(k => <Al key={k} k={k} />)}</div>)}</div></div>)}</div></div>;
   return <div className="sg-wrap"><div className="sg-hang lhr"><i /><i /></div><div className="sg sg-lhr" role="img" aria-label={rows.map(r => r.lines.map(l => l.t).join(" ")).join(", ")}>
     {rows.map((r, i) => { const stack = r.lines.length > 1 && r.ics.length > 1; return <div key={i} className="sl-row"><span className="sl-ar"><ArrowSvg a={r.arrow} w={3} /></span>
       <span className={"sl-ic" + (stack ? " stack" : "")}>{r.ics.map(k => <span key={k} className="sl-c"><Picto k={k} /></span>)}</span>
@@ -147,7 +157,7 @@ export function SignStudio() {
   const reset = () => { if (isDefault(s) || confirm(`Reset to the ${STHEMES.find(t => t[0] === s.theme)![1]} default sign? Your rows will be replaced.`)) setS(clone(DEFAULTS[s.theme])); };
   const kr = s.theme === "krk"; const langs = LANGS[s.theme]; const blank = (): SLine => ({ t: "", ...Object.fromEntries(langs.map(([k]) => [k, ""])) }) as SLine;
   const ADDROW: Record<SThemeK, SRow> = { krk: { arrow: "right", ics: ["plane"], lines: [{ t: "Wyjścia", en: "Gates" }] }, man: { arrow: "upright", ics: ["plane"], lines: [{ t: "Gates" }] }, lhr: { arrow: "left", ics: ["plane"], lines: [{ t: "Gates" }] },
-    lpa: { arrow: "right", ics: ["plane"], lines: [{ t: "Flugsteige", en: "Gates", es: "Puertas" }], gates: { a: "A1", b: "A10", en: "to", es: "a" } }, fgr: { arrow: "right", ics: ["plane"], lines: [{ t: "Πύλες", en: "Gates" }] } };
+    lpa: { arrow: "right", ics: ["plane"], lines: [{ t: "Flugsteige", en: "Gates", es: "Puertas" }], gates: { a: "A1", b: "A10", en: "to", es: "a" } }, fgr: { arrow: "right", ics: ["plane"], lines: [{ t: "Πύλες", en: "Gates" }] }, ktw: { arrow: "right", ics: ["gates"], lines: [{ t: "wyjścia", en: "gates" }] } };
   const Picker = ({ have, add }: { have: string[]; add: (k: string) => void }) => <div className="sg-pick">{PICTO_KEYS.filter(k => !have.includes(k)).map(k => <button key={k} onClick={() => add(k)} title={PICTOS[k].n}><Picto k={k} /><small>{PICTOS[k].n}</small></button>)}</div>;
   return <div className="gsx sgs">
     <div className={"sg-stage " + s.theme} onClick={() => setFull(true)}><SignView s={s} /></div>
@@ -156,6 +166,7 @@ export function SignStudio() {
     <div className="gsx-pre">{["default", ...PRESET_KEYS].map(k => <button key={k} onClick={() => { if (isDefault(s) || confirm("Replace this sign with the preset?")) setS(presetFor(s.theme, k)); }}>{k === "default" ? "Photo sign" : COMMON[k].n}</button>)}</div>
     {s.theme === "fgr" && <div className="sg-card"><div className="sg-card-h"><b>Green exit end-cap</b><button className={"sg-mini" + (s.cap?.on !== false ? " on" : "")} aria-pressed={s.cap?.on !== false} onClick={() => setS({ ...s, cap: { on: s.cap?.on === false, arrow: s.cap?.arrow || "right" } })}>{s.cap?.on !== false ? "On" : "Off"}</button></div>
       {s.cap?.on !== false && <label className="gsx-f"><span>End-cap arrow</span><select value={s.cap?.arrow || "right"} onChange={e => setS({ ...s, cap: { on: true, arrow: e.target.value as Arrow } })}>{ARROWS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></label>}</div>}
+    {s.theme === "ktw" && <div className="sg-card"><div className="sg-card-h"><b>Terminal box</b></div><label className="gsx-f"><span>Terminal letter (empty = no box)</span><input value={s.term || ""} maxLength={3} placeholder="C" onChange={e => setS({ ...s, term: e.target.value.toUpperCase() || undefined })} /></label></div>}
     {kr && <div className="sg-card"><div className="sg-card-h"><b>Corner pictograms</b></div><div className="sg-chips">{(s.corner || []).map(k => <button key={k} className="sg-chip" onClick={() => setS({ ...s, corner: (s.corner || []).filter(x => x !== k) })} aria-label={"Remove " + PICTOS[k].n}><Picto k={k} />✕</button>)}{(s.corner || []).length < 4 && <button className="sg-chip add" onClick={() => setPick(pick === "c" ? null : "c")}>＋ Pictogram</button>}</div>
       {pick === "c" && <Picker have={s.corner || []} add={k => { setS({ ...s, corner: [...(s.corner || []), k].slice(0, 4) }); setPick(null); }} />}</div>}
     {rows.map((r, i) => <div key={i} className="sg-card">
@@ -181,6 +192,6 @@ export function SignStudio() {
     </div>)}
     {rows.length < 8 && <button className="gp-btn sg-add" onClick={() => setRows([...rows, clone(ADDROW[s.theme])])}>＋ {s.theme === "lpa" ? "Add bar" : "Add row"}</button>}
     {saved.length > 0 && <><h3 className="gsx-h">Saved signs</h3><div className="gsx-saved">{saved.map((x, k) => <button key={k} onClick={() => setS(clone(x))}>{x.rows[0]?.lines[0]?.en || x.rows[0]?.lines[0]?.t || "Sign"}<small>{x.theme.toUpperCase()}</small></button>)}</div></>}
-    <p className="faint xs mt8">Fun recreations of Kraków-, Manchester-, Heathrow-, Gran Canaria- and Fraport Greece-style wayfinding signs, not official airport signs. Pictograms are drawn for Skyline; airline logos come from Skyline's own set. No airport logos are used.</p>
+    <p className="faint xs mt8">Fun recreations of Kraków-, Manchester-, Heathrow-, Gran Canaria-, Fraport Greece- and Katowice-style wayfinding signs, not official airport signs. Pictograms are drawn for Skyline; airline logos come from Skyline's own set. No airport logos are used.</p>
     {full && <FullScreen onClose={() => setFull(false)} bg="radial-gradient(120% 90% at 50% 0%,#3a3f4a,#0c0e12)"><div className="sg-full"><SignView s={s} /></div></FullScreen>}</div>;
 }

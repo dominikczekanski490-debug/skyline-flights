@@ -125,3 +125,15 @@ html body .games .gp-seg button.on{background:#fff!important;color:#0b1f3f!impor
 .sheet-body:has(> .games),.sheet-body:has(.games.in-tab){background:#0b1020!important}
 html body .games h2.gm-h{color:#a9b4d0!important;-webkit-text-fill-color:#a9b4d0}
 .gm-art.gates{grid-template-columns:repeat(3,minmax(0,1fr)) 50px}
+/* Gate Builder */
+.gb{display:flex;flex-direction:column;gap:10px}
+.gb-brief{background:linear-gradient(135deg,#13203a,#0f1830);border:1px solid rgba(96,165,250,.3);border-radius:14px;padding:10px 14px}.gb-brief small{color:#93c5fd;font-weight:800;letter-spacing:1.5px;font-size:11px}
+.gb-brief p{margin:4px 0 0;color:#e8efff;font-size:15px;line-height:1.35}
+.gm-play .gb-prev.gp-stage{margin:0;height:auto;aspect-ratio:640/360;cursor:default}.gm-play .gb-prev.gp-stage.lpa{aspect-ratio:640/580}
+.gb-als{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.gb-als button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:#141b2d;color:#fff}
+.gb-als button.on{border-color:#60a5fa;box-shadow:0 0 0 2px rgba(96,165,250,.45);background:#1b2a4a}.gb-als .al-tile{width:100%;height:26px}.gb-als small{font-size:10px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.gb-go{width:100%;padding:12px!important;font-size:16px}
+.gb-res ul{list-style:none;padding:0;margin:6px 0;display:grid;gap:4px}.gb-res li{padding:6px 10px;border-radius:9px;background:#141b2d;font-size:14px}.gb-res li.ok{color:#86efac}.gb-res li.bad{color:#fca5a5}
+.gb-pts{font-size:34px;font-weight:800;color:#fde68a;text-align:center;animation:gbPop .4s ease}@keyframes gbPop{from{transform:scale(.6);opacity:0}}
+.gb-end{display:flex;flex-direction:column;align-items:center;gap:6px;padding:30px 10px;text-align:center}.gb-end b{font-size:22px}
+.gb-alf{grid-column:1/-1;min-width:0}.gb-als{min-width:0}.gb-als button{min-width:0}

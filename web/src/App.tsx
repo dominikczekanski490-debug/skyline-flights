@@ -25,6 +25,12 @@ import { Livery, PLANE_CREDITS, useFlightPhoto, photoLabel } from "./livery";
 import { usePoll, Refreshed, TRACK_MS, markTracked, LiveLine } from "./refresh";
 import { Ic, SecHead, ActBtn } from "./v25";
 const Labs = lazy(() => import("./labs"));
+const RadarAirport = lazy(() => import("./radar"));
+// Airport page style: "classic" (Skyline board) or "radar" (tracker-app style sheet). Deep links to the FIDS / a flight keep the classic board.
+export const aptStyle = () => { const h = location.hash.match(/[#&]aptstyle=(radar|classic)/)?.[1]; if (h) localStorage.setItem("sk.aptstyle", h); return localStorage.getItem("sk.aptstyle") || "classic"; };
+function BoardSwitch({ iata, x, push, term0, close }: any) { const [radar, setRadar] = useState(() => aptStyle() === "radar" && !term0 && !/[#&](open|term|gate|info)=?/.test(location.hash));
+  if (radar) return <Suspense fallback={<div className="card">Loading airport…</div>}><RadarAirport iata={iata} onClose={close} push={push} onClassic={() => setRadar(false)} /></Suspense>;
+  return <Board iata={iata} x={x} push={push} term0={term0} />; }
 let labCount = 0; setTimeout(() => import("./labs").then(m => { labCount = m.LAB_COUNT; }), 4000);
 import { applySkin, SkinPicker, skinOf } from "./themes";
 import { NotifInbox, NotifPreviews, changeMsgs, flightTitle, contextLine, addInbox } from "./v34";
@@ -258,7 +264,7 @@ function Overlay(p: { o: Ov; z: number; close: () => void; push: (o: Ov) => void
   if (o.t === "search") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><SearchView {...p} x={x} /></Sheet>;
   if (o.t === "flight") return <Sheet z={z} onClose={close} snaps={[0.5, 0.94]} initial={0} header={<div className="head fhead"><div className="row g10"><Logo a={o.f.airline} /><div><div className="muted sm">{o.f.number} • {fmtD(o.f.date, { weekday: "short", day: "numeric", month: "short" }).toUpperCase()}</div><h2>{o.f.origin?.city} to {o.f.diverted ? <s>{o.f.destination?.city}</s> : o.f.destination?.city}</h2></div></div>{x}</div>}>
     <FlightDetail f={p.flights.find(f => f.id === o.f.id) || o.f} {...p} /><div className="px"><RouteAurora f={o.f} /></div></Sheet>;
-  if (o.t === "board") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Board iata={o.iata} x={x} push={p.push} term0={o.term} /></Sheet>;
+  if (o.t === "board") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><BoardSwitch iata={o.iata} x={x} push={p.push} term0={o.term} close={close} /></Sheet>;
   if (o.t === "airports") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Airports x={x} push={p.push} flights={p.flights} initial={o.mode} /></Sheet>;
   if (o.t === "tools") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><Head title="Tools" right={x} /><div className="px"><ToolsHub open={o.id} /></div></Sheet>;
   if (o.t === "ask") return <Sheet z={z} onClose={close} snaps={[0.94]} initial={0}><AskSkyline flights={p.flights} x={x} /></Sheet>;
@@ -479,7 +485,7 @@ function Board({ iata, x, push, term0 }: any) { const cw = useCw();
   const [dir, setDir] = useState(() => /[#&]dir=arr\b/.test(location.hash) ? "arr" : "dep"); const [date, setDate] = useState(() => location.hash.match(/[#&]date=(\d{4}-\d\d-\d\d)/)?.[1] || today()); const [d, setD] = useState<any>(null); const [airline, setAirline] = useState(""); const [q, setQ] = useState(""); const [earlier, setEarlier] = useState(false); const [qf, setQf] = useState("");
   const isGr = FRAPORT_GR.has(iata); const [gr, setGr] = useState(() => localStorage.getItem("sk.grboard") !== "off");
   useEffect(() => setD(null), [iata, dir, date]);
-  const poll = usePoll(() => api(`/board/${iata}?dir=${dir}&date=${date}`).then(setD).catch(e => setD((p: any) => p && !p.error ? p : { error: e.message, needsKey: e.needsKey, airport: e.airport || p?.airport })), [iata, dir, date]);
+  const poll = usePoll(() => api(`/board/${iata}?dir=${dir}&date=${date}`).then(r => withKtw(iata, dir, date, r)).then(setD).catch(e => setD((p: any) => p && !p.error ? p : { error: e.message, needsKey: e.needsKey, airport: e.airport || p?.airport })), [iata, dir, date]);
   const ap = d?.airport; const adj = useRef(false); // v23: open on the airport's local "today" (e.g. Greece/Turkey are past midnight before London)
   useEffect(() => { if (adj.current || !ap?.tz || date !== today()) return; adj.current = true; try { const loc = new Date().toLocaleDateString("en-CA", { timeZone: ap.tz }); if (loc !== date) setDate(loc); } catch {} }, [ap?.tz]);
   const [, tick] = useState(0); useEffect(() => { const t = setInterval(() => tick(n => n + 1), 30e3); return () => clearInterval(t); }, []);
@@ -504,7 +510,7 @@ function Board({ iata, x, push, term0 }: any) { const cw = useCw();
     <div className="px"><label className="sk-field"><span>{Ic.search}</span><input placeholder="Filter city or flight" value={q} onChange={e => setQ(e.target.value)} /></label></div>
     {d?.flights?.length > 0 && !d.liveOnly && <div className="px row g6 mt8 qf">{([["", "All"], ...(dir === "dep" ? [["board", "Boarding now"]] : []), ["late", "Delayed 15+"], ["cx", "Cancelled"]] as [string, string][]).map(([k, l]) => <button key={k} className={"chip" + (qf === k ? " blue" : "")} onClick={() => setQf(k)}>{l}{k ? ` · ${(d.flights as any[]).filter((f: any) => k === "board" ? (!f.dep?.actual && f.status !== "departed" && f.status !== "cancelled" && Math.abs(+new Date(f.dep?.estimated || f.dep?.scheduled) - Date.now()) < 90 * 60e3 && /board|final|gate open|go to gate/i.test(String(f.dep?.gateAction || f.statusText || ""))) : k === "late" ? (delay(dir === "dep" ? f.dep : f.arr) ?? 0) >= 15 : f.status === "cancelled").length}` : ""}</button>)}</div>}
     {!d && <div>{[0,1,2,3,4,5,6].map(i => <div key={i} className="sk-row"><div className="skel" style={{ width: 52 }} /><div className="grow"><div className="skel" style={{ width: (60 + (i * 37) % 30) + "%" }} /><div className="skel" style={{ width: "35%", height: 10, marginTop: 8 }} /></div><div className="skel" style={{ width: 54 }} /></div>)}</div>}
-    {d && !d.error && d.sourceKind && d.sourceKind !== "live" && <div className="px"><span className={"srcb " + (d.sourceKind === "official" ? "off" : "")}>{d.sourceKind === "official" ? "OFFICIAL AIRPORT FEED" : "AERODATABOX"}</span> <span className="faint sm">{d.source}{d.site ? ` · ${d.site}` : ""} · real scheduled, estimated & actual times</span></div>}
+    {d && !d.error && d.sourceKind && d.sourceKind !== "live" && <div className="px"><span className={"srcb " + (d.sourceKind === "official" ? "off" : "")}>{d.sourceKind === "official" ? "OFFICIAL AIRPORT FEED" : d.sourceKind === "derived" ? "FROM DESTINATION BOARDS" : "AERODATABOX"}</span> <span className="faint sm">{d.source}{d.site ? ` · ${d.site}` : ""}{d.sourceKind === "derived" ? "" : " · real scheduled, estimated & actual times"}</span></div>}
     {d?.error && <div className="note warn">{d.needsKey ? `Free real-time boards are available for MAN, STN, EMA, FRA, SYD and 45 Norwegian (Avinor) airports. For ${iata}, add a free AeroDataBox key in Settings.` : d.error}</div>}
     {d?.liveOnly && <div className="note live-note"><b>Live traffic only</b> — derived from real ADS-B positions near {iata} (adsb.lol / adsb.fi) with adsbdb routes. No free official schedule feed exists for this airport, so no times or delays are shown (nothing is guessed). Optional: an AeroDataBox key in Settings adds schedules here.{date !== today() && " Live traffic is only available for today."}</div>}
     {d?.liveOnly && d.flights?.length === 0 && date === today() && <div className="empty"><b>Quiet right now</b><div className="muted sm">No aircraft seen near {iata} in the last 3h; this airport has no free timetable feed.</div><button className="chip mt8" onClick={() => push({ t: "airports", mode: "uk" })}>Airports with official boards</button></div>}
@@ -624,6 +630,10 @@ function PushControls() {
     {dbg && <pre className="sm muted mt8" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 200, overflow: "auto" }}>{JSON.stringify(dbg.you ? { you: dbg.you, vapid: dbg.vapidSource, subs: dbg.subscriptions, log: dbg.log?.slice(0, 5) } : dbg, null, 1)}</pre>}</>;
 }
 
+function AptStylePick() { const [v, setV] = useState(aptStyle); const set = (k: string) => { localStorage.setItem("sk.aptstyle", k); setV(k); };
+  return <div className="card m0"><h3 className="set-h"><span>{Ic.board}</span>Airport page</h3><div className="muted sm">How an airport opens when you tap it.</div>
+    <div className="sk-seg mt8">{([["classic", "Classic board"], ["radar", "Radar style"]] as const).map(([k, n]) => <button key={k} className={v === k ? "on" : ""} aria-pressed={v === k} onClick={() => set(k)}><span>{n}</span></button>)}</div>
+    <div className="faint sm mt4">{v === "radar" ? "Dark header, General / Departures / Arrivals / On ground tabs, weather, disruptions and airport stats from live data. You can switch back from inside the page." : "Skyline's board with List / FIDS, gate screens and filters."}</div></div>; }
 function Settings({ x, theme, setTheme, push }: any) {
   const [s, setS] = useState<any>({}); const [k, setK] = useState(""); const [lk, setLk] = useState(""); const [lb, setLb] = useState(""); const [lm, setLm] = useState(""); const [tok, setTok] = useState(""); const [msg, setMsg] = useState("");
   const load = () => api("/settings").then(r => { setS(r); setLb(r.llmBase); setLm(r.llmModel); }); useEffect(() => { load(); }, []);
@@ -632,7 +642,7 @@ function Settings({ x, theme, setTheme, push }: any) {
     <button className="card m0 gm-set" style={{ width: "100%", textAlign: "left" }} onClick={() => push({ t: "games" })}><b>🎮 Games</b><div className="faint sm mt4">Make your own animated gate screens and flight boards</div></button>
     <ThemeFeature theme={theme} setTheme={setTheme} name={skinOf(theme)?.n || (theme === "light" ? "Light" : theme === "dark" ? "Dark" : theme)} />
     <div className="card m0"><b className="set-h sm"><span>{Ic.image}</span>Photo credits</b><div className="faint sm mt4">{PLANE_CREDITS}</div><div className="faint sm mt4"><a href="https://www.planespotters.net" target="_blank" rel="noopener">Planespotters.net</a> · <a href="https://commons.wikimedia.org" target="_blank" rel="noopener">Wikimedia Commons</a></div></div><div className="card m0 row between"><span className="set-l"><span>{Ic.info}</span>App version</span><b className="sm">{BUILD}</b></div><button className="card m0 row between press" style={{ width: "100%" }} onClick={() => push({ t: "features" })}><span className="set-l"><span>{Ic.flask}</span>All features</span><b className="sm set-n">{TOOLS.length + BOARD_FEATURES.length}</b></button><UnitsCard /><AlertPrefsCard onChange={() => syncPush(JSON.parse(localStorage.getItem("skyline.flights.v1") || "[]").filter((f: any) => !f.friend)).catch(() => {})} />
-    <div className="card m0"><h3 className="set-h"><span>{Ic.palette}</span>Appearance</h3><SkinPicker v={theme} set={setTheme} /></div><button className="card m0 mt12" style={{ width: "100%", textAlign: "left" }} onClick={() => dispatchEvent(new Event("sk:welcome"))}><b>Replay welcome tour</b><div className="faint sm">Home airport, favourite airline, alerts, theme and Home Screen tips</div></button>
+    <div className="card m0"><h3 className="set-h"><span>{Ic.palette}</span>Appearance</h3><SkinPicker v={theme} set={setTheme} /></div><AptStylePick /><button className="card m0 mt12" style={{ width: "100%", textAlign: "left" }} onClick={() => dispatchEvent(new Event("sk:welcome"))}><b>Replay welcome tour</b><div className="faint sm">Home airport, favourite airline, alerts, theme and Home Screen tips</div></button>
     <div className="card m0"><h3 className="set-h"><span>{Ic.bell}</span>Notifications</h3><div className="muted sm">Gate & terminal changes, boarding, delays (15+ min, or improving), cancellations, departure, landing and baggage belt for your tracked flights. Tap <b>Turn on alerts</b> — iPhone only asks for permission after a tap, and only inside the Home Screen app (Safari → Share → Add to Home Screen, iOS 16.4+).</div>
       <div className="faint sm mt4"><b>Honest limits:</b> with the app open, Skyline also alerts on-device straight away. When it's closed, alerts come from the server, which checks tracked flights every 4 min — so they can lag by a few minutes, and if the free server is asleep (Render free tier) the first check after it wakes can be late. Focus modes and iOS notification settings can hide banners.</div>
       <PushControls /><NotifInbox /><NotifPreviews /></div>
@@ -652,6 +662,7 @@ function Settings({ x, theme, setTheme, push }: any) {
 const Man3D = lazy(() => import("./v35"));
 import { Apt3DBtn, WhatMatters } from "./v63b";
 import { GatePreview, GateWall } from "./gate";
+import { withKtw } from "./fids";
 import { GamesView } from "./games";
 import { useCw, TopBar, BoardList, FlightTop, DestPage, warmDest, loadLqip, loadDest, ThemeFeature, type CwNav } from "./clearway";
 const Welcome = lazy(() => import("./v53"));

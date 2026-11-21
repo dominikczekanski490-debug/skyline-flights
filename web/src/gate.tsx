@@ -9,13 +9,19 @@ import { LOGOS } from "./logoset";
 import { AL_NAMES } from "./alnames";
 import { WHITE_LOGOS } from "./assets.gen";
 import { status as boardStatus, TerminalBoard, THEMES } from "./terminal";
+import { TYPES, regCountry } from "./toolsdata";
+import { CC, flag } from "./countries";
+import { Kiosk, saveImage, withKtw, ktwFlights } from "./fids";
+import { Picto } from "./pictos";
 import "./gate.css";
 
-export type GStyle = "mag" | "krk" | "lhr" | "lpa";
-export const GSTYLES: GStyle[] = ["mag", "krk", "lhr", "lpa"];
-export const GLABEL: Record<GStyle, string> = { mag: "MAN · EMA · STN", krk: "Kraków", lhr: "Heathrow", lpa: "Gran Canaria" };
+export type GStyle = "mag" | "krk" | "lhr" | "lpa" | "spot";
+export const GSTYLES: GStyle[] = ["mag", "krk", "lhr", "lpa", "spot"];
+export const GLABEL: Record<GStyle, string> = { mag: "MAN · EMA · STN", krk: "Kraków", lhr: "Heathrow", lpa: "Gran Canaria", spot: "Spotter" };
 export type GState = "wait" | "gate" | "pre" | "boarding" | "final" | "closed" | "departed" | "delayed" | "cancelled";
-export type GSpec = { style: GStyle; gate: string; al: string; alName?: string; num: string; dest: string; destPl?: string; time: string; est?: string; st: GState; stPl?: string; msg?: string; next?: string; nextPl?: string; lang?: "en" | "pl" | "enpl"; anim?: "live" | "cycle" | "none"; tz?: string; co?: string };
+export type GSpec = { style: GStyle; gate: string; al: string; alName?: string; num: string; dest: string; destPl?: string; time: string; est?: string; st: GState; stPl?: string; msg?: string; next?: string; nextPl?: string; lang?: "en" | "pl" | "enpl"; anim?: "live" | "cycle" | "none"; tz?: string; co?: string;
+  /** Manchester: gate not in use → "Gate Closed" idle screen (neutral blue band, no flight). */ idle?: boolean; /** Gate-area scene around the screen (wall letter + striped desk). */ scene?: boolean;
+  /** Spotter gate: ICAO type, registration, operator country, "rare visitor" note. */ ac?: string; reg?: string; regc?: string; rare?: string; /** Idle band wording (airport name, generic type; no operator logo). */ apt?: string };
 
 export const ST: Record<GState, { en: string; pl: string; mag: string; lhr: string; col: string; lcol: string; msg: string }> = {
   wait: { en: "PLEASE WAIT", pl: "PROSZĘ CZEKAĆ", mag: "Wait in Lounge", lhr: "Please wait", col: "#1d4ed8", lcol: "#ffffff", msg: "Please remain in the seating area. Boarding will begin shortly." },
@@ -29,7 +35,7 @@ export const ST: Record<GState, { en: string; pl: string; mag: string; lhr: stri
   cancelled: { en: "CANCELLED", pl: "ODWOŁANY", mag: "Cancelled", lhr: "Cancelled", col: "#e11d2a", lcol: "#ff6b6b", msg: "This flight has been cancelled. Please contact your airline for assistance." },
 };
 const CYCLE: GState[] = ["wait", "gate", "pre", "boarding", "final", "closed"];
-export const STYLE_NAME: Record<GStyle, string> = { mag: "Manchester · East Midlands · Stansted", krk: "Kraków (EN/PL)", lhr: "Heathrow (portrait)", lpa: "Gran Canaria (DE/EN/ES)" };
+export const STYLE_NAME: Record<GStyle, string> = { mag: "Manchester · East Midlands · Stansted", krk: "Kraków (EN/PL)", lhr: "Heathrow (portrait)", lpa: "Gran Canaria (DE/EN/ES)", spot: "Planespotting gate" };
 /** Gran Canaria gate screen: status bar wording and colour (cyan boarding bar as in the photo). */
 export const LPA_ST: Record<GState, [string, string]> = { wait: ["PLEASE WAIT", "#2a56b0"], gate: ["GATE OPEN", "#2fae4f"], pre: ["PRIORITY BOARDING", "#1fb8d6"], boarding: ["BOARDING", "#1fc0e0"], final: ["LAST CALL", "#ff3b1f"], closed: ["GATE CLOSED", "#a01c1c"], departed: ["DEPARTED", "#5b6472"], delayed: ["DELAYED", "#f29a00"], cancelled: ["CANCELLED", "#d11f2a"] };
 export const tzFor = (s: { style: GStyle; tz?: string }) => s.tz || (s.style === "krk" ? "Europe/Warsaw" : s.style === "lpa" ? "Atlantic/Canary" : "Europe/London");
@@ -73,6 +79,11 @@ export function GateScreen({ s }: { s: GSpec }) {
   const pl = s.lang === "pl" || (s.lang === "enpl" && alt);
   const L = ST[st]; const urgent = anim !== "none" && (st === "final" || st === "boarding" || st === "gate");
   const bg = BRAND[s.al] || "#0b2a6b"; const clock = new Date(now).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tzFor(s) });
+  if (s.style === "spot") return <SpotScreen s={s} st={st} clock={clock} urgent={urgent} />;
+  if (s.style === "mag" && s.idle) return <div className="gs gs-mag idle" role="img" aria-label={`Gate ${s.gate} Gate Closed`}>
+    <div className="gm-top"><b>{s.gate || "—"}</b><i><Dep /></i><em className="gm-acc" aria-label="Assistance"><Picto k="wheelchair" /></em></div>
+    <div className="gm-ban gm-neutral"><span className="gm-lock"><svg className="gm-arc" viewBox="0 0 48 40" aria-hidden="true"><path d="M3 31C12 14 28 6 45 6c-12 4-22 12-28 25z" fill="#fff" /><circle cx="40" cy="31" r="4" fill="#fff" opacity=".85" /></svg><span className="gm-lw"><b>{s.apt || "Manchester"}</b><i>Airport</i></span></span></div>
+    <div className="gm-idle">Gate Closed</div></div>;
   if (s.style === "mag") return <div className="gs gs-mag" role="img" aria-label={`Gate ${s.gate} ${s.num} ${s.dest} ${L.mag}`}>
     <div className="gm-top"><b>{s.gate || "—"}</b><i><Dep /></i></div>
     <div className="gm-ban" style={{ background: bg }}><Banner al={s.al} name={s.alName} cls="gm-logo" /></div>
@@ -104,7 +115,30 @@ export function GateScreen({ s }: { s: GSpec }) {
       <div className="gl-msg">{s.msg || L.msg}</div>
       <div className="gl-foot"><div className="gl-tick"><span className={anim === "none" ? "" : "run"}>{tick}</span></div><em>{clock}</em></div></div></div>;
 }
-export const DIM: Record<GStyle, [number, number]> = { mag: [640, 360], krk: [640, 360], lhr: [380, 720], lpa: [640, 580] };
+export const DIM: Record<GStyle, [number, number]> = { mag: [640, 360], krk: [640, 360], lhr: [380, 720], lpa: [640, 580], spot: [640, 400] };
+
+// ---------- Planespotting gate ----------
+const TYPE_ROW = (ac = "") => { const k = ac.toUpperCase().replace(/[^A-Z0-9]/g, ""); return TYPES.find(t => t[0] === k) || TYPES.find(t => k && t[1].replace(/[^A-Z0-9]/gi, "").toUpperCase() === k); };
+/** Everyday short-haul types at UK/EU airports; anything else (wide-bodies, classics, freighters, bizjets) is flagged as a rare visitor. */
+const COMMON_AC = /^(A31[89]|A32[01]|A2[01]N|A19N|B73[6-9]|B3[89]M|B37M|B738|B752|E1[79]0|E19[05]|E[27]5|E29\d|BCS[13]|AT[47]\d|DH8D|CRJ\d|SB20|DH8C)$/;
+export const rareNote = (ac?: string) => { const k = (ac || "").toUpperCase(); if (!k) return ""; if (/^(A38|B74|A34|AN12|AN22|B52|MD11|IL76|A3ST|BLCF|BELF)/.test(k)) return "RARE VISITOR"; if (/^(A3[35]|B7[678]|A35K)/.test(k)) return "WIDE-BODY"; return COMMON_AC.test(k) ? "" : "UNUSUAL TYPE"; };
+export const acName = (ac?: string) => { const t = TYPE_ROW(ac); return t ? `${t[2]} ${t[1]}` : ac || ""; };
+function SpotScreen({ s, st, clock, urgent }: { s: GSpec; st: GState; clock: string; urgent: boolean }) {
+  const t = TYPE_ROW(s.ac); const rare = s.rare ?? rareNote(s.ac); const cc = s.regc || (s.reg ? regCountry(s.reg) : ""); const L = ST[st]; const bg = BRAND[s.al] || "#2b3a55";
+  return <div className="gs gs-spot" role="img" aria-label={`Spotter gate ${s.gate}: ${s.num} ${s.dest}, ${acName(s.ac) || "aircraft not assigned yet"}${s.reg ? " " + s.reg : ""}, ${L.lhr}`}>
+    <div className="sp-top"><b className="sp-gate">{s.gate || "—"}</b><span className="sp-k">SPOTTER GATE</span><em>{clock}</em></div>
+    <div className="sp-main"><div className="sp-ac"><small>{t ? t[2].toUpperCase() : "AIRCRAFT"}</small><b>{t ? t[1] : s.ac || "Not assigned yet"}</b>
+      <div className="sp-reg">{s.reg ? <><span className="sp-mono">{s.reg}</span>{cc && <i>{flag(CC[cc] || "")} {cc}</i>}</> : <span className="sp-dim">Registration shows when the airline assigns the plane</span>}</div></div>
+      {rare ? <span className={"sp-badge" + (urgent || rare === "RARE VISITOR" ? " glow" : "")}>★ {rare}</span> : s.ac ? <span className="sp-badge reg">REGULAR</span> : null}</div>
+    <div className="sp-facts">{t ? <><span><small>FIRST FLEW</small>{t[3]}</span><span><small>SEATS</small>{t[4]}</span><span><small>RANGE</small>{t[5].toLocaleString("en-GB")} km</span></> : <span><small>TIP</small>Types are often confirmed 2–3 h before departure</span>}</div>
+    <div className="sp-fl" style={{ ["--al" as any]: bg }}><AirlineTile a={{ iata: s.al, name: s.alName || AL_NAMES[s.al] || s.al }} className="sp-logo" mode="colour" /><b>{spaced(s.num)}</b><span className="sp-dest">{s.dest}</span><span>{s.est && st === "delayed" ? s.est : s.time}</span>
+      <span className={"sp-st" + (urgent && st === "final" ? " pulse" : "")} style={{ background: L.col }}>{L.lhr}</span></div></div>;
+}
+/** Gate-area scene: wall with the big gate number, the screen on a post and the white desk with a black diagonal stripe (MAN-style gate). */
+export function GateScene({ s, children }: { s: GSpec; children: ReactNode }) {
+  return <div className="gsc"><b className="gsc-wall">{s.gate || "—"}</b><div className="gsc-scr">{children}</div><div className="gsc-desk"><i /></div><div className="gsc-floor" /></div>;
+}
+export const SCENE: [number, number] = [900, 760];
 
 export function FullScreen({ children, onClose, bg = "#05070c" }: { children: ReactNode; onClose: () => void; bg?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -114,28 +148,57 @@ export function FullScreen({ children, onClose, bg = "#05070c" }: { children: Re
 
 /** Live preview for a real flight (from a flight's detail or a board). Polls the origin's board for status / next-at-gate. */
 export function GatePreview({ f, x, studio }: { f: any; x?: ReactNode; studio?: (s: GSpec) => void }) {
-  const apt = f?.origin?.iata; const [style, setStyle] = useState<GStyle>(() => (location.hash.match(/[#&]gstyle=(mag|krk|lhr|lpa)/)?.[1] as GStyle) || styleFor(apt));
+  const apt = f?.origin?.iata; const [style, setStyle] = useState<GStyle>(() => (location.hash.match(/[#&]gstyle=(mag|krk|lhr|lpa|spot)/)?.[1] as GStyle) || styleFor(apt));
+  const [scene, setScene] = useState(false); const [msg, setMsg] = useState(""); const shot = useRef<HTMLDivElement>(null); const spot = useSpot(f, style === "spot");
   const [board, setBoard] = useState<any[] | null>(null); const [cur, setCur] = useState(f); const [anim, setAnim] = useState<"live" | "cycle" | "none">("live"); const [full, setFull] = useState(false); const [src, setSrc] = useState("");
-  useEffect(() => { if (!apt) return; let dead = false; const go = () => api(`/board/${apt}?dir=dep&date=${(f.dep?.scheduled || "").slice(0, 10) || today()}`).then(d => { if (dead) return; const L = d?.flights || []; setBoard(L); setSrc(d?.source || ""); const m = L.find((y: any) => y.id === f.id || String(y.number).replace(/\s/g, "") === String(f.number).replace(/\s/g, "")); if (m) setCur(m); }).catch(() => {}); go(); const t = setInterval(go, 60e3); return () => { dead = true; clearInterval(t); }; }, [apt, f.id]);
-  const spec = { ...specFromFlight(cur, style, board || undefined), anim }; const [w, h] = DIM[style];
+  useEffect(() => { if (!apt) return; let dead = false; const day = (f.dep?.scheduled || "").slice(0, 10) || today(); const go = () => api(`/board/${apt}?dir=dep&date=${day}`).then(d => withKtw(apt, "dep", day, d)).then(d => { if (dead) return; const L = d?.flights || []; setBoard(L); setSrc(d?.source || ""); const m = L.find((y: any) => y.id === f.id || String(y.number).replace(/\s/g, "") === String(f.number).replace(/\s/g, "")); if (m) setCur(m); }).catch(() => {}); go(); const t = setInterval(go, 60e3); return () => { dead = true; clearInterval(t); }; }, [apt, f.id]);
+  const spec: GSpec = { ...specFromFlight(cur, style, board || undefined), anim, ...(style === "spot" ? spot : {}) }; const [w0, h0] = DIM[style]; const sc = scene && style !== "lhr"; const [w, h] = sc ? SCENE : [w0, h0];
+  const screen = sc ? <GateScene s={spec}><Fit w={w0} h={h0}><GateScreen s={spec} /></Fit></GateScene> : <GateScreen s={spec} />;
   return <div className="fd gp"><div className="head"><div><span className="tag">GATE SCREEN</span><h1 className="h1s">{spec.num} · {spec.dest}</h1><div className="muted sm">{spec.gate ? `Gate ${spec.gate}` : "Gate not announced yet"} · {ST[spec.st].lhr} · {apt}</div></div>{x}</div>
     <div className="px"><div className="gp-seg" role="tablist">{GSTYLES.map(k => <button key={k} role="tab" aria-selected={style === k} className={style === k ? "on" : ""} onClick={() => setStyle(k)}>{GLABEL[k]}</button>)}</div>
-      <div className={"gp-stage " + style} onClick={() => setFull(true)}><Fit w={w} h={h}><GateScreen s={spec} /></Fit></div>
+      <div ref={shot} className={"gp-stage " + style + (sc ? " scene" : "")} onClick={() => setFull(true)}><Fit w={w} h={h}>{screen}</Fit></div>
       <div className="gp-ctl"><div className="gp-seg sm">{([["live", "Live"], ["cycle", "Simulate boarding"], ["none", "Still"]] as const).map(([k, l]) => <button key={k} className={anim === k ? "on" : ""} onClick={() => setAnim(k)}>{l}</button>)}</div>
-        <button className="gp-btn pri" onClick={() => setFull(true)}>⛶ Fullscreen</button>{studio && <button className="gp-btn" onClick={() => studio(spec)}>Edit in Gate studio</button>}</div>
-      <p className="faint xs mt8">A fun recreation of {style === "mag" ? "Manchester / East Midlands / Stansted" : style === "krk" ? "Kraków" : style === "lpa" ? "Gran Canaria" : "Heathrow"}-style gate screens, not an official display. {anim === "cycle" ? "Simulate boarding cycles through the boarding stages; it is not the real status." : `Status, gate and time come from the live board${src ? " (" + src + ")" : ""}${spec.next ? "; the next-flight line is the next departure listed for the same gate" : ""}. Refreshes every minute.`}{!spec.gate && " The gate shows “—” until the airport publishes it."}</p></div>
-    {full && <FullScreen onClose={() => setFull(false)}><Fit w={w} h={h} max={4}><GateScreen s={spec} /></Fit></FullScreen>}</div>;
+        <button className="gp-btn pri" onClick={() => setFull(true)}>⛶ Fullscreen</button>{style !== "lhr" && <button className={"gp-btn" + (scene ? " on" : "")} aria-pressed={scene} onClick={() => setScene(v => !v)}>🚪 Gate scene</button>}
+        <button className="gp-btn" onClick={async () => setMsg(await saveImage(shot.current?.querySelector(".gs-fit-in > div") as HTMLElement, `${spec.num} gate screen`))}>📷 Save image</button>{studio && <button className="gp-btn" onClick={() => studio(spec)}>Edit in Gate studio</button>}{msg && <span className="faint xs">{msg}</span>}</div>
+      {style === "spot" && <p className="faint xs mt8">{spot.reg ? `Aircraft ${spot.reg}${spot.ac ? " (" + spot.ac + ")" : ""} from Skyline's live aircraft lookup.` : spot.ac ? `The airline hasn't assigned the plane yet; ${spot.ac} is the type this flight usually uses.` : spot.loading ? "Looking up the aircraft…" : "No aircraft assigned yet. Airlines usually assign it 2–3 hours before departure."} Rare-visitor badges are a fun guess from the aircraft type.</p>}
+      <p className="faint xs mt8">{style === "spot" ? "A planespotting gate screen made for Skyline, not an official display." : <>A fun recreation of {style === "mag" ? "Manchester / East Midlands / Stansted" : style === "krk" ? "Kraków" : style === "lpa" ? "Gran Canaria" : "Heathrow"}-style gate screens, not an official display.</>} {anim === "cycle" ? "Simulate boarding cycles through the boarding stages; it is not the real status." : `Status, gate and time come from the live board${src ? " (" + src + ")" : ""}${spec.next ? "; the next-flight line is the next departure listed for the same gate" : ""}. Refreshes every minute.`}{!spec.gate && " The gate shows “—” until the airport publishes it."}</p></div>
+    {full && <FullScreen onClose={() => setFull(false)}><Fit w={w} h={h} max={4}>{screen}</Fit></FullScreen>}</div>;
+}
+/** Spotter data for a live flight: assigned aircraft (or the usual type) from /plane-card, then registration details. Fetched only for the Spotter style. */
+function useSpot(f: any, on: boolean) {
+  const [v, setV] = useState<{ ac?: string; reg?: string; regc?: string; loading?: boolean }>({});
+  useEffect(() => { if (!on || !f?.number) return; let dead = false; setV({ loading: true });
+    const ac0 = f.aircraft?.type || f.aircraft?.model || "";
+    api(`/plane-card?number=${encodeURIComponent(f.number)}&date=${f.date || (f.dep?.scheduled || "").slice(0, 10) || today()}&o=${f.origin?.iata || ""}&d=${f.destination?.iata || ""}`).then(async c => {
+      if (dead) return; const reg = c?.reg || f.aircraft?.reg || ""; let ac = c?.type || ac0 || c?.typicalType || ""; let regc = "";
+      if (reg) { const a = await api(`/aircraft/${encodeURIComponent(reg)}`).catch(() => null); ac = a?.info?.icao_type || a?.live?.type || ac; regc = a?.info?.registered_owner_country_name || ""; }
+      if (!dead) setV({ ac, reg, regc }); }).catch(() => { if (!dead) setV({ ac: ac0 }); });
+    return () => { dead = true; }; }, [on, f?.number]);
+  return v;
 }
 
-/** Gate screens for every upcoming departure on a board that has a gate (opened from the board header). */
+/** Gate screens for every upcoming departure on a board that has a gate (opened from the board header). Manchester-style walls can also
+ *  show the gates with no flight right now as "Gate Closed" screens, and any wall can run as a fullscreen kiosk. */
+const natural = (a: string, b: string) => a.localeCompare(b, "en", { numeric: true });
 export function GateWall({ iata, x, open }: { iata: string; x?: ReactNode; open: (f: any) => void }) {
-  const [d, setD] = useState<any>(null); useEffect(() => { api(`/board/${iata}?dir=dep&date=${today()}`).then(setD).catch(e => setD({ error: e.message })); }, [iata]);
-  const style = styleFor(iata); const L = (d?.flights || []).filter((f: any) => !f.liveOnly && !["departed", "cancelled"].includes(stateOf(f)) && (gateOf(f) || style === "krk")).slice(0, 24);
-  const [w, h] = DIM[style];
-  return <div className="fd gp"><div className="head"><div><span className="tag">GATE SCREENS</span><h1 className="h1s">{iata} gates now</h1><div className="muted sm">Live departures{style === "krk" ? "" : " with a gate"} · tap one to open</div></div>{x}</div>
-    <div className="px">{!d ? <p className="muted">Loading live board…</p> : d.error ? <p className="bad">{d.error}</p> : !L.length ? <p className="muted">No upcoming departures with a published gate right now.</p> :
-      <div className={"gw-grid " + style}>{L.map((f: any) => <button key={f.id} className="gw-it" onClick={() => open(f)}><Fit w={w} h={h}><GateScreen s={{ ...specFromFlight(f, style, d.flights), anim: "live" }} /></Fit></button>)}</div>}
-      <p className="faint xs mt8">Recreations for fun from the live board{d?.source ? " (" + d.source + ")" : ""}, not official displays.</p></div></div>;
+  const [d, setD] = useState<any>(null); const day = today();
+  useEffect(() => { let dead = false; const go = () => api(`/board/${iata}?dir=dep&date=${day}`).then(r => withKtw(iata, "dep", day, r)).then(r => !dead && setD(r)).catch(e => !dead && setD((p: any) => p && !p.error ? p : { error: e.message })); go(); const t = setInterval(go, 90e3); return () => { dead = true; clearInterval(t); }; }, [iata]);
+  const [style, setStyle0] = useState<GStyle>(() => (localStorage.getItem("sk.gw.style." + iata) as GStyle) || styleFor(iata)); const setStyle = (k: GStyle) => { setStyle0(k); localStorage.setItem("sk.gw.style." + iata, k); };
+  const [idle, setIdle] = useState(true); const [kiosk, setKiosk] = useState(false); const loose = style === "krk" || iata === "KTW";
+  const L = (d?.flights || []).filter((f: any) => !f.liveOnly && !["departed", "cancelled"].includes(stateOf(f)) && (gateOf(f) || loose)).slice(0, 24);
+  // Gates seen on today's board with nothing boarding in the next 3 hours → idle "Gate Closed" screens (Manchester style only).
+  const idleGates = useMemo(() => { if (style !== "mag") return []; const busy = new Set(L.filter((f: any) => +new Date(f.dep?.estimated || f.dep?.scheduled) < Date.now() + 3 * 3600e3).map(gateOf));
+    return [...new Set((d?.flights || []).map(gateOf).filter(Boolean) as string[])].filter(g => !busy.has(g)).sort(natural).slice(0, 18); }, [d, style]);
+  const sty = style === "spot" ? "mag" : style; const [w, h] = DIM[sty];
+  const specs = [...L.map((f: any) => ({ key: f.id, label: `${spaced(f.number)} · ${f.destination?.city || ""}${gateOf(f) ? " · Gate " + gateOf(f) : ""}`, s: { ...specFromFlight(f, sty, d.flights), anim: "live" } as GSpec, f })),
+    ...(idle ? idleGates.map(g => ({ key: "idle" + g, label: `Gate ${g} · not in use`, s: { ...DEFAULT_GATE, gate: g, idle: true, anim: "none", apt: iata === "STN" ? "London Stansted" : iata === "EMA" ? "East Midlands" : iata === "MAN" ? "Manchester" : d?.airport?.city || iata } as GSpec, f: null })) : [])];
+  return <div className="fd gp"><div className="head"><div><span className="tag">GATE SCREENS</span><h1 className="h1s">{iata} gates now</h1><div className="muted sm">Live departures{loose ? "" : " with a gate"} · tap one to open</div></div>{x}</div>
+    <div className="px"><div className="gp-seg" role="tablist">{GSTYLES.filter(k => k !== "spot").map(k => <button key={k} role="tab" aria-selected={style === k} className={style === k ? "on" : ""} onClick={() => setStyle(k)}>{GLABEL[k]}</button>)}</div>
+      <div className="gp-ctl">{specs.length > 0 && <button className="gp-btn pri" onClick={() => setKiosk(true)}>▶ Kiosk mode</button>}{style === "mag" && <button className={"gp-btn" + (idle ? " on" : "")} aria-pressed={idle} onClick={() => setIdle(v => !v)}>Closed gates {idle ? "on" : "off"}</button>}</div>
+      {!d ? <p className="muted">Loading live board…</p> : d.error ? <p className="bad">{d.error}</p> : !specs.length ? <p className="muted">No upcoming departures with a published gate right now.</p> :
+      <div className={"gw-grid " + sty}>{specs.map(x => <button key={x.key} className={"gw-it" + (x.f ? "" : " idle")} onClick={() => x.f ? open(x.f) : setKiosk(true)} aria-label={x.label}><Fit w={w} h={h}><GateScreen s={x.s} /></Fit></button>)}</div>}
+      <p className="faint xs mt8">Recreations for fun from the live board{d?.source ? " (" + d.source + ")" : ""}, not official displays.{style === "mag" && idle && idleGates.length ? " “Gate Closed” screens are gates listed on today's board with no departure in the next 3 hours." : ""} Kiosk mode shows each screen fullscreen for 8 seconds, like a gate-area display.</p></div>
+    {kiosk && <Kiosk items={specs.map(x => ({ key: x.key, label: x.label, node: <Fit w={w} h={h} max={4}><GateScreen s={x.s} /></Fit> }))} onClose={() => setKiosk(false)} />}</div>;
 }
 
 // ---------- Games ----------
@@ -146,6 +209,8 @@ export const PRESETS: { n: string; s: GSpec }[] = [
   { n: "Manchester style", s: DEFAULT_GATE },
   { n: "Kraków style", s: { style: "krk", gate: "17", al: "FR", num: "FR2616", dest: "Eilat (Ovda)", destPl: "Ejlat (Ovda)", time: "07:50", st: "wait", lang: "enpl", next: "EZY 1872 MANCHESTER 10:55", nextPl: "EZY 1872 MANCHESTER 10:55", anim: "live", tz: "Europe/Warsaw" } },
   { n: "Heathrow style", s: { style: "lhr", gate: "B32", al: "BA", num: "BA109", dest: "Dubai", time: "21:25", st: "pre", lang: "en", anim: "live" } },
+  { n: "Manchester gate closed", s: { style: "mag", gate: "A6", al: "", num: "", dest: "", time: "", st: "closed", idle: true, scene: true, lang: "en", anim: "none" } },
+  { n: "Planespotting gate", s: { style: "spot", gate: "B32", al: "EK", num: "EK18", dest: "Dubai", time: "14:05", st: "boarding", ac: "A388", reg: "A6-EOE", lang: "en", anim: "live" } },
   { n: "Gran Canaria style", s: { style: "lpa", gate: "C06", al: "VY", num: "VLG3275", dest: "Bilbao", time: "06:45", st: "boarding", co: "IB 5427   BILBAO", msg: "**** PIO PIO ****", lang: "en", anim: "live", tz: "Atlantic/Canary" } },
 ];
 const alList = () => [...LOGOS].map(k => [k, AL_NAMES[k] || k] as const).sort((a, b) => a[1].localeCompare(b[1]));
@@ -157,14 +222,20 @@ export function GateStudio({ init }: { init?: GSpec }) {
   const link = () => `${location.origin}/#games=gate&g=${enc(s)}`;
   const share = async () => { const u = link(); try { if (navigator.share) await navigator.share({ url: u, title: `${s.num} gate screen` }); else { await navigator.clipboard.writeText(u); setMsg("Link copied"); } } catch { try { await navigator.clipboard.writeText(u); setMsg("Link copied"); } catch { setMsg(u); } } history.replaceState(null, "", `#games=gate&g=${enc(s)}`); };
   const save = () => { const n = [{ n: `${s.num} ${s.dest}`, s }, ...saved.filter(x => x.n !== `${s.num} ${s.dest}`)].slice(0, 20); setSaved(n); localStorage.setItem("sk.games.gates", JSON.stringify(n)); setMsg("Saved on this device"); };
-  const [w, h] = DIM[s.style]; const AL = useMemo(alList, []);
+  const [w0, h0] = DIM[s.style]; const AL = useMemo(alList, []); const sc = !!s.scene && s.style !== "lhr"; const [w, h] = sc ? SCENE : [w0, h0]; const shot = useRef<HTMLDivElement>(null);
+  const screen = sc ? <GateScene s={s}><Fit w={w0} h={h0}><GateScreen s={s} /></Fit></GateScene> : <GateScreen s={s} />;
   const F = (l: string, el: ReactNode) => <label className="gsx-f"><span>{l}</span>{el}</label>;
-  return <div className="gsx"><div className={"gp-stage " + s.style} onClick={() => setFull(true)}><Fit w={w} h={h}><GateScreen s={s} /></Fit></div>
-    <div className="gp-ctl"><button className="gp-btn pri" onClick={() => setFull(true)}>⛶ Fullscreen</button><button className="gp-btn" onClick={share}>Share link</button><button className="gp-btn" onClick={save}>Save</button>{msg && <span className="faint xs">{msg}</span>}</div>
+  return <div className="gsx"><div ref={shot} className={"gp-stage " + s.style + (sc ? " scene" : "")} onClick={() => setFull(true)}><Fit w={w} h={h}>{screen}</Fit></div>
+    <div className="gp-ctl"><button className="gp-btn pri" onClick={() => setFull(true)}>⛶ Fullscreen</button><button className="gp-btn" onClick={share}>Share link</button><button className="gp-btn" onClick={save}>Save</button><button className="gp-btn" onClick={async () => setMsg(await saveImage(shot.current?.querySelector(".gs-fit-in > div") as HTMLElement, `Gate ${s.gate} screen`))}>📷 Image</button>{msg && <span className="faint xs">{msg}</span>}</div>
     <div className="gsx-pre">{PRESETS.map(p => <button key={p.n} onClick={() => setS0(p.s)}>{p.n}</button>)}</div>
     <div className="gsx-grid">
       {F("Design", <div className="gp-seg sm">{GSTYLES.map(k => <button key={k} className={s.style === k ? "on" : ""} onClick={() => setS({ style: k, lang: k === "krk" ? "enpl" : "en" })}>{k === "mag" ? "MAN·EMA·STN" : GLABEL[k]}</button>)}</div>)}
+      {s.style !== "lhr" && F("Gate area", <div className="gp-seg sm"><button className={!s.scene ? "on" : ""} onClick={() => setS({ scene: false })}>Screen only</button><button className={s.scene ? "on" : ""} onClick={() => setS({ scene: true })}>Gate scene (desk + wall)</button></div>)}
+      {s.style === "mag" && F("Gate in use?", <div className="gp-seg sm"><button className={!s.idle ? "on" : ""} onClick={() => setS({ idle: false, al: s.al || "DY", num: s.num || "D84470", dest: s.dest || "Stockholm", time: s.time || "20:05" })}>Flight at gate</button><button className={s.idle ? "on" : ""} onClick={() => setS({ idle: true })}>Not in use · Gate Closed</button></div>)}
       {F("Gate", <input value={s.gate} maxLength={5} onChange={e => setS({ gate: e.target.value.toUpperCase() })} />)}
+      {s.style === "mag" && s.idle && F("Airport name on the blue band", <input value={s.apt || ""} maxLength={20} placeholder="Manchester" onChange={e => setS({ apt: e.target.value || undefined })} />)}
+      {s.style === "spot" && F("Aircraft type (ICAO code)", <input value={s.ac || ""} maxLength={5} placeholder="A388" onChange={e => setS({ ac: e.target.value.toUpperCase() || undefined })} />)}
+      {s.style === "spot" && F("Registration", <input value={s.reg || ""} maxLength={9} placeholder="A6-EOE" onChange={e => setS({ reg: e.target.value.toUpperCase() || undefined })} />)}
       {F("Airline", <select value={s.al} onChange={e => setS({ al: e.target.value, alName: AL_NAMES[e.target.value] })}>{AL.map(([k, n]) => <option key={k} value={k}>{n} ({k})</option>)}</select>)}
       {F("Flight", <input value={s.num} maxLength={8} onChange={e => setS({ num: e.target.value.toUpperCase() })} />)}
       {F("Destination", <input value={s.dest} maxLength={24} onChange={e => setS({ dest: e.target.value })} />)}
@@ -178,12 +249,12 @@ export function GateStudio({ init }: { init?: GSpec }) {
       {F("Animation", <div className="gp-seg sm">{([["live", "Animated"], ["cycle", "Boarding sequence"], ["none", "Still"]] as const).map(([k, l]) => <button key={k} className={(s.anim || "live") === k ? "on" : ""} onClick={() => setS({ anim: k })}>{l}</button>)}</div>)}
     </div>
     {saved.length > 0 && <><h3 className="gsx-h">Saved screens</h3><div className="gsx-saved">{saved.map(x => <button key={x.n} onClick={() => setS0(x.s)}>{x.n}<small>{x.s.style.toUpperCase()}</small></button>)}</div></>}
-    {full && <FullScreen onClose={() => setFull(false)}><Fit w={w} h={h} max={4}><GateScreen s={s} /></Fit></FullScreen>}</div>;
+    {full && <FullScreen onClose={() => setFull(false)}><Fit w={w} h={h} max={4}>{screen}</Fit></FullScreen>}</div>;
 }
 
 // Board studio: user-built rows rendered by the real TerminalBoard themes (Kraków, split-flap, MAG, Heathrow, …).
 type BRow = { t: string; dest: string; al: string; num: string; gate: string; st: string; est?: string; via?: string };
-const BST = ["Scheduled", "Wait in lounge", "Go to gate", "Boarding", "Final call", "Gate closed", "Delayed", "Departed", "Cancelled", "Gate open", "New gate", "Gate displayed at"];
+const BST = ["Scheduled", "Wait in lounge", "Go to gate", "Boarding", "Final call", "Gate closed", "Delayed", "Departed", "Cancelled", "Gate open", "New gate", "Gate displayed at", "Check-in"];
 export type BSpec = { name: string; theme: string; dir: string; anim: boolean; rows: BRow[]; sign?: boolean; dual?: boolean; foot?: string };
 export const BDEF: BSpec = { name: "My board", theme: "krk", dir: "dep", anim: true, rows: [
   { t: "07:50", dest: "Eilat", al: "FR", num: "FR2616", gate: "17", st: "Wait in lounge" }, { t: "08:15", dest: "Manchester", al: "U2", num: "EZY1872", gate: "18", st: "Scheduled" },
@@ -210,6 +281,16 @@ export const BPRESETS: { n: string; b: BSpec }[] = [
     { t: "12:55", dest: "Stockholm", al: "D8", num: "D85706", gate: "", st: "Gate displayed at", est: "11:45" },
     { t: "12:55", dest: "Bournemouth", al: "LS", num: "LS3644", gate: "D35", st: "Go to gate" },
     { t: "13:00", dest: "E.Midlands", al: "LS", num: "LS670", gate: "D25", st: "Go to gate" }] } },
+  { n: "Katowice (sample)", b: { name: "Katowice", theme: "ktw", dir: "dep", anim: true, rows: [
+    { t: "06:00", dest: "London Luton", al: "W6", num: "W61005", gate: "2", st: "Departed", est: "06:08" },
+    { t: "06:25", dest: "Warsaw", al: "LO", num: "LO3884", gate: "5", st: "Departed", est: "06:31" },
+    { t: "09:40", dest: "London Stansted", al: "FR", num: "FR2472", gate: "4", st: "Boarding" },
+    { t: "10:15", dest: "Dortmund", al: "W6", num: "W61093", gate: "1", st: "Boarding" },
+    { t: "11:05", dest: "Malaga", al: "FR", num: "FR7012", gate: "6", st: "Check-in" },
+    { t: "11:30", dest: "Barcelona", al: "W6", num: "W61175", gate: "", st: "Check-in" },
+    { t: "12:10", dest: "Larnaca", al: "W6", num: "W61251", gate: "", st: "Scheduled" },
+    { t: "13:20", dest: "Lanzarote", al: "E4", num: "E45017", gate: "", st: "Scheduled" },
+    { t: "14:05", dest: "Paphos", al: "FR", num: "FR6393", gate: "", st: "Delayed", est: "14:45" }] } },
   { n: "Fraport Greece (photo)", b: { name: "Fraport Greece", theme: "fgr", dir: "dep", anim: true, rows: [
     { t: "09:40", dest: "Tel Aviv", al: "W6", num: "W67502", gate: "01", st: "Delayed", est: "11:00" },
     { t: "09:45", dest: "Athens", al: "A3", num: "A3203", gate: "05", st: "Final call" },
@@ -226,7 +307,7 @@ export const BPRESETS: { n: string; b: BSpec }[] = [
 /** Minutes the zone is ahead of UTC right now. */
 export const tzOff = (tz: string, at = Date.now()) => { const p = (z: string) => Date.parse(new Date(at).toLocaleString("en-US", { timeZone: z })); return Math.round((p(tz) - p("UTC")) / 60e3); };
 /** Board studio clock zone: Polish board styles run on Kraków time, every other style on UK time. */
-const TZ: Record<string, string> = { krk: "Europe/Warsaw", waw: "Europe/Warsaw", fra: "Europe/Berlin", muc: "Europe/Berlin", ber: "Europe/Berlin", ger: "Europe/Berlin", zrh: "Europe/Zurich", vie: "Europe/Vienna", prg: "Europe/Prague", ams: "Europe/Amsterdam", cdg: "Europe/Paris", bud: "Europe/Budapest", aena: "Europe/Madrid", mad: "Europe/Madrid", pmi: "Europe/Madrid", swedavia: "Europe/Stockholm", cph: "Europe/Copenhagen", bru: "Europe/Brussels", ita: "Europe/Rome", adria: "Europe/Zagreb", otp: "Europe/Bucharest", fgr: "Europe/Athens", lpa: "Atlantic/Canary", finavia: "Europe/Helsinki", avinor: "Europe/Oslo", ana: "Europe/Lisbon", lis: "Europe/Lisbon", daa: "Europe/Dublin", kef: "Atlantic/Reykjavik", syd: "Australia/Sydney", tr: "Europe/Istanbul" };
+const TZ: Record<string, string> = { krk: "Europe/Warsaw", ktw: "Europe/Warsaw", waw: "Europe/Warsaw", fra: "Europe/Berlin", muc: "Europe/Berlin", ber: "Europe/Berlin", ger: "Europe/Berlin", zrh: "Europe/Zurich", vie: "Europe/Vienna", prg: "Europe/Prague", ams: "Europe/Amsterdam", cdg: "Europe/Paris", bud: "Europe/Budapest", aena: "Europe/Madrid", mad: "Europe/Madrid", pmi: "Europe/Madrid", swedavia: "Europe/Stockholm", cph: "Europe/Copenhagen", bru: "Europe/Brussels", ita: "Europe/Rome", adria: "Europe/Zagreb", otp: "Europe/Bucharest", fgr: "Europe/Athens", lpa: "Atlantic/Canary", finavia: "Europe/Helsinki", avinor: "Europe/Oslo", ana: "Europe/Lisbon", lis: "Europe/Lisbon", daa: "Europe/Dublin", kef: "Atlantic/Reykjavik", syd: "Australia/Sydney", tr: "Europe/Istanbul" };
 /** Board studio clock zone = the local time of the airport whose style is picked (UK styles → Europe/London). */
 export const boardTz = (theme: string) => TZ[theme] || "Europe/London";
 /** "HH:MM" typed as local time in tz → next occurrence as a UTC ISO string. */
@@ -238,12 +319,12 @@ export function boardData(b: BSpec, step = 0) {
   // Keep the rows in the order typed even when the clock passes them: every row is placed on the day that keeps it within 12h after the row above.
   let prev = 0; const day = 864e5;
   const near = (x: string, ref: number) => { let v = +new Date(x); while (v < ref - day / 2) v += day; while (v > ref + day / 2) v -= day; return new Date(v).toISOString(); };
-  const flights = b.rows.map((r, i) => { const s = b.anim && step ? BST[(BST.indexOf(r.st) + (i % 3 === step % 3 ? 1 : 0)) % 7] : r.st; let tm = +new Date(iso(r.t, tz));
+  const flights = b.rows.map((r, i) => { const s = b.anim && step && BST.indexOf(r.st) < 7 ? BST[(BST.indexOf(r.st) + (i % 3 === step % 3 ? 1 : 0)) % 7] : r.st; let tm = +new Date(iso(r.t, tz));
     if (i) { while (tm < prev - day / 2) tm += day; while (tm > prev + day / 2) tm -= day; } prev = tm; const t = new Date(tm).toISOString();
     const side = { scheduled: t, estimated: s === "Delayed" && r.est ? near(iso(r.est, tz), tm) : t, gate: r.gate || undefined };
     const ap = { iata: "", city: r.dest, tz }; const home = { iata: "XXX", city: b.name, tz };
     return { id: "c" + i + r.num, number: r.num, airline: { iata: r.al, name: AL_NAMES[r.al] || r.al }, origin: b.dir === "dep" ? home : ap, destination: b.dir === "dep" ? ap : home, dep: b.dir === "dep" ? side : {}, arr: b.dir === "arr" ? side : {},
-      ...(s === "New gate" ? { remark: { txt: "New gate", k: "warn" } } : s === "Gate displayed at" ? { remark: { txt: "Gate displayed at" + (r.est ? " " + r.est : ""), k: "info" } } : {}), via: r.via || "",
+      ...(s === "Check-in" ? { remark: { txt: "Check-in", k: "" } } : s === "Departed" && r.est ? { remark: { txt: "Departed " + r.est, k: "dim" } } : s === "New gate" ? { remark: { txt: "New gate", k: "warn" } } : s === "Gate displayed at" ? { remark: { txt: "Gate displayed at" + (r.est ? " " + r.est : ""), k: "info" } } : {}), via: r.via || "",
       statusText: s === "Scheduled" ? "" : s, status: s === "Cancelled" ? "cancelled" : s === "Departed" ? (b.dir === "dep" ? "departed" : "landed") : s === "Delayed" ? "delayed" : "scheduled", localName: r.dest.toUpperCase() }; });
   return { airport: { name: b.name, tz, country: "" }, flights, source: "Made in Skyline Games", ...(b.foot != null ? { footer: b.foot } : {}) };
 }
@@ -268,12 +349,17 @@ export function BoardStudio() {
   const [saved, setSaved] = useState<any[]>(() => JSON.parse(localStorage.getItem("sk.games.boards") || "[]"));
   const save = () => { const n = [b, ...saved.filter(x => x.name !== b.name)].slice(0, 20); setSaved(n); localStorage.setItem("sk.games.boards", JSON.stringify(n)); setMsg("Saved on this device"); };
   const share = async () => { const u = `${location.origin}/#games=board&b=${enc(b)}`; try { await navigator.clipboard.writeText(u); setMsg("Link copied"); } catch { setMsg(u); } };
+  const prevRef = useRef<HTMLDivElement>(null);
+  const ktwLive = async () => { setMsg("Collecting today's Katowice flights…"); const fl = await ktwFlights(b.dir, today()).catch(() => []); if (!fl.length) { setB0(JSON.parse(JSON.stringify(BPRESETS.find(p => p.b.theme === "ktw")!.b))); setMsg("No live Katowice flights found right now, so here's a sample board"); return; }
+    const tz = "Europe/Warsaw"; const rows: BRow[] = fl.slice(0, 18).map((f: any) => { const t = b.dir === "dep" ? f.dep : f.arr; const done = b.dir === "dep" ? !!t.actual : !!t.actual; const late = t.estimated && t.estimated !== t.scheduled;
+      return { t: fmtT(t.scheduled, tz), dest: (b.dir === "dep" ? f.destination?.city : f.origin?.city) || "", al: f.airline?.iata || "", num: f.number, gate: "", st: f.status === "cancelled" ? "Cancelled" : done ? "Departed" : late ? "Delayed" : "Scheduled", ...(done ? { est: fmtT(t.actual, tz) } : late ? { est: fmtT(t.estimated, tz) } : {}) }; });
+    setB0({ name: "Katowice", theme: "ktw", dir: b.dir, anim: false, rows }); setMsg(`${rows.length} real flights · Katowice times estimated from flight length`); };
   const themes = Object.entries(THEMES).map(([k, v]) => [k, v.name] as const);
   const one = (k: string, cd: any) => <div className="bs-board" key={k} style={{ width: BW, height: BH }}><TerminalBoard key={b.theme + b.dir + k} iata="XXX" dir={b.dir} date={today()} onClose={() => {}} custom={cd} theme0={b.theme} inline dw={BW} /></div>;
-  return <div className="gsx"><div className={"bs-prev" + (lpa ? " lpa" : "")} style={{ aspectRatio: `${TW}/${TH}` }}><Fit w={TW} h={TH} max={2}><div className="bs-compose" style={{ width: TW, height: TH }}>{signH > 0 && <div className="bs-sign" style={{ height: signH }}><LpaSign dir={b.dir} /></div>}
+  return <div className="gsx"><div ref={prevRef} className={"bs-prev" + (lpa ? " lpa" : "")} style={{ aspectRatio: `${TW}/${TH}` }}><Fit w={TW} h={TH} max={2}><div className="bs-compose" style={{ width: TW, height: TH }}>{signH > 0 && <div className="bs-sign" style={{ height: signH }}><LpaSign dir={b.dir} /></div>}
       <div className="bs-screens">{one("a", dataA)}{dual && one("b", dataB)}</div></div></Fit></div>
-    <div className="gp-ctl"><button className="gp-btn pri" onClick={() => setFull(true)}>⛶ Fullscreen</button><button className="gp-btn" onClick={save}>Save</button><button className="gp-btn" onClick={share}>Share link</button>{msg && <span className="faint xs">{msg}</span>}</div>
-    <div className="gsx-pre">{BPRESETS.map(p => <button key={p.n} onClick={() => setB0(JSON.parse(JSON.stringify(p.b)))}>{p.n}</button>)}<button onClick={() => setB0(BDEF)}>Kraków sample</button></div>
+    <div className="gp-ctl"><button className="gp-btn pri" onClick={() => setFull(true)}>⛶ Fullscreen</button><button className="gp-btn" onClick={save}>Save</button><button className="gp-btn" onClick={share}>Share link</button><button className="gp-btn" onClick={async () => setMsg(await saveImage(prevRef.current?.querySelector(".bs-compose") as HTMLElement, b.name + " board"))}>📷 Image</button>{msg && <span className="faint xs">{msg}</span>}</div>
+    <div className="gsx-pre"><button onClick={ktwLive}>✈ Katowice · today's real flights</button>{BPRESETS.map(p => <button key={p.n} onClick={() => setB0(JSON.parse(JSON.stringify(p.b)))}>{p.n}</button>)}<button onClick={() => setB0(BDEF)}>Kraków sample</button></div>
     <div className="gsx-grid">
       <label className="gsx-f"><span>Board name</span><input value={b.name} maxLength={40} onChange={e => setB({ name: e.target.value })} /></label>
       <label className="gsx-f"><span>Style</span><select value={b.theme} onChange={e => setB({ theme: e.target.value })}>{themes.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></label>

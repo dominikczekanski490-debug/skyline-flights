@@ -723,3 +723,18 @@ html,body{overflow-x:hidden;overscroll-behavior-x:none}
 .tb-lpa .tb-st.ok,.tb-lpa .tb-st.blink.ok{color:#7ed957}
 .tb-lpa .tb-st.warn{color:#fff}.tb-lpa .tb-st.info{color:#e6f3ff}
 .tb-lpa .tb-g[data-z="C"]{background:#6cc23a}
+/* Katowice departures board recreation (style reference only: blue title bar, yellow column strip, black rows, white caps). */
+.tb-ktw{--bg:#000;--fg:#fff;--ok:#38e07b;--warn:#ffd21f;--bad:#ff4040;background:#000;font-family:"Helvetica Neue",Arial,sans-serif}
+.tb-ktw .tb-top{background:linear-gradient(180deg,#2a63d6,#1b49b3);padding:8px 16px;border-bottom:0;align-items:center}
+.tb-ktw .tb-title{display:flex;align-items:center;gap:12px}.tb-ktw .tb-mark{width:36px;height:36px;display:inline-flex;flex:none}
+.tb-ktw .tb-title b{color:#fff;font-size:30px;font-weight:700;letter-spacing:2px;animation:ktwSwap .5s ease}.tb-ktw .tb-ap{display:none}
+.tb-ktw .tb-clock{color:#fff;font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;margin-left:auto}
+.tb-ktw .tb-head{background:#ffcc00;color:#000;font-weight:800;font-size:13px;letter-spacing:1px;opacity:1;text-transform:uppercase}
+.tb-ktw .tb-row{background:#000;border-bottom:2px solid #1d1d1d;color:#fff;text-transform:uppercase;font-weight:700;font-size:calc(var(--rh,40px)*.42);animation:ktwRoll .45s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0)*45ms)}
+.tb-ktw .tb-row.alt{background:#070707}
+.tb-ktw .tb-fl{display:flex;align-items:center;gap:8px}.tb-ktw .tb-logo{height:calc(var(--rh,40px)*.62);width:64px;background:#fff;border-radius:3px;flex:none}
+.tb-ktw .c-gate{text-align:center}.tb-ktw .tb-st{color:#fff}.tb-ktw .tb-st.ok,.tb-ktw .tb-st.blink.ok{color:var(--ok)}.tb-ktw .tb-st.warn{color:var(--warn)}.tb-ktw .tb-st.bad{color:var(--bad)}.tb-ktw .tb-st.dim{color:#bfbfbf}
+.tb-ktw .tb-foot{color:#8a8a8a}
+@keyframes ktwRoll{from{opacity:0;transform:rotateX(-80deg);transform-origin:50% 0}to{opacity:1;transform:none}}
+@keyframes ktwSwap{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.tb-ktw .tb-row,.tb-ktw .tb-title b{animation:none}}

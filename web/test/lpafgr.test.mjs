@@ -7,7 +7,7 @@ const load = async (f) => { const out = path.join(here, `.lf-${f}.mjs`); await b
 const S = await load("signs.tsx"), G = await load("gate.tsx"), T = await load("terminal.tsx");
 const { createElement: h } = await import("react"); const { renderToStaticMarkup: R } = await import("react-dom/server");
 // ---- Sign studio
-assert.deepStrictEqual(S.STHEMES.map(t => t[0]), ["krk", "man", "lhr", "lpa", "fgr"]);
+assert.deepStrictEqual(S.STHEMES.map(t => t[0]), ["krk", "man", "lhr", "lpa", "fgr", "ktw"]);
 const L = S.DEFAULTS.lpa.rows; assert.deepStrictEqual(L.map(r => r.arrow), ["right", "down"]);
 assert.deepStrictEqual(L[0].lines[0], { t: "Flugsteige", en: "Gates", es: "Puertas" }); assert.deepStrictEqual([L[0].gates.a, L[0].gates.b, L[1].gates.a, L[1].gates.b], ["C19", "C21", "C18", "C01"]);
 assert.deepStrictEqual(L[1].chips, [{ m: "10min.", l: "B", c: "blue" }, { m: "15min.", l: "A", c: "red" }]); assert.ok(L.every(r => r.gates.en === "to" && r.gates.es === "a"));
@@ -16,7 +16,7 @@ for (const p of S.PRESET_KEYS) { const a = S.presetFor("lpa", p), b = S.presetFo
   for (const r of a.rows) for (const l of r.lines) { assert.ok(l.t && l.en && l.es, "lpa DE/EN/ES " + p); assert.ok(!/[α-ωΑ-Ω]/.test(l.t)); }
   for (const r of b.rows) for (const l of r.lines) { assert.ok(/[α-ωΑ-Ωά-ώ]/.test(l.t), "Greek field: " + l.t); assert.ok(l.en && !/[α-ωΑ-Ω]/.test(l.en)); } }
 // renders
-for (const th of ["lpa", "fgr"]) for (const p of ["default", ...S.PRESET_KEYS]) assert.ok(R(h(S.SignView, { s: S.presetFor(th, p) })).includes("sg-" + th), th + p);
+for (const th of ["lpa", "fgr", "ktw"]) for (const p of ["default", ...S.PRESET_KEYS]) assert.ok(R(h(S.SignView, { s: S.presetFor(th, p) })).includes("sg-" + th), th + p);
 const lh = R(h(S.SignView, { s: S.DEFAULTS.lpa })); assert.ok(lh.includes("C19") && lh.includes("C01") && lh.includes("Puertas") && lh.includes("10min.") && lh.includes("15min."));
 const fh = R(h(S.SignView, { s: F })); assert.ok(fh.includes("Έλεγχος Ασφαλείας") && fh.includes("sf-cap")); assert.ok(!R(h(S.SignView, { s: { ...F, cap: { on: false, arrow: "right" } } })).includes("sf-cap"));
 // share round trip + sanitising of new fields
