@@ -21,7 +21,7 @@ import "./games.css";
 const lz = (f: () => Promise<{ default: ComponentType }>) => { const C = lazy(f); return () => <Suspense fallback={<p className="muted">Loading…</p>}><C /></Suspense>; };
 const AirportManager = lz(() => import("./manager").then(m => ({ default: m.AirportManager })));
 const BirdGlide = lz(() => import("./g/glide")), RunwayRoulette = lz(() => import("./g/roulette")), Pushback = lz(() => import("./g/pushback")), Boarding = lz(() => import("./g/boarding")), GateAgent = lz(() => import("./g/gateagent")), LuggageDetective = lz(() => import("./g/luggage")), EscapeRoom = lz(() => import("./g/escape"));
-const TowerBoss = lz(() => import("./g/atc2")), BaggageHall = lz(() => import("./g/bags")), PilotApproach = lz(() => import("./g/approach")), OwnAirline = lz(() => import("./g/airline")), DisasterDay = lz(() => import("./g/disaster"));
+const TowerBoss = lz(() => import("./g/atc2")), BaggageHall = lz(() => import("./g/bags")), PilotApproach = lz(() => import("./g/approach")), OwnAirline = lz(() => import("./g/airline")), DisasterDay = lz(() => import("./g/disaster")), AirportBuilder = lz(() => import("./g/sandbox"));
 
 // ---------- helpers ----------
 export const shuffle = <T,>(a: T[]): T[] => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
@@ -194,6 +194,7 @@ export const GAMES: Def[] = [
   { id: "gateagent", name: "Gate Agent Rush", sub: "Board the flight before the slot is lost", ic: "🛂", col: "#be185d", C: GateAgent, unit: "pts" },
   { id: "luggage", name: "Lost Luggage Detective", sub: "Follow the clues across airports", ic: "🕵️", col: "#4d7c0f", C: LuggageDetective, unit: "pts" },
   { id: "escape", name: "Airport Escape Room", sub: "Five puzzles to reach your gate", ic: "🔐", col: "#6d28d9", C: EscapeRoom, lower: true, unit: "s" },
+  { id: "sandbox", name: "Airport Builder 3D", sub: "Sandbox: build inside and out, infinite money", ic: "🧱", col: "#0369a1", C: AirportBuilder },
   { id: "tower", name: "Tower Boss", sub: "Radar control: stacks, sequencing, go-arounds", ic: "🗼", col: "#0f766e", C: TowerBoss, unit: "pts" },
   { id: "bags", name: "Baggage Hall", sub: "Sort suitcases onto the right belts", ic: "🧳", col: "#9a3412", C: BaggageHall, unit: "pts" },
   { id: "approach", name: "Pilot Approach", sub: "Fly the ILS into MAN- or KTW-style runways", ic: "🛬", col: "#1e40af", C: PilotApproach, unit: "pts" },
@@ -221,6 +222,7 @@ export const GAME_IDS = [...STUDIOS, ...ALL_GAMES.map(g => g.id)];
 
 export function GamesView({ x, tab0, init, inTab }: { x?: ReactNode; tab0?: string; init?: GSpec; more?: () => void; inTab?: boolean }) {
   const [t, setT0] = useState<string>(() => tab0 && GAME_IDS.includes(tab0) ? tab0 : "home"); const [bests, setBests] = useState<Best>(readBest);
+  useEffect(() => { if (tab0 && GAME_IDS.includes(tab0)) setT0(tab0); }, [tab0]); // e.g. Manager → Sandbox switches game while the overlay is open
   const setT = (v: string) => { setT0(v); setBests(readBest()); const h = v === "home" ? (inTab ? "#tab=games" : "#games") : inTab ? `#tab=games&game=${v}` : `#games=${v}`; if (!/[#&][gbs]=/.test(location.hash) || v === "home") history.replaceState(history.state, "", h); document.querySelector(".games")?.scrollIntoView({ block: "start" }); };
   const g = ALL_GAMES.find(d => d.id === t); const title = t === "gate" ? "Gate studio" : t === "board" ? "Board studio" : t === "signs" ? "Sign studio" : t === "announce" ? "Announcement maker" : t === "eurovision" ? "Eurovision studio" : g?.name || "Games";
   const Card = ({ d }: { d: Def }) => { const b = bests[d.id]; return <button className="gm-tile" onClick={() => setT(d.id)} style={{ ["--c" as any]: d.col }}><span className="gm-ic">{d.ic}</span><b>{d.name}</b><small>{d.sub}</small>{b != null ? <em>Best {b}{d.unit && d.unit.startsWith("/") ? d.unit : d.unit ? " " + d.unit : ""}</em> : d.online ? <em className="on">Needs internet</em> : <em className="new">Play</em>}</button>; };

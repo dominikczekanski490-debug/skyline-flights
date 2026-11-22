@@ -125,3 +125,4 @@
 /* v45: your own airline in the Manager */
 .mg-myal{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:10px;border:2px solid;font:900 12px system-ui;letter-spacing:.5px;flex:none}
 .mg-invite{width:100%;margin-bottom:8px;background:linear-gradient(90deg,#0e7490,#2563eb)!important;color:#fff!important;font-weight:800}
+.mg-sbx{width:100%;margin:0 0 10px}

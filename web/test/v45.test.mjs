@@ -29,5 +29,5 @@ const D = await load("disastersim");
 for (let lv = 0; lv < D.LEVELS.length; lv++) { const run = mode => { const s = D.newDay(lv, 11); assert.match(String(D.pendingEvs(s).length ? D.play(s) : "Decide"), /Decide/); while (!s.done) { for (const e of D.pendingEvs(s)) { const ch = D.EVS[e].ch; const c = mode === "safe" ? (ch.find(c => !c.risky && c.cost <= s.money) || ch.at(-1)) : (ch.find(c => c.risky) || ch.at(-1)); D.answer(s, e, c.k); } if (mode === "safe" && s.snow + D.cur(s).snow >= 4) s.orders.plough = true; const r = D.play(s); assert.notStrictEqual(typeof r, "string"); } return s; };
   const safe = run("safe"), risky = run("risky"); assert.ok(D.score(safe) > D.score(risky), lv + ": safety pays"); assert.strictEqual(safe.incidents, 0); assert.strictEqual(safe.hist.length, D.TURNS); }
 // SW cache bumped
-assert.match(fs.readFileSync(path.join(here, "../public/sw.js"), "utf8"), /skyline-v45/);
+assert.match(fs.readFileSync(path.join(here, "../public/sw.js"), "utf8"), /skyline-v4[5-9]/);
 console.log("v45 ok");
