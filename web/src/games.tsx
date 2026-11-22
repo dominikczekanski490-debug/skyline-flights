@@ -1,6 +1,6 @@
 // Games tab: gate/board studios + offline aviation games built on Skyline's bundled data (tail fins, airline logos,
 // destination photos/index). Scores are kept on this device only (localStorage "sk.games.best").
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type ComponentType } from "react";
 import { GateScreen, GateStudio, BoardStudio, Fit, DIM, PRESETS, type GSpec } from "./gate";
 import { TAIL_FILES } from "./assets.gen";
 import { LOGOS, SOLID } from "./logoset";
@@ -16,8 +16,11 @@ import { SignStudio, SignView, DEFAULTS as SIGN_DEFAULTS } from "./signs";
 import { AnnounceStudio } from "./announce";
 import { EuroStudio, EuroTileArt } from "./eurovision";
 import { GateBuilder } from "./gategame";
-import { AirportManager } from "./manager";
 import "./games.css";
+// v44: the Airport Manager and the new mini-games load only when opened (keeps memory low on iPhone).
+const lz = (f: () => Promise<{ default: ComponentType }>) => { const C = lazy(f); return () => <Suspense fallback={<p className="muted">Loading…</p>}><C /></Suspense>; };
+const AirportManager = lz(() => import("./manager").then(m => ({ default: m.AirportManager })));
+const BirdGlide = lz(() => import("./g/glide")), RunwayRoulette = lz(() => import("./g/roulette")), Pushback = lz(() => import("./g/pushback")), Boarding = lz(() => import("./g/boarding")), GateAgent = lz(() => import("./g/gateagent")), LuggageDetective = lz(() => import("./g/luggage")), EscapeRoom = lz(() => import("./g/escape"));
 
 // ---------- helpers ----------
 export const shuffle = <T,>(a: T[]): T[] => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
@@ -183,6 +186,13 @@ export const GAMES: Def[] = [
   { id: "rush", name: "Gate Rush", sub: "Send passengers to the right gate", ic: "🏃", col: "#dc2626", C: GateRush, unit: "boarded" },
   { id: "gatebuild", name: "Gate Builder", sub: "Build the gate screen from the brief", ic: "🖥️", col: "#1d4ed8", C: GateBuilder, unit: "pts" },
   { id: "manager", name: "Airport Manager", sub: "Design and run your own airport", ic: "🏗️", col: "#0f766e", C: AirportManager, unit: "rep" },
+  { id: "glide", name: "Bird Strike Panic", sub: "Both engines out: glide to the runway", ic: "🐦", col: "#b91c1c", C: BirdGlide, unit: "pts" },
+  { id: "roulette", name: "Runway Roulette", sub: "Land on four scary runways", ic: "🎰", col: "#7c2d12", C: RunwayRoulette, unit: "pts" },
+  { id: "pushback", name: "Pushback Driver", sub: "Steer the tug, mind the wingtips", ic: "🚜", col: "#a16207", C: Pushback, unit: "pts" },
+  { id: "boarding", name: "Speed-run Boarding", sub: "Race boarding methods, 180 passengers", ic: "🏁", col: "#0369a1", C: Boarding, lower: true, unit: "s" },
+  { id: "gateagent", name: "Gate Agent Rush", sub: "Board the flight before the slot is lost", ic: "🛂", col: "#be185d", C: GateAgent, unit: "pts" },
+  { id: "luggage", name: "Lost Luggage Detective", sub: "Follow the clues across airports", ic: "🕵️", col: "#4d7c0f", C: LuggageDetective, unit: "pts" },
+  { id: "escape", name: "Airport Escape Room", sub: "Five puzzles to reach your gate", ic: "🔐", col: "#6d28d9", C: EscapeRoom, lower: true, unit: "s" },
   { id: "atc", name: "Approach Control", sub: "Hold and land traffic safely", ic: "📡", col: "#059669", C: AtcGame, unit: "landed" },
 ];
 const CLASSIC: Def[] = [
