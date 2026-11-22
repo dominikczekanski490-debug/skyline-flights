@@ -74,7 +74,7 @@ export default function Mgr3D({ s, close }: { s: Save; close: () => void }) {
         if (["taxiIn", "taxiOut", "tkof", "land", "push", "app"].includes(r.ph) ? !followMoving : !followPos) { followPos = new THREE.Vector3(nx.x, nx.y, nx.z); fol = r.num; if (r.ph !== "park") followMoving = true; } k++; }
       for (const id of cur.keys()) if (!seen.has(id)) cur.delete(id);
       [fus, wing, tail, stab].forEach(m => { m.count = k; m.instanceMatrix.needsUpdate = true; }); if (tail.instanceColor) tail.instanceColor.needsUpdate = true;
-      const cm = camRef.current; if (cm !== lastCam) { lastCam = cm; if (cm === "overview") OV(); if (cm === "tower") { const t = tower(); camera.position.set(t.x, 36, t.z + 10); ctl.target.set(t.x * .4, 0, Z(15)); } }
+      const cm = camRef.current; if (cm !== lastCam) { lastCam = cm; if (cm === "overview") OV(); if (cm === "tower") { const t = tower(); const l = Math.hypot(t.x, t.z) || 1; camera.position.set(t.x + t.x / l * 34, 58, t.z + t.z / l * 34); ctl.target.set(-t.x * .2, 0, -t.z * .2); } }
       if (cm === "follow" && followPos) { ctl.target.lerp(followPos, 0.15); const want = followPos.clone().add(new THREE.Vector3(-16, 26 + followPos.y * 0.3, 30)); camera.position.lerp(want, 0.05); }
       if (cm === "follow") setFollow(f => f === fol ? f : fol);
       ctl.update(); ren.render(scene, camera); };

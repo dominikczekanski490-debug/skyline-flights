@@ -122,3 +122,6 @@
 .mg-gobar{width:100%}.mg-next{color:#93c5fd}
 .mg-cart{animation:mgCart 2.4s ease-in-out infinite}@keyframes mgCart{50%{transform:translate(-3px,0)}}
 .mg-hud2{grid-template-columns:minmax(0,1fr) auto}.mg-hud2 .mg-clock{min-width:0}.mg-hud2 .mg-speed button{flex:1 1 0;padding:6px 2px}.mg-hud2 .mg-mute{flex:none;padding:5px 6px}
+/* v45: your own airline in the Manager */
+.mg-myal{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:10px;border:2px solid;font:900 12px system-ui;letter-spacing:.5px;flex:none}
+.mg-invite{width:100%;margin-bottom:8px;background:linear-gradient(90deg,#0e7490,#2563eb)!important;color:#fff!important;font-weight:800}

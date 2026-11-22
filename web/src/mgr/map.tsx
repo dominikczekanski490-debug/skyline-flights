@@ -1,9 +1,10 @@
 // Airport Manager: the top-down build map (SVG grid) with animated planes, day/night lighting and build highlights.
 import { memo } from "react";
+import { MY_AL, myLiveryCached } from "../g/myair";
 import { W, H, taxiPath, standName, type Save, type Tile, type Rot } from "./sim";
 
 export const TERM_COL: Record<string, [string, string]> = { glass: ["#a9c9e8", "#5b7fa6"], timber: ["#d9b483", "#8a6239"], concrete: ["#b4b6b8", "#6d6f72"], heritage: ["#e3d3ad", "#7a5b3a"] };
-export const AL_COL = (al: string) => { let h = 0; for (const c of al || "XX") h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 70% 48%)`; };
+export const AL_COL = (al: string) => { if (al === MY_AL) return myLiveryCached()?.tail || "#2563eb"; let h = 0; for (const c of al || "XX") h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 70% 48%)`; };
 /** 0 = full day, 1 = full night (sunrise ~06:30, sunset ~18:30, soft dusk/dawn). */
 export const nightOf = (clock: number) => { const m = ((clock % 1440) + 1440) % 1440; const k = (a: number, b: number) => Math.max(0, Math.min(1, (m - a) / (b - a))); return m < 360 ? 1 : m < 420 ? 1 - k(360, 420) : m < 1080 ? 0 : m < 1170 ? k(1080, 1170) : 1; };
 const ICON: Partial<Record<Tile, string>> = { sh: "🛍️", fd: "🍔", pk: "🚗", rl: "🚆", sc: "🛂", bg: "🧳", hg: "🛠️" };

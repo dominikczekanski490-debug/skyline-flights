@@ -9,11 +9,12 @@ import { GateScreen, Fit, DIM, GLABEL, boardData, type GSpec, type GState, type 
 import { TerminalBoard, THEMES } from "./terminal";
 import { AirlineTile } from "./brand";
 import { AL_NAMES } from "./alnames";
+import { MY_AL, myLivery } from "./g/myair";
 import { saveImage } from "./fids";
 import { useBest } from "./games";
 import { MgrMap, nightOf } from "./mgr/map";
 import { sfx, muted, setMuted } from "./mgr/sfx";
-import { W, BUILD, RUNWAY_TILE, LEVELS, RESEARCH, ACH, STAFF_INFO, WAGE, EV_INFO, freshSave, migrate, openAirport, startDay, step, answer, build, buildRunway, bulldoze, hire, sign, decline, dropContract, research, borrow, repay, assign, canBuild, canRunway, bdef, usableStands, taxiPath, isStand, standName, stars, hm, count, runwayCap, secRate, chkRate, turnMin, wagesOf, upkeepOf, loanMax, meets, qWait, nextLevel, planDay, PH_LABEL, rng as rngOf, type Save, type Tile, type Rot, type FX, type Ev, type Contract, type Staff } from "./mgr/sim";
+import { makeOffer, W, BUILD, RUNWAY_TILE, LEVELS, RESEARCH, ACH, STAFF_INFO, WAGE, EV_INFO, freshSave, migrate, openAirport, startDay, step, answer, build, buildRunway, bulldoze, hire, sign, decline, dropContract, research, borrow, repay, assign, canBuild, canRunway, bdef, usableStands, taxiPath, isStand, standName, stars, hm, count, runwayCap, secRate, chkRate, turnMin, wagesOf, upkeepOf, loanMax, meets, qWait, nextLevel, planDay, PH_LABEL, rng as rngOf, type Save, type Tile, type Rot, type FX, type Ev, type Contract, type Staff } from "./mgr/sim";
 import "./manager.css";
 
 // ---------- world ----------
@@ -109,7 +110,12 @@ function Setup({ s, set, done, playing }: { s: Save; set: (p: Partial<Save>) => 
 const reg = (s: Save) => REGIONS.find(r => r.k === s.region) || REGIONS[0];
 const rnd = (n: number) => Math.floor(Math.random() * n);
 const gbp = (n: number) => (n < 0 ? "−£" : "£") + Math.abs(Math.round(n)).toLocaleString("en-GB");
-const demoGate = (s: Save, r?: Rot, clock = 600): GSpec => ({ style: s.gstyle as GStyle, gate: r?.stand != null ? standName(s.grid, r.stand) : "A1", al: r?.al || reg(s).als[0], num: r?.num || reg(s).als[0] + "1234", dest: r?.city || reg(s).dests[0], time: hm(r?.dep ?? 615), st: r ? stOf(r, clock) : "boarding", lang: "en", anim: "none", ac: "A320", tz: reg(s).tz });
+// The player's own airline from the "Your Own Airline" game can fly here too (fan-made: shown with its own colours, never a real logo).
+const alName = (al: string) => (al === MY_AL ? myLivery()?.name || "Your airline" : AL_NAMES[al] || al);
+const dispAl = (al: string) => (al === MY_AL ? myLivery()?.code || "ME" : al);
+const fixNum = (n: string) => (n.startsWith(MY_AL) ? dispAl(MY_AL) + n.slice(MY_AL.length) : n);
+function ALTile({ al }: { al: string }) { if (al === MY_AL) { const l = myLivery(); return <span className="mg-myal" style={{ background: l?.tail || "#2563eb", color: l?.stripe || "#fff", borderColor: l?.body || "#fff" }}>{l?.code || "ME"}</span>; } return <AirlineTile a={{ iata: al || "XX", name: AL_NAMES[al] || al || "Private" }} mode="colour" />; }
+const demoGate = (s: Save, r?: Rot, clock = 600): GSpec => ({ style: s.gstyle as GStyle, gate: r?.stand != null ? standName(s.grid, r.stand) : "A1", al: r?.al ? dispAl(r.al) : reg(s).als[0], num: r?.num ? fixNum(r.num) : reg(s).als[0] + "1234", dest: r?.city || reg(s).dests[0], time: hm(r?.dep ?? 615), st: r ? stOf(r, clock) : "boarding", lang: "en", anim: "none", ac: "A320", tz: reg(s).tz });
 function stOf(r: Rot, now: number): GState { if (r.ph === "cxl") return "cancelled"; if (["push", "taxiOut", "tkof", "gone"].includes(r.ph)) return "departed"; if (r.delay > 15) return "delayed"; const left = r.dep + r.delay - now; return left > 45 ? "wait" : left > 30 ? "gate" : left > 15 ? "boarding" : left > 8 ? "final" : "closed"; }
 
 // ---------- saves (3 slots on this device; the v1 save is migrated into slot 1) ----------
@@ -213,17 +219,18 @@ function Flights({ s, apply }: { s: Save; apply: (r: Save | string, ok?: string)
   const rows = s.rots.filter(r => r.ph !== "gone").concat(s.rots.filter(r => r.ph === "gone").slice(-4));
   return <div className="mg-fls"><div className="mg-row"><span>Auto-assign stands</span><div className="gp-seg sm"><button className={s.auto ? "on" : ""} onClick={() => apply({ ...s, auto: true })}>On</button><button className={!s.auto ? "on" : ""} onClick={() => apply({ ...s, auto: false })}>Off (I'll do it)</button></div></div>
     {!rows.length && <p className="mg-hint">No flights yet today. Start the day, or sign airlines in the Airlines tab.</p>}
-    {rows.map(r => <div key={r.id} className={"mg-fl2 ph-" + r.ph + (r.delay > 15 ? " late" : "")}><AirlineTile a={{ iata: r.al || "XX", name: AL_NAMES[r.al] || r.al || "Private" }} mode="colour" />
-      <div className="mg-fl2-m"><b>{r.num} {r.vip ? "🎩" : r.div ? "↪️" : ""}</b><span>{r.city} · {r.pax} pax</span></div><div className="mg-fl2-t"><span>{hm(r.arr)} → {hm(r.dep)}</span><em>{PH_LABEL[r.ph]}{r.delay > 0 ? ` +${Math.round(r.delay)}m` : ""}</em></div>
+    {rows.map(r => <div key={r.id} className={"mg-fl2 ph-" + r.ph + (r.delay > 15 ? " late" : "")}><ALTile al={r.al} />
+      <div className="mg-fl2-m"><b>{fixNum(r.num)} {r.vip ? "🎩" : r.div ? "↪️" : ""}</b><span>{r.city} · {r.pax} pax</span></div><div className="mg-fl2-t"><span>{hm(r.arr)} → {hm(r.dep)}</span><em>{PH_LABEL[r.ph]}{r.delay > 0 ? ` +${Math.round(r.delay)}m` : ""}</em></div>
       <select aria-label={"Stand for " + r.num} value={r.stand ?? ""} disabled={["taxiIn", "park", "push", "taxiOut", "tkof", "gone", "cxl"].includes(r.ph)} onChange={e => apply(assign(s, r.id, Number(e.target.value)), "Stand set")}><option value="" disabled>Stand…</option>{stands.map(i => <option key={i} value={i}>{standName(s.grid, i)}</option>)}</select></div>)}</div>; }
 
 function Airlines({ s, apply }: { s: Save; apply: (r: Save | string, ok?: string, snd?: any) => boolean }) {
   const D = (c: Contract) => [c.demand.ontime && `${c.demand.ontime}% on time`, c.demand.gates && `${c.demand.gates} jet-bridge gates`, c.demand.stars && `${c.demand.stars}★`].filter(Boolean).join(" · ") || "No special demands";
-  return <div className="mg-als"><h3 className="gsx-h">Offers</h3>{!s.offers.length && <p className="mg-hint">New offers arrive at the end of each day.</p>}
-    {s.offers.map(c => { const miss = meets(s, c); return <div key={c.id} className="mg-con offer"><AirlineTile a={{ iata: c.al, name: AL_NAMES[c.al] || c.al }} mode="colour" /><div><b>{AL_NAMES[c.al] || c.al}</b><span>{c.perDay} flights a day · ~{c.pax} pax · {gbp(c.fee)} per flight · {c.days} days</span><small>{D(c)}{miss.length ? " · ⚠️ needs " + miss.join(", ") : ""}</small></div>
-      <div className="mg-con-b"><button className="gp-btn pri" disabled={!!miss.length} onClick={() => apply(sign(s, c.id), `${AL_NAMES[c.al] || c.al} signed!`, "cash")}>Sign</button><button className="gp-btn" onClick={() => apply(decline(s, c.id))}>✕</button></div></div>; })}
-    <h3 className="gsx-h">Your airlines ({s.contracts.length})</h3>{s.contracts.map(c => <div key={c.id} className="mg-con"><AirlineTile a={{ iata: c.al, name: AL_NAMES[c.al] || c.al }} mode="colour" /><div><b>{AL_NAMES[c.al] || c.al}</b><span>{c.perDay}/day · {gbp(c.fee)} per flight · renews in {c.left} day{c.left === 1 ? "" : "s"}</span><small>{D(c)} · {c.strikes ? "😠".repeat(c.strikes) + " " + c.strikes + "/3 warnings" : "😊 happy"}</small></div>
-      <div className="mg-con-b"><button className="gp-btn" onClick={() => { if (confirm(`End the ${AL_NAMES[c.al] || c.al} contract? Your rating drops a little.`)) apply(dropContract(s, c.id)); }}>End</button></div></div>)}
+  const my = myLivery(); const canInvite = !!my && ![...s.contracts, ...s.offers].some(c => c.al === MY_AL);
+  return <div className="mg-als">{canInvite && <button className="gp-btn mg-invite" onClick={() => { const o = makeOffer(s, Math.random); apply({ ...s, offers: [...s.offers, { ...o, al: MY_AL, demand: {}, fee: Math.round(o.fee * 0.9 / 25) * 25 }] }, `${my!.name} wants to fly here!`, "chime"); }}>✈️ Invite your airline, {my!.name}</button>}<h3 className="gsx-h">Offers</h3>{!s.offers.length && <p className="mg-hint">New offers arrive at the end of each day.</p>}
+    {s.offers.map(c => { const miss = meets(s, c); return <div key={c.id} className="mg-con offer"><ALTile al={c.al} /><div><b>{alName(c.al)}</b><span>{c.perDay} flights a day · ~{c.pax} pax · {gbp(c.fee)} per flight · {c.days} days</span><small>{D(c)}{miss.length ? " · ⚠️ needs " + miss.join(", ") : ""}</small></div>
+      <div className="mg-con-b"><button className="gp-btn pri" disabled={!!miss.length} onClick={() => apply(sign(s, c.id), `${alName(c.al)} signed!`, "cash")}>Sign</button><button className="gp-btn" onClick={() => apply(decline(s, c.id))}>✕</button></div></div>; })}
+    <h3 className="gsx-h">Your airlines ({s.contracts.length})</h3>{s.contracts.map(c => <div key={c.id} className="mg-con"><ALTile al={c.al} /><div><b>{alName(c.al)}</b><span>{c.perDay}/day · {gbp(c.fee)} per flight · renews in {c.left} day{c.left === 1 ? "" : "s"}</span><small>{D(c)} · {c.strikes ? "😠".repeat(c.strikes) + " " + c.strikes + "/3 warnings" : "😊 happy"}</small></div>
+      <div className="mg-con-b"><button className="gp-btn" onClick={() => { if (confirm(`End the ${alName(c.al)} contract? Your rating drops a little.`)) apply(dropContract(s, c.id)); }}>End</button></div></div>)}
     <p className="faint xs">Airlines warn you when their demands aren't met. Three warnings and they leave (and your rating drops). Fees are game numbers.</p></div>; }
 
 function StaffTab({ s, apply }: { s: Save; apply: (r: Save | string, ok?: string) => boolean }) {
@@ -254,7 +261,7 @@ function Goals({ s, bestPax, nx }: { s: Save; bestPax: number; nx: { n: string; 
 function BoardTab({ s, set, boardRef }: { s: Save; set: (p: Partial<Save>) => void; boardRef: React.RefObject<HTMLDivElement | null> }) {
   const mine = useMemo(() => { try { return (JSON.parse(localStorage.getItem("sk.games.boards") || "[]") as BSpec[]).filter(b => b?.theme && THEMES[b.theme]); } catch { return []; } }, []);
   const [msg, setMsg] = useState(""); const deps = (s.phase === "day" ? s.rots.filter(r => r.ph !== "gone" || s.clock - r.t0 < 30) : planDay(s, rngOf(s.seed + s.day))).slice(0, 14);
-  const brd: BSpec = useMemo(() => ({ name: s.name || "My airport", theme: s.board, dir: "dep", anim: false, rows: deps.map(r => ({ t: hm(r.dep), dest: r.city, al: r.al || "XX", num: r.num, gate: r.stand != null ? standName(s.grid, r.stand) : "", st: s.phase !== "day" ? "Scheduled" : r.ph === "cxl" ? "Cancelled" : ["push", "taxiOut", "tkof", "gone"].includes(r.ph) ? "Departed" : r.delay > 15 ? "Delayed" : ({ wait: "Wait in lounge", gate: "Go to gate", boarding: "Boarding", final: "Final call", closed: "Gate closed" } as any)[stOf(r, s.clock)] || "Scheduled", ...(r.delay > 15 ? { est: hm(r.dep + r.delay) } : {}) })) }), [s.rots.length, s.board, s.name, s.phase, s.day, Math.floor(s.clock / 10)]);
+  const brd: BSpec = useMemo(() => ({ name: s.name || "My airport", theme: s.board, dir: "dep", anim: false, rows: deps.map(r => ({ t: hm(r.dep), dest: r.city, al: dispAl(r.al) || "XX", num: fixNum(r.num), gate: r.stand != null ? standName(s.grid, r.stand) : "", st: s.phase !== "day" ? "Scheduled" : r.ph === "cxl" ? "Cancelled" : ["push", "taxiOut", "tkof", "gone"].includes(r.ph) ? "Departed" : r.delay > 15 ? "Delayed" : ({ wait: "Wait in lounge", gate: "Go to gate", boarding: "Boarding", final: "Final call", closed: "Gate closed" } as any)[stOf(r, s.clock)] || "Scheduled", ...(r.delay > 15 ? { est: hm(r.dep + r.delay) } : {}) })) }), [s.rots.length, s.board, s.name, s.phase, s.day, Math.floor(s.clock / 10)]);
   const data = useMemo(() => boardData(brd), [brd]); const next = s.rots.find(r => r.ph === "park");
   return <><div ref={boardRef} className="mg-board"><TerminalBoard key={s.board} iata="XXX" dir="dep" date="" onClose={() => {}} custom={data} theme0={s.board} inline dw={780} /></div>
     <div className="gp-ctl"><select aria-label="Board style" value={s.board} onChange={e => set({ board: e.target.value })}>{mine.length > 0 && <optgroup label="My board designs">{mine.map((b, k) => <option key={"m" + k} value={b.theme}>⭐ {b.name} ({THEMES[b.theme].name})</option>)}</optgroup>}<optgroup label="All styles">{Object.entries(THEMES).filter(([k]) => !["tr", "cy", "mla", "ee"].includes(k)).map(([k, v]) => <option key={k} value={k}>{v.name}</option>)}</optgroup></select>

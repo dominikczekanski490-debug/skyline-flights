@@ -21,6 +21,7 @@ import "./games.css";
 const lz = (f: () => Promise<{ default: ComponentType }>) => { const C = lazy(f); return () => <Suspense fallback={<p className="muted">Loading…</p>}><C /></Suspense>; };
 const AirportManager = lz(() => import("./manager").then(m => ({ default: m.AirportManager })));
 const BirdGlide = lz(() => import("./g/glide")), RunwayRoulette = lz(() => import("./g/roulette")), Pushback = lz(() => import("./g/pushback")), Boarding = lz(() => import("./g/boarding")), GateAgent = lz(() => import("./g/gateagent")), LuggageDetective = lz(() => import("./g/luggage")), EscapeRoom = lz(() => import("./g/escape"));
+const TowerBoss = lz(() => import("./g/atc2")), BaggageHall = lz(() => import("./g/bags")), PilotApproach = lz(() => import("./g/approach")), OwnAirline = lz(() => import("./g/airline")), DisasterDay = lz(() => import("./g/disaster"));
 
 // ---------- helpers ----------
 export const shuffle = <T,>(a: T[]): T[] => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
@@ -193,6 +194,11 @@ export const GAMES: Def[] = [
   { id: "gateagent", name: "Gate Agent Rush", sub: "Board the flight before the slot is lost", ic: "🛂", col: "#be185d", C: GateAgent, unit: "pts" },
   { id: "luggage", name: "Lost Luggage Detective", sub: "Follow the clues across airports", ic: "🕵️", col: "#4d7c0f", C: LuggageDetective, unit: "pts" },
   { id: "escape", name: "Airport Escape Room", sub: "Five puzzles to reach your gate", ic: "🔐", col: "#6d28d9", C: EscapeRoom, lower: true, unit: "s" },
+  { id: "tower", name: "Tower Boss", sub: "Radar control: stacks, sequencing, go-arounds", ic: "🗼", col: "#0f766e", C: TowerBoss, unit: "pts" },
+  { id: "bags", name: "Baggage Hall", sub: "Sort suitcases onto the right belts", ic: "🧳", col: "#9a3412", C: BaggageHall, unit: "pts" },
+  { id: "approach", name: "Pilot Approach", sub: "Fly the ILS into MAN- or KTW-style runways", ic: "🛬", col: "#1e40af", C: PilotApproach, unit: "pts" },
+  { id: "airline", name: "Your Own Airline", sub: "Livery, planes, routes, real-ish delays", ic: "🛩️", col: "#0e7490", C: OwnAirline, unit: "£k" },
+  { id: "disaster", name: "Disaster Day", sub: "Storms, strikes and snow: keep flights moving", ic: "🌪️", col: "#991b1b", C: DisasterDay, unit: "pts" },
   { id: "atc", name: "Approach Control", sub: "Hold and land traffic safely", ic: "📡", col: "#059669", C: AtcGame, unit: "landed" },
 ];
 const CLASSIC: Def[] = [

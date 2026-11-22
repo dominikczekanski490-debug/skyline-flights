@@ -27,3 +27,35 @@
 .g4-meth{display:grid;grid-template-columns:1fr 1fr;gap:6px}.g4-meth button{padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:#141b2d;color:#fff;font:inherit;text-align:left;font-size:12.5px}.g4-meth button.on{border-color:#60a5fa;box-shadow:0 0 0 2px rgba(96,165,250,.4)}.g4-meth small{display:block;opacity:.65;font-size:11px}
 .g4-queue{display:flex;align-items:flex-end;gap:2px;min-height:34px;font-size:22px;overflow:hidden;border-bottom:3px solid #334155;padding-bottom:2px}.g4-queue i{font-style:normal;animation:g4walk .9s ease-in-out infinite alternate}.g4-queue span{margin-left:auto;font-size:26px;color:#93c5fd}
 @keyframes g4walk{to{transform:translateY(-3px)}}
+/* v45 Tower Boss */
+.tb .g4-hud{align-items:center}.tb-sp{flex:1;background:none!important}.tb-mini{border:0;border-radius:8px;background:#1e293b;color:#fff;font:inherit;font-weight:800;padding:4px 10px}
+.tb-sel{min-height:84px}.tb-sel.may{border-color:#f87171;box-shadow:0 0 0 2px rgba(248,113,113,.35)}.tb-row{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.tb-row b{font:800 16px ui-monospace,Menlo,monospace;color:#67e8f9}.tb-err{color:#fca5a5;font-weight:700}
+.tb-lists{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:6px}.tb-stack{background:#0f1525;border-radius:12px;padding:6px;display:flex;flex-direction:column;gap:4px;font-size:12px}.tb-stack b{color:#facc15;font-size:11.5px}.tb-stack.dep b{color:#fdba74}
+.tb-stack button{position:relative;overflow:hidden;text-align:left;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:#141b2d;color:#e2e8f0;font:700 11.5px ui-monospace,Menlo,monospace;padding:5px 6px 7px}.tb-stack button span{opacity:.6;margin-right:5px}.tb-stack button i{position:absolute;left:0;bottom:0;height:3px;background:#22c55e}.tb-stack button.low{border-color:#f87171}.tb-stack button.low i{background:#ef4444}.tb-stack button.on{border-color:#fff;background:#1e3a5f}.tb-stack button.hint{border-color:#facc15;box-shadow:0 0 0 2px rgba(250,204,21,.4)}
+/* v45 Baggage Hall */
+.bh-legend{display:flex;flex-wrap:wrap;gap:5px}.bh-legend span{display:flex;gap:6px;align-items:center;background:#141b2d;border:1px solid rgba(255,255,255,.12);border-left-width:5px;border-radius:9px;padding:3px 8px;font-size:11.5px;font-weight:700}.bh-legend b{color:#4ade80}
+/* v45 Pilot Approach */
+.ap .g4-hold{min-width:70px}.ap-s{font-size:10px;display:block}
+.ap-thr{display:grid;grid-template-columns:44px 1fr 44px auto;gap:6px;align-items:center}.ap-thr button{height:44px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:#1e293b;color:#fff;font:inherit;font-weight:800;padding:0 10px}
+.ap-thr div{position:relative;height:30px;border-radius:10px;background:#0b1020;overflow:hidden}.ap-thr i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#0ea5e9,#22c55e)}.ap-thr b{position:absolute;top:0;bottom:0;width:3px;background:#fff;margin-left:-1px}.ap-thr span{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;font-weight:800;text-shadow:0 1px 2px #000}
+.ap-parts li{display:flex;justify-content:space-between}
+/* v45 Your Own Airline */
+.oa-top{display:flex;gap:10px;align-items:center;background:#141b2d;border-radius:14px;padding:6px 10px}.oa-top div{display:flex;flex-direction:column;min-width:0}.oa-top b{font-size:16px}.oa-top small{font-size:11.5px;opacity:.85}
+.oa-tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}.oa-tabs button{flex:none;border:1px solid rgba(255,255,255,.15);background:#141b2d;color:#fff;border-radius:999px;padding:7px 11px;font:inherit;font-size:12.5px;font-weight:800}.oa-tabs button.on{background:#fff;color:#0b1f3f}
+.oa-msg{margin:0;background:#1e3a5f;border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;animation:g4in .25s ease}
+.oa-map{width:100%;aspect-ratio:4/3;border-radius:16px;display:block}.oa-go{width:100%;height:50px;font-size:16px}.oa-day{display:flex;flex-direction:column;gap:8px}
+.oa-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}.oa-stats span{background:#0f1525;border-radius:9px;padding:5px;font-weight:800;font-size:12.5px;display:flex;flex-direction:column}.oa-stats small{font-size:9.5px;opacity:.65;font-weight:700}.oa-stats .ok{color:#86efac}.oa-stats .bad{color:#fca5a5}
+.oa-list{display:flex;flex-direction:column;gap:8px}.oa-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.oa-row select{flex:1;min-width:0;height:40px;padding:0 10px}.oa-row small.bad{color:#fca5a5}.oa-row small.ok{color:#86efac}
+.oa-fare button{width:36px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:#1e293b;color:#fff;font:inherit;font-weight:800}
+.oa-wear{flex:1;height:8px;border-radius:9px;background:#0b1020;overflow:hidden}.oa-wear i{display:block;height:100%}
+.oa-chart{width:100%;height:auto}
+.oa-prev{background:linear-gradient(180deg,#7fb2e5,#cfe5f7);border-radius:16px;padding:8px}
+.oa-sw{display:flex;flex-direction:column;gap:4px}.oa-sw>small{font-size:12px;opacity:.78;font-weight:700}.oa-sw>div{display:flex;flex-wrap:wrap;gap:5px}.oa-sw button[aria-label]{width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,.25)}.oa-sw button.on{outline:3px solid #60a5fa;outline-offset:1px}
+.oa-motifs button{border:1px solid rgba(255,255,255,.2);background:#1e293b;color:#fff;border-radius:10px;padding:6px 10px;font:inherit;font-size:12px;font-weight:700;text-transform:capitalize}.oa-motifs button.on{background:#2563eb}
+.oa-des .gsx-f{display:flex;flex-direction:column;gap:4px}.oa-des input{height:42px;padding:0 12px}
+/* v45 Disaster Day */
+.dd-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:5px}.dd-stats span{background:#141b2d;border-radius:10px;padding:5px 8px;font-size:12.5px;font-weight:800;display:flex;flex-direction:column}.dd-stats small{font-size:10px;opacity:.65;font-weight:700}
+.dd-mood{grid-column:1/-1}.dd-mood i{display:block;height:9px;border-radius:9px;background:#0b1020;overflow:hidden;margin-top:3px}.dd-mood b{display:block;height:100%;transition:width .5s}
+.dd-ev{border-color:rgba(251,191,36,.5)}.dd-ev p{margin:0}.dd-ch{display:grid;gap:6px}.dd-ch button{display:flex;justify-content:space-between;gap:8px;align-items:center;text-align:left;padding:11px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:#1e293b;color:#fff;font:inherit;font-weight:700;font-size:13px}.dd-ch button small{color:#fcd34d;font-weight:800}.dd-ch button:active{transform:scale(.98)}
+.dd-ord{display:grid;grid-template-columns:1fr 1fr;gap:6px}.dd-ord button{display:grid;grid-template-columns:auto 1fr;column-gap:6px;text-align:left;padding:8px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:#141b2d;color:#fff;font:inherit}.dd-ord button span{grid-row:span 2;font-size:20px}.dd-ord button b{font-size:12.5px}.dd-ord button small{font-size:10.5px;opacity:.7}.dd-ord button.on{background:#14532d;border-color:#4ade80}
+.dd-go{width:100%;height:48px;font-size:15px;margin-top:6px}.dd-inc{margin:0;color:#fecaca;font-weight:700;font-size:13px}.dd-res .g4-log{margin-top:4px}
